@@ -1,0 +1,12 @@
+{
+  "name": "groovia-bot",
+  "version": "1.0.0",
+  "private": true,
+  "main": "webhook/test-app.js",
+  "scripts": {
+    "start": "node webhook/test-app.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
