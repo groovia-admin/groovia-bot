@@ -1,6 +1,5 @@
 name: Production Deployment
 
-# 1. Trigger the workflow on PR events and merges
 on:
   pull_request:
     types: [opened, synchronize, reopened, closed]
@@ -15,10 +14,9 @@ jobs:
     name: Deploy Application
     runs-on: ubuntu-latest
     
-    # 2. Tell GitHub to link this run to an environment
+    # Clean, fixed environment definition
     environment:
       name: Production
-     url: https://github.com/groovia-admin/groovia-bot.git 
 
     steps:
       - name: Checkout Code
@@ -26,5 +24,5 @@ jobs:
 
       - name: Simulate or Execute Deployment
         run: |
-          echo "Deploying the code triggered by PR #${{ github.event.pull_request.number }}"
-          # Add your actual deployment script/commands here (e.g., Railway, Vercel, AWS, etc.)
+          echo "Deploying the code triggered by this branch/PR"
+          # Optional: Put your Railway deploy scripts here
