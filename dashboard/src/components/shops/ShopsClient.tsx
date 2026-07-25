@@ -239,7 +239,7 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                   </td>
                 </tr>
               ) : filtered.map(shop => {
-                const subCfg = SUB_STATUS_CONFIG[shop.subscription_status] ?? SUB_STATUS_CONFIG.trial
+                const subCfg = SUB_STATUS_CONFIG[shop.subscription_status as keyof typeof SUB_STATUS_CONFIG] ?? SUB_STATUS_CONFIG.trial
                 const trialExpired = shop.trial_ends_at && isPast(new Date(shop.trial_ends_at))
 
                 return (
