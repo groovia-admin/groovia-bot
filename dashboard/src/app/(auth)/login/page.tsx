@@ -9,11 +9,47 @@ export default function LoginPage() {
   const router = useRouter()
   const supabase = createClient()
 
-  const [email, setEmail]       = useState('')
-  const [password, setPassword] = useState('')
-  const [showPw, setShowPw]     = useState(false)
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [step, setStep] = useState<Step>('input')
+  const [method, setMethod] = useState<Method>('email')
+  const [phone, setPhone] = useState('')
+  const [email, setEmail] = useState('')
+  const [otp, setOtp] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  function formatPhone(raw: string): string {
+    const digits = raw.replace(/\D/g, '')
+    if (digits.startsWith('91') && digits.length === 12) return `+${digits}`
+    if (digits.length === 10) return `+91${digits}`
+    return `+${digits}`
+  }
+
+  async function handleSendOTP(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+
+    try {
+      if (method === 'email') {
+       const { error } = await supabase.auth.signInWithOtp({
+  email,
+  options: {
+    shouldCreateUser: true
+  }
+})
+        if (error) throw error
+      } else {
+        const formatted = formatPhone(phone)
+        const { error } = await supabase.auth.signInWithOtp({ phone: formatted })
+        if (error) throw error
+      }
+      setStep('otp')
+    } catch (err: any) {
+      setError(err.message || 'Failed to send OTP. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
