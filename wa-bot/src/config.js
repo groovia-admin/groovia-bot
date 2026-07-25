@@ -15,5 +15,5 @@ module.exports = {
   appSecret: process.env.APP_SECRET,
   whatsappToken: process.env.WHATSAPP_TOKEN || '',
   phoneNumberId: process.env.PHONE_NUMBER_ID || '',
-  graphApiVersion: process.env.GRAPH_API_VERSION || 'v21.0',
+  graphApiVersion: process.env.GRAPH_API_VERSION || 'v25.0',
 };
