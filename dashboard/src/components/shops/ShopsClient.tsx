@@ -4,20 +4,20 @@ import { useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { formatDistanceToNow, format, isPast } from 'date-fns'
 import {
-  Search, Plus, Store, MapPin, Phone, Calendar,
-  CheckCircle, XCircle, AlertTriangle, ChevronDown,
-  MoreVertical, ToggleLeft, ToggleRight, ExternalLink,
-  Filter
+  Search, Plus, Store, MapPin, Calendar,
+  CheckCircle, XCircle, AlertTriangle,
+  MoreVertical, ExternalLink,
 } from 'lucide-react'
 import clsx from 'clsx'
-import type { Shop } from '@/types/database'
+import type { Shop, SubscriptionStatus } from '@/types/database'
 
+// Only columns that exist in the actual DB
 type ShopRow = Pick<Shop,
   'id' | 'slug' | 'name' | 'city' | 'state' | 'is_active' |
-  'subscription_status' | 'trial_ends_at' | 'owner_phone' | 'created_at' | 'updated_at'
+  'subscription_status' | 'trial_ends_at' | 'created_at' | 'updated_at'
 >
 
-const SUB_STATUS_CONFIG = {
+const SUB_STATUS_CONFIG: Record<SubscriptionStatus, { label: string; color: string }> = {
   trial:      { label: 'Trial',     color: 'text-amber-400 bg-amber-400/10 border-amber-400/20' },
   active:     { label: 'Active',    color: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' },
   past_due:   { label: 'Past Due',  color: 'text-orange-400 bg-orange-400/10 border-orange-400/20' },
@@ -29,43 +29,43 @@ const SUB_STATUS_CONFIG = {
 interface AddShopForm {
   name: string
   slug: string
-  owner_phone: string
   city: string
   state: string
+  address_line_1: string
+  description: string
 }
 
 export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] }) {
   const supabase = createClient()
 
-  const [shops, setShops] = useState<ShopRow[]>(initialShops)
-  const [search, setSearch] = useState('')
+  const [shops, setShops]               = useState<ShopRow[]>(initialShops)
+  const [search, setSearch]             = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
   const [filterActive, setFilterActive] = useState<string>('all')
-  const [openMenu, setOpenMenu] = useState<string | null>(null)
+  const [openMenu, setOpenMenu]         = useState<string | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
-  const [addForm, setAddForm] = useState<AddShopForm>({ name: '', slug: '', owner_phone: '', city: '', state: '' })
-  const [addLoading, setAddLoading] = useState(false)
-  const [addError, setAddError] = useState('')
-  const [toastMsg, setToastMsg] = useState('')
+  const [addForm, setAddForm]           = useState<AddShopForm>({
+    name: '', slug: '', city: '', state: '', address_line_1: '', description: ''
+  })
+  const [addLoading, setAddLoading]     = useState(false)
+  const [addError, setAddError]         = useState('')
+  const [toastMsg, setToastMsg]         = useState('')
 
   function toast(msg: string) {
     setToastMsg(msg)
     setTimeout(() => setToastMsg(''), 3000)
   }
 
-  // Auto-generate slug from name
   function handleNameChange(name: string) {
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
     setAddForm(f => ({ ...f, name, slug }))
   }
 
-  // Filtered + searched list
   const filtered = useMemo(() => {
     return shops.filter(s => {
       const matchSearch = !search ||
         s.name.toLowerCase().includes(search.toLowerCase()) ||
         s.slug.toLowerCase().includes(search.toLowerCase()) ||
-        s.owner_phone?.includes(search) ||
         s.city?.toLowerCase().includes(search.toLowerCase())
 
       const matchStatus = filterStatus === 'all' || s.subscription_status === filterStatus
@@ -77,18 +77,16 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
     })
   }, [shops, search, filterStatus, filterActive])
 
-  // Stats
   const stats = useMemo(() => ({
-    total: shops.length,
-    active: shops.filter(s => s.is_active).length,
-    trial: shops.filter(s => s.subscription_status === 'trial').length,
+    total:          shops.length,
+    active:         shops.filter(s => s.is_active).length,
+    trial:          shops.filter(s => s.subscription_status === 'trial').length,
     revenue_active: shops.filter(s => s.subscription_status === 'active').length,
   }), [shops])
 
   async function toggleActive(shop: ShopRow) {
     const newVal = !shop.is_active
-    const action = newVal ? 'activate' : 'suspend'
-    if (!confirm(`${action === 'suspend' ? 'Suspend' : 'Activate'} "${shop.name}"?`)) return
+    if (!confirm(`${newVal ? 'Activate' : 'Suspend'} "${shop.name}"?`)) return
 
     const { error } = await supabase
       .from('shops')
@@ -104,16 +102,16 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
     setOpenMenu(null)
   }
 
-  async function updateSubStatus(shop: ShopRow, status: string) {
+  async function updateSubStatus(shop: ShopRow, status: SubscriptionStatus) {
     const { error } = await supabase
       .from('shops')
-      .update({ subscription_status: status as Shop['subscription_status'], updated_at: new Date().toISOString() })
+      .update({ subscription_status: status, updated_at: new Date().toISOString() })
       .eq('id', shop.id)
 
     if (error) {
       toast(`Error: ${error.message}`)
     } else {
-      setShops(prev => prev.map(s => s.id === shop.id ? { ...s, subscription_status: status as Shop['subscription_status'] } : s))
+      setShops(prev => prev.map(s => s.id === shop.id ? { ...s, subscription_status: status } : s))
       toast(`Subscription updated to "${status}"`)
     }
     setOpenMenu(null)
@@ -124,27 +122,34 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
     setAddLoading(true)
     setAddError('')
 
+    // Insert only columns that exist in the shops table
     const { data, error } = await supabase
       .from('shops')
       .insert({
-        name: addForm.name,
-        slug: addForm.slug,
-        owner_phone: addForm.owner_phone || null,
-        city: addForm.city || null,
-        state: addForm.state || null,
-        subscription_status: 'trial',
-        trial_ends_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        name:                addForm.name,
+        slug:                addForm.slug,
+        city:                addForm.city    || null,
+        state:               addForm.state   || null,
+        address_line_1:      addForm.address_line_1 || null,
+        description:         addForm.description    || null,
+        subscription_status: 'trial' as SubscriptionStatus,
+        trial_ends_at:       new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), // 60 days
+        is_active:           true,
       })
-      .select()
+      .select('id, slug, name, city, state, is_active, subscription_status, trial_ends_at, created_at, updated_at')
       .single()
 
     if (error) {
-      setAddError(error.message.includes('unique') ? 'That slug is already taken' : error.message)
+      setAddError(
+        error.message.includes('unique') || error.message.includes('duplicate')
+          ? 'That slug is already taken — try a different one'
+          : error.message
+      )
     } else if (data) {
       setShops(prev => [data as ShopRow, ...prev])
       setShowAddModal(false)
-      setAddForm({ name: '', slug: '', owner_phone: '', city: '', state: '' })
-      toast(`Shop "${data.name}" created`)
+      setAddForm({ name: '', slug: '', city: '', state: '', address_line_1: '', description: '' })
+      toast(`Shop "${data.name}" created successfully`)
     }
     setAddLoading(false)
   }
@@ -162,13 +167,13 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
         </button>
       </div>
 
-      {/* Stats row */}
+      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Total shops', value: stats.total, icon: Store, color: 'text-slate-300' },
-          { label: 'Active', value: stats.active, icon: CheckCircle, color: 'text-emerald-400' },
-          { label: 'On trial', value: stats.trial, icon: AlertTriangle, color: 'text-amber-400' },
-          { label: 'Paid', value: stats.revenue_active, icon: CheckCircle, color: 'text-brand' },
+          { label: 'Total shops',  value: stats.total,          icon: Store,         color: 'text-slate-300' },
+          { label: 'Active',       value: stats.active,         icon: CheckCircle,   color: 'text-emerald-400' },
+          { label: 'On trial',     value: stats.trial,          icon: AlertTriangle, color: 'text-amber-400' },
+          { label: 'Paid',         value: stats.revenue_active, icon: CheckCircle,   color: 'text-blue-400' },
         ].map(s => (
           <div key={s.label} className="card">
             <div className="flex items-center justify-between mb-2">
@@ -187,27 +192,17 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Search by name, phone, city..."
+            placeholder="Search by name, city, slug..."
             className="input pl-9"
           />
         </div>
-
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          className="input w-auto pr-8 cursor-pointer"
-        >
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="input w-auto cursor-pointer">
           <option value="all">All subscriptions</option>
           {Object.entries(SUB_STATUS_CONFIG).map(([val, cfg]) => (
             <option key={val} value={val}>{cfg.label}</option>
           ))}
         </select>
-
-        <select
-          value={filterActive}
-          onChange={e => setFilterActive(e.target.value)}
-          className="input w-auto pr-8 cursor-pointer"
-        >
+        <select value={filterActive} onChange={e => setFilterActive(e.target.value)} className="input w-auto cursor-pointer">
           <option value="all">Active & Inactive</option>
           <option value="active">Active only</option>
           <option value="inactive">Inactive only</option>
@@ -222,8 +217,8 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
               <tr>
                 <th>Shop</th>
                 <th>Location</th>
-                <th>Owner</th>
                 <th>Subscription</th>
+                <th>Trial ends</th>
                 <th>Status</th>
                 <th>Joined</th>
                 <th className="text-right pr-4">Actions</th>
@@ -234,21 +229,20 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                 <tr>
                   <td colSpan={7} className="text-center py-12 text-slate-500">
                     {search || filterStatus !== 'all' || filterActive !== 'all'
-                      ? 'No shops match your filters'
+                      ? 'No shops match your filters.'
                       : 'No shops yet. Add the first one.'}
                   </td>
                 </tr>
               ) : filtered.map(shop => {
-                const subCfg = SUB_STATUS_CONFIG[shop.subscription_status as keyof typeof SUB_STATUS_CONFIG] ?? SUB_STATUS_CONFIG.trial
-                const trialExpired = shop.trial_ends_at && isPast(new Date(shop.trial_ends_at))
+                const subCfg = SUB_STATUS_CONFIG[shop.subscription_status] ?? SUB_STATUS_CONFIG.trial
+                const trialExpired = shop.trial_ends_at ? isPast(new Date(shop.trial_ends_at)) : false
 
                 return (
                   <tr key={shop.id}>
-                    {/* Shop name + slug */}
                     <td>
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center flex-shrink-0">
-                          <Store className="w-4 h-4 text-brand" />
+                        <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0">
+                          <Store className="w-4 h-4 text-blue-400" />
                         </div>
                         <div>
                           <p className="font-medium text-slate-100">{shop.name}</p>
@@ -256,67 +250,45 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                         </div>
                       </div>
                     </td>
-
-                    {/* Location */}
                     <td>
                       {shop.city ? (
-                        <span className="flex items-center gap-1 text-slate-400">
+                        <span className="flex items-center gap-1 text-slate-400 text-sm">
                           <MapPin className="w-3 h-3" />
                           {shop.city}{shop.state ? `, ${shop.state}` : ''}
                         </span>
-                      ) : (
-                        <span className="text-slate-600">—</span>
-                      )}
+                      ) : <span className="text-slate-600">—</span>}
                     </td>
-
-                    {/* Owner */}
                     <td>
-                      {shop.owner_phone ? (
-                        <span className="flex items-center gap-1 text-slate-400 text-xs">
-                          <Phone className="w-3 h-3" />
-                          {shop.owner_phone}
-                        </span>
-                      ) : (
-                        <span className="text-slate-600">—</span>
-                      )}
-                    </td>
-
-                    {/* Subscription */}
-                    <td>
-                      <span className={clsx(
-                        'status-badge border',
-                        subCfg.color
-                      )}>
+                      <span className={clsx('status-badge border', subCfg.color)}>
                         {subCfg.label}
                       </span>
-                      {shop.subscription_status === 'trial' && shop.trial_ends_at && (
-                        <p className={clsx('text-xs mt-0.5', trialExpired ? 'text-red-400' : 'text-slate-500')}>
-                          {trialExpired ? 'Expired' : `Ends ${formatDistanceToNow(new Date(shop.trial_ends_at), { addSuffix: true })}`}
-                        </p>
-                      )}
                     </td>
-
-                    {/* Active status */}
                     <td>
-                      <span className={clsx(
-                        'status-badge border',
+                      {shop.subscription_status === 'trial' && shop.trial_ends_at ? (
+                        <span className={clsx('text-xs', trialExpired ? 'text-red-400' : 'text-slate-500')}>
+                          {trialExpired
+                            ? 'Expired'
+                            : formatDistanceToNow(new Date(shop.trial_ends_at), { addSuffix: true })}
+                        </span>
+                      ) : <span className="text-slate-600">—</span>}
+                    </td>
+                    <td>
+                      <span className={clsx('status-badge border',
                         shop.is_active
                           ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
                           : 'text-red-400 bg-red-400/10 border-red-400/20'
                       )}>
-                        {shop.is_active ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
-                        {shop.is_active ? 'Active' : 'Suspended'}
+                        {shop.is_active
+                          ? <><CheckCircle className="w-3 h-3" /> Active</>
+                          : <><XCircle className="w-3 h-3" /> Suspended</>}
                       </span>
                     </td>
-
-                    {/* Joined */}
                     <td>
-                      <span className="text-slate-400 text-xs">
+                      <span className="text-slate-400 text-xs flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
                         {format(new Date(shop.created_at), 'dd MMM yyyy')}
                       </span>
                     </td>
-
-                    {/* Actions menu */}
                     <td className="text-right pr-4">
                       <div className="relative inline-block">
                         <button
@@ -325,62 +297,41 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                         >
                           <MoreVertical className="w-4 h-4" />
                         </button>
-
                         {openMenu === shop.id && (
                           <>
-                            {/* Backdrop */}
-                            <div
-                              className="fixed inset-0 z-10"
-                              onClick={() => setOpenMenu(null)}
-                            />
-                            <div className="absolute right-0 top-8 z-20 w-52 bg-surface-card border border-surface-border rounded-xl shadow-xl py-1">
-                              {/* Toggle active */}
+                            <div className="fixed inset-0 z-10" onClick={() => setOpenMenu(null)} />
+                            <div className="absolute right-0 top-8 z-20 w-52 rounded-xl shadow-xl py-1"
+                              style={{ background: '#1e293b', border: '1px solid #334155' }}>
                               <button
                                 onClick={() => toggleActive(shop)}
-                                className={clsx(
-                                  'w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-surface-hover transition-colors',
-                                  shop.is_active ? 'text-red-400' : 'text-emerald-400'
-                                )}
+                                className={clsx('w-full flex items-center gap-2.5 px-3.5 py-2 text-sm transition-colors hover:bg-slate-700/50',
+                                  shop.is_active ? 'text-red-400' : 'text-emerald-400')}
                               >
                                 {shop.is_active
                                   ? <><XCircle className="w-4 h-4" /> Suspend shop</>
                                   : <><CheckCircle className="w-4 h-4" /> Activate shop</>}
                               </button>
-
-                              <div className="border-t border-surface-border my-1" />
-
-                              {/* Subscription status changes */}
+                              <div style={{ borderTop: '1px solid #334155', margin: '4px 0' }} />
                               <p className="px-3.5 py-1.5 text-xs text-slate-500 font-medium">Set subscription</p>
-                              {Object.entries(SUB_STATUS_CONFIG).map(([val, cfg]) => (
+                              {(Object.entries(SUB_STATUS_CONFIG) as [SubscriptionStatus, { label: string; color: string }][]).map(([val, cfg]) => (
                                 <button
                                   key={val}
                                   onClick={() => updateSubStatus(shop, val)}
-                                  className={clsx(
-                                    'w-full flex items-center gap-2.5 px-3.5 py-2 text-sm hover:bg-surface-hover transition-colors',
-                                    shop.subscription_status === val ? 'text-brand' : 'text-slate-300'
-                                  )}
+                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700/50"
                                 >
-                                  {shop.subscription_status === val && (
-                                    <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                                  )}
-                                  <span className={shop.subscription_status === val ? 'ml-0' : 'ml-5'}>
-                                    {cfg.label}
-                                  </span>
+                                  {shop.subscription_status === val && <CheckCircle className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                  <span className={shop.subscription_status === val ? '' : 'ml-5'}>{cfg.label}</span>
                                 </button>
                               ))}
-
-                              <div className="border-t border-surface-border my-1" />
-
-                              {/* View public site */}
+                              <div style={{ borderTop: '1px solid #334155', margin: '4px 0' }} />
                               <a
                                 href={`https://groovia.co.in/shop/${shop.slug}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-300 hover:bg-surface-hover transition-colors"
+                                className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-slate-300 transition-colors hover:bg-slate-700/50"
                                 onClick={() => setOpenMenu(null)}
                               >
-                                <ExternalLink className="w-4 h-4" />
-                                View public page
+                                <ExternalLink className="w-4 h-4" /> View public page
                               </a>
                             </div>
                           </>
@@ -394,7 +345,7 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
           </table>
         </div>
         {filtered.length > 0 && (
-          <div className="px-4 py-3 border-t border-surface-border text-xs text-slate-500">
+          <div className="px-4 py-3 text-xs text-slate-500" style={{ borderTop: '1px solid #334155' }}>
             Showing {filtered.length} of {shops.length} shops
           </div>
         )}
@@ -404,11 +355,11 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)} />
-          <div className="relative bg-surface-card border border-surface-border rounded-2xl w-full max-w-md shadow-2xl">
+          <div className="relative rounded-2xl w-full max-w-md shadow-2xl"
+            style={{ background: '#1e293b', border: '1px solid #334155' }}>
             <div className="p-6">
               <h2 className="font-display text-lg font-semibold text-white mb-1">Add New Shop</h2>
-              <p className="text-slate-400 text-sm mb-6">Creates a 30-day trial account</p>
-
+              <p className="text-slate-400 text-sm mb-6">Creates a 60-day trial account</p>
               <form onSubmit={handleAddShop} className="space-y-4">
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">Shop name *</label>
@@ -420,13 +371,13 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                     className="input"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-medium text-slate-400 mb-1.5">
                     Slug * <span className="text-slate-600 font-normal">(URL identifier)</span>
                   </label>
                   <div className="flex">
-                    <span className="flex items-center px-3 rounded-l-lg bg-surface-hover border border-r-0 border-surface-border text-slate-500 text-xs whitespace-nowrap">
+                    <span className="flex items-center px-3 rounded-l-lg text-slate-500 text-xs whitespace-nowrap"
+                      style={{ background: '#334155', border: '1px solid #475569', borderRight: 'none' }}>
                       /shop/
                     </span>
                     <input
@@ -438,17 +389,6 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                     />
                   </div>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Owner phone</label>
-                  <input
-                    value={addForm.owner_phone}
-                    onChange={e => setAddForm(f => ({ ...f, owner_phone: e.target.value }))}
-                    placeholder="+91 98765 43210"
-                    className="input"
-                  />
-                </div>
-
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-400 mb-1.5">City</label>
@@ -469,26 +409,34 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
                     />
                   </div>
                 </div>
-
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Address</label>
+                  <input
+                    value={addForm.address_line_1}
+                    onChange={e => setAddForm(f => ({ ...f, address_line_1: e.target.value }))}
+                    placeholder="Shop #12, Main Road"
+                    className="input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Description</label>
+                  <input
+                    value={addForm.description}
+                    onChange={e => setAddForm(f => ({ ...f, description: e.target.value }))}
+                    placeholder="Neighbourhood grocery store"
+                    className="input"
+                  />
+                </div>
                 {addError && (
-                  <p className="text-red-400 text-xs bg-red-500/10 px-3 py-2 rounded-lg border border-red-500/20">
+                  <p className="text-red-400 text-xs px-3 py-2 rounded-lg" style={{ background: '#ef444420', border: '1px solid #ef444430' }}>
                     {addError}
                   </p>
                 )}
-
                 <div className="flex gap-3 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setShowAddModal(false); setAddError('') }}
-                    className="btn-secondary flex-1 justify-center"
-                  >
+                  <button type="button" onClick={() => { setShowAddModal(false); setAddError('') }} className="btn-secondary flex-1 justify-center">
                     Cancel
                   </button>
-                  <button
-                    type="submit"
-                    disabled={addLoading}
-                    className="btn-primary flex-1 justify-center"
-                  >
+                  <button type="submit" disabled={addLoading} className="btn-primary flex-1 justify-center">
                     {addLoading ? 'Creating...' : 'Create Shop'}
                   </button>
                 </div>
@@ -500,7 +448,8 @@ export default function ShopsClient({ initialShops }: { initialShops: ShopRow[] 
 
       {/* Toast */}
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 bg-surface-card border border-surface-border rounded-xl px-4 py-3 shadow-xl text-sm text-slate-200 flex items-center gap-2">
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-slate-200 flex items-center gap-2"
+          style={{ background: '#1e293b', border: '1px solid #334155' }}>
           <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0" />
           {toastMsg}
         </div>
