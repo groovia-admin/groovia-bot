@@ -2,15 +2,149 @@
 @tailwind components;
 @tailwind utilities;
 
-* { box-sizing: border-box; }
+/* ── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  --color-bg:           #0f172a;
+  --color-surface:      #0f172a;
+  --color-surface-card: #1e293b;
+  --color-surface-hover:#334155;
+  --color-border:       #334155;
+  --color-brand:        #3b82f6;
+  --color-brand-hover:  #2563eb;
+  --color-text:         #f1f5f9;
+  --color-text-muted:   #94a3b8;
+  --color-text-dim:     #64748b;
+  --color-green:        #22c55e;
+  --color-orange:       #f59e0b;
+  --color-red:          #ef4444;
+  --color-purple:       #a855f7;
+}
+
+/* ── Base ───────────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; }
 
 body {
-  background: #0f172a;
-  color: #f1f5f9;
-  font-family: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  min-height: 100vh;
 }
 
 /* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
-::-webkit-scrollbar-track { background: #1e293b; }
-::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--color-surface-card); }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+/* ── Component classes (used throughout all .tsx files) ─────────────────────── */
+@layer components {
+
+  /* Cards */
+  .card {
+    @apply rounded-xl border p-5;
+    background: var(--color-surface-card);
+    border-color: var(--color-border);
+  }
+
+  /* Form inputs */
+  .input {
+    @apply w-full rounded-lg px-3 py-2.5 text-sm outline-none transition-colors;
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    font-family: inherit;
+  }
+  .input:focus { border-color: var(--color-brand); }
+  .input::placeholder { color: var(--color-text-dim); }
+
+  /* Buttons */
+  .btn-primary {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity cursor-pointer;
+    background: var(--color-brand);
+    color: #fff;
+    border: none;
+    font-family: inherit;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors cursor-pointer;
+    background: var(--color-surface-hover);
+    color: var(--color-text-muted);
+    border: none;
+    font-family: inherit;
+  }
+  .btn-secondary:hover { color: var(--color-text); }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer;
+    background: transparent;
+    color: var(--color-text-muted);
+    border: none;
+    font-family: inherit;
+  }
+  .btn-ghost:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-text);
+  }
+
+  .btn-danger {
+    @apply inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-opacity cursor-pointer;
+    background: #991b1b;
+    color: var(--color-red);
+    border: none;
+    font-family: inherit;
+  }
+  .btn-danger:hover { opacity: 0.88; }
+
+  /* Status badges */
+  .status-badge {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  /* Data table */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide;
+    color: var(--color-text-dim);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .data-table td {
+    @apply px-4 py-3 text-sm;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid #1e293b;
+  }
+  .data-table tbody tr:hover td {
+    background: var(--color-surface-hover);
+  }
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Page shell */
+  .page-header {
+    @apply flex items-center justify-between mb-6;
+  }
+  .page-title {
+    @apply text-xl font-bold;
+    color: var(--color-text);
+  }
+  .page-subtitle {
+    @apply text-sm mt-0.5;
+    color: var(--color-text-muted);
+  }
+
+  /* Surface variants (used in Sidebar and modals) */
+  .bg-surface        { background: var(--color-surface) !important; }
+  .bg-surface-card   { background: var(--color-surface-card) !important; }
+  .bg-surface-hover  { background: var(--color-surface-hover) !important; }
+  .border-surface-border { border-color: var(--color-border) !important; }
+  .text-brand        { color: var(--color-brand) !important; }
+  .bg-brand          { background: var(--color-brand) !important; }
+  .font-display      { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; font-weight: 700; }
+}
