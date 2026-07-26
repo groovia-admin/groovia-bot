@@ -17,7 +17,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const isSuperAdmin = !!adminRecord
 
-  // Get shop user record for non-admins
+  // Get shop user record — NOTE: column is auth_user_id not user_id
   let shopUser: {
     role: string
     full_name: string
@@ -28,7 +28,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
     const { data } = await supabase
       .from('shop_users')
       .select('role, full_name, shops(name, logo_url)')
-      .eq('user_id', user.id)
+      .eq('auth_user_id', user.id)   // ← correct column name
       .single()
 
     if (data) {
@@ -36,8 +36,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
         role:      data.role as string,
         full_name: data.full_name as string,
         shops:     Array.isArray(data.shops)
-             ? (data.shops[0] ?? undefined)
-             : (data.shops as { name: string; logo_url: string | null } | undefined)
+                     ? (data.shops[0] ?? undefined)
+                     : (data.shops as { name: string; logo_url: string | null } | undefined) ?? undefined
       }
     }
   }
