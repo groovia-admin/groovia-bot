@@ -22,10 +22,11 @@ interface SidebarProps {
 
 // Nav items per role
 const SUPER_ADMIN_NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/shops', label: 'Shops', icon: Store },
-  { href: '/dashboard/logs', label: 'Audit Logs', icon: ScrollText },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard',         label: 'Overview',       icon: LayoutDashboard, exact: true },
+  { href: '/dashboard/shops',   label: 'Shops',          icon: Store },
+  { href: '/dashboard/catalog', label: 'Master Catalog', icon: Package },  // ← ADD THIS
+  { href: '/dashboard/logs',    label: 'Audit Logs',     icon: ScrollText },
+  { href: '/dashboard/settings',label: 'Settings',       icon: Settings },
 ]
 
 const OWNER_NAV = [
