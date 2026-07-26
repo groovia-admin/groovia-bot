@@ -1,124 +1,267 @@
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { redirect } from 'next/navigation'
+import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
 
-  // Fetch real stats in parallel
-  const [shopsResult, ordersResult, activeShopsResult] = await Promise.all([
-    supabase.from('shops').select('*', { count: 'exact', head: true }),
-    supabase.from('orders').select('*', { count: 'exact', head: true }),
-    supabase.from('shops').select('*', { count: 'exact', head: true }).eq('is_active', true),
-  ])
+  // Use admin client for platform_admins check — RLS on anon client
+  // may return null even for valid admins if session cookie timing is off
+  const adminClient = createAdminClient()
 
-  // Today's orders
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const { count: todayOrders } = await supabase
-    .from('orders')
-    .select('*', { count: 'exact', head: true })
-    .gte('created_at', today.toISOString())
+  const { data: adminRecord } = await adminClient
+    .from('platform_admins')
+    .select('user_id')
+    .eq('user_id', user.id)
+    .single()
 
-  // Trial vs paying shops
-  const { count: trialShops } = await supabase
-    .from('shops')
-    .select('*', { count: 'exact', head: true })
-    .eq('subscription_status', 'trial')
+  const isSuperAdmin = !!adminRecord
 
-  const { count: payingShops } = await supabase
-    .from('shops')
-    .select('*', { count: 'exact', head: true })
-    .eq('subscription_status', 'active')
+  // ── Super Admin Overview ───────────────────────────────────
+  if (isSuperAdmin) {
+    const [
+      { count: totalShops },
+      { count: activeShops },
+      { count: trialShops },
+      { count: paidShops },
+    ] = await Promise.all([
+      adminClient.from('shops').select('*', { count: 'exact', head: true }),
+      adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('is_active', true),
+      adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('subscription_status', 'trial'),
+      adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('subscription_status', 'active'),
+    ])
 
-  const stats = {
-    totalShops:   shopsResult.count       ?? 0,
-    activeShops:  activeShopsResult.count ?? 0,
-    totalOrders:  ordersResult.count      ?? 0,
-    todayOrders:  todayOrders             ?? 0,
-    trialShops:   trialShops              ?? 0,
-    payingShops:  payingShops             ?? 0,
-    estMRR:       (payingShops ?? 0) * 599,
+    const { data: recentShops } = await adminClient
+      .from('shops')
+      .select('id, name, slug, city, subscription_status, is_active, created_at')
+      .order('created_at', { ascending: false })
+      .limit(6)
+
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-white">Platform Overview</h1>
+          <p className="text-slate-400 text-sm mt-0.5">GrooVia Super Admin</p>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-slate-300" />
+          <StatCard icon={Store}         label="Active"       value={activeShops ?? 0} color="text-emerald-400" />
+          <StatCard icon={AlertTriangle} label="On Trial"     value={trialShops  ?? 0} color="text-amber-400" />
+          <StatCard icon={Store}         label="Paid"         value={paidShops   ?? 0} color="text-brand" />
+        </div>
+
+        {/* Recent shops */}
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-white">Recently Added Shops</h2>
+            <a href="/dashboard/shops" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+              View all →
+            </a>
+          </div>
+
+          {!recentShops?.length ? (
+            <p className="text-slate-500 text-sm">No shops yet.</p>
+          ) : (
+            <div className="space-y-0">
+              {recentShops.map((shop, i) => (
+                <div
+                  key={shop.id}
+                  className="flex items-center justify-between py-3"
+                  style={{ borderBottom: i < recentShops.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                      style={{ background: 'rgba(42,140,140,0.15)', color: 'var(--brand)' }}
+                    >
+                      {shop.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">{shop.name}</p>
+                      <p className="text-xs text-slate-500">{shop.city ?? '—'} · /{shop.slug}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <SubBadge status={shop.subscription_status} />
+                    <span className="text-xs text-slate-500 hidden sm:block">
+                      {new Date(shop.created_at).toLocaleDateString('en-IN', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                      })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
-  const cards = [
-    { label: 'Total Shops',    value: stats.totalShops,  sub: `${stats.activeShops} active`,    icon: '🏪', color: '#3b82f6' },
-    { label: 'Paying Shops',   value: stats.payingShops, sub: `${stats.trialShops} on trial`,   icon: '✅', color: '#22c55e' },
-    { label: 'Total Orders',   value: stats.totalOrders, sub: `${stats.todayOrders} today`,     icon: '📦', color: '#f59e0b' },
-    { label: 'Est. MRR',       value: `₹${stats.estMRR.toLocaleString('en-IN')}`, sub: '@ ₹599/shop', icon: '💰', color: '#a855f7' },
-  ]
+  // ── Merchant Overview ──────────────────────────────────────
+  const { data: shopUser } = await supabase
+    .from('shop_users')
+    .select('shop_id, role, full_name, shops(name)')
+    .eq('auth_user_id', user.id)
+    .eq('is_active', true)
+    .single()
+
+  if (!shopUser) redirect('/login')
+
+  const shopId = shopUser.shop_id
+  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+
+  const [
+    { count: todayOrders },
+    { count: pendingOrders },
+    { count: totalCustomers },
+    { data: recentOrders },
+  ] = await Promise.all([
+    supabase.from('orders').select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId).gte('created_at', today),
+    supabase.from('orders').select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId).eq('status', 'pending'),
+    supabase.from('customers').select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId),
+    supabase.from('orders')
+      .select('id, order_number, status, total_amount, created_at, pickup_slot_label')
+      .eq('shop_id', shopId)
+      .order('created_at', { ascending: false })
+      .limit(5),
+  ])
+
+  const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
+    pending:   { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
+    accepted:  { bg: 'rgba(59,130,246,0.15)',  color: '#60a5fa' },
+    preparing: { bg: 'rgba(139,92,246,0.15)',  color: '#a78bfa' },
+    ready:     { bg: 'rgba(16,185,129,0.15)',  color: '#34d399' },
+    completed: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
+    rejected:  { bg: 'rgba(239,68,68,0.15)',   color: '#f87171' },
+    cancelled: { bg: 'rgba(239,68,68,0.15)',   color: '#f87171' },
+  }
 
   return (
-    <div>
-      {/* Page header */}
-      <div style={{ marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9', marginBottom: '4px' }}>
-          Platform Overview
+    <div className="space-y-6">
+      <div>
+        <h1 className="font-display text-2xl font-bold text-white">
+          Good {getGreeting()}, {shopUser.full_name?.split(' ')[0] ?? 'there'}
         </h1>
-        <p style={{ fontSize: '13px', color: '#94a3b8' }}>
-          {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+        <p className="text-slate-400 text-sm mt-0.5">
+          {(shopUser.shops as any)?.name ?? 'Your store'} — here's today at a glance
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-        {cards.map(card => (
-          <div key={card.label} style={{
-            background: '#1e293b',
-            border: '1px solid #334155',
-            borderRadius: '12px',
-            padding: '20px',
-            transition: 'border-color 0.15s',
-          }}>
-            <div style={{ fontSize: '24px', marginBottom: '8px' }}>{card.icon}</div>
-            <div style={{ fontSize: '28px', fontWeight: 800, color: card.color, lineHeight: 1.2 }}>
-              {card.value}
-            </div>
-            <div style={{ fontSize: '12px', color: '#94a3b8', marginTop: '4px' }}>{card.label}</div>
-            <div style={{ fontSize: '11px', color: '#475569', marginTop: '4px' }}>{card.sub}</div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <StatCard icon={ShoppingBag} label="Today's Orders" value={todayOrders   ?? 0} color="text-brand" />
+        <StatCard icon={Clock}       label="Pending"        value={pendingOrders ?? 0} color="text-amber-400" urgent={!!pendingOrders && pendingOrders > 0} />
+        <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-slate-300" />
       </div>
 
-      {/* Quick links */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-        <a href="/dashboard/shops" style={{ textDecoration: 'none' }}>
-          <div style={{
-            background: '#1e293b',
-            border: '1px solid #3b82f633',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            cursor: 'pointer',
-          }}>
-            <div style={{ fontSize: '32px' }}>🏪</div>
-            <div>
-              <div style={{ fontWeight: 700, color: '#f1f5f9', marginBottom: '4px' }}>Manage Shops</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>View, activate, suspend shops</div>
-            </div>
-            <div style={{ marginLeft: 'auto', color: '#94a3b8' }}>→</div>
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-white">Recent Orders</h2>
+          <a href="/dashboard/orders" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+            View all →
+          </a>
+        </div>
+
+        {!recentOrders?.length ? (
+          <p className="text-slate-500 text-sm">No orders yet today.</p>
+        ) : (
+          <div>
+            {recentOrders.map((order, i) => {
+              const style = STATUS_STYLES[order.status] ?? STATUS_STYLES.pending
+              return (
+                <div
+                  key={order.id}
+                  className="flex items-center justify-between py-3"
+                  style={{ borderBottom: i < recentOrders.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className="text-xs font-medium px-2.5 py-0.5 rounded-full"
+                      style={{ background: style.bg, color: style.color }}
+                    >
+                      {order.status}
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium text-slate-200">#{order.order_number}</p>
+                      <p className="text-xs text-slate-500">
+                        {order.pickup_slot_label ?? new Date(order.created_at).toLocaleTimeString('en-IN', {
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-slate-200">
+                    ₹{Number(order.total_amount).toFixed(2)}
+                  </p>
+                </div>
+              )
+            })}
           </div>
-        </a>
-        <a href="/dashboard/logs" style={{ textDecoration: 'none' }}>
-          <div style={{
-            background: '#1e293b',
-            border: '1px solid #a855f733',
-            borderRadius: '12px',
-            padding: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '16px',
-            cursor: 'pointer',
-          }}>
-            <div style={{ fontSize: '32px' }}>📋</div>
-            <div>
-              <div style={{ fontWeight: 700, color: '#f1f5f9', marginBottom: '4px' }}>Audit Logs</div>
-              <div style={{ fontSize: '12px', color: '#94a3b8' }}>All platform activity</div>
-            </div>
-            <div style={{ marginLeft: 'auto', color: '#94a3b8' }}>→</div>
-          </div>
-        </a>
+        )}
       </div>
     </div>
   )
+}
+
+// ── Sub-components ─────────────────────────────────────────────
+
+function StatCard({ icon: Icon, label, value, color, urgent }: {
+  icon: React.ElementType
+  label: string
+  value: number
+  color: string
+  urgent?: boolean
+}) {
+  return (
+    <div
+      className="card"
+      style={urgent && value > 0 ? { borderColor: 'rgba(245,158,11,0.4)' } : undefined}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs text-slate-500">{label}</p>
+        <Icon className={`w-4 h-4 ${color}`} />
+      </div>
+      <p className={`text-2xl font-bold font-display ${color}`}>{value}</p>
+      {urgent && value > 0 && (
+        <p className="text-xs text-amber-400 mt-1">Needs attention</p>
+      )}
+    </div>
+  )
+}
+
+function SubBadge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string; label: string }> = {
+    trial:    { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', label: 'Trial' },
+    active:   { bg: 'rgba(16,185,129,0.15)',  color: '#34d399', label: 'Active' },
+    past_due: { bg: 'rgba(249,115,22,0.15)',  color: '#fb923c', label: 'Past Due' },
+    expired:  { bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Expired' },
+    suspended:{ bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Suspended' },
+    cancelled:{ bg: 'rgba(107,114,128,0.15)', color: '#9ca3af', label: 'Cancelled' },
+  }
+  const cfg = map[status] ?? map.trial
+  return (
+    <span
+      className="text-xs font-medium px-2 py-0.5 rounded-full"
+      style={{ background: cfg.bg, color: cfg.color }}
+    >
+      {cfg.label}
+    </span>
+  )
+}
+
+function getGreeting() {
+  const h = new Date().getHours()
+  if (h < 12) return 'morning'
+  if (h < 17) return 'afternoon'
+  return 'evening'
 }

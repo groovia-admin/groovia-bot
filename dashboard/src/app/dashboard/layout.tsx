@@ -1,15 +1,17 @@
-import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import Sidebar from '@/components/Sidebar'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import Sidebar from '@/components/layout/Sidebar'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Check platform_admins
-  const { data: adminRecord } = await supabase
+  // Admin client for privilege checks — bypasses RLS so we get accurate results
+  const adminClient = createAdminClient()
+
+  const { data: adminRecord } = await adminClient
     .from('platform_admins')
     .select('user_id')
     .eq('user_id', user.id)
@@ -17,49 +19,33 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const isSuperAdmin = !!adminRecord
 
-  // Get shop user record — NOTE: column is auth_user_id not user_id
-  let shopUser: {
-    role: string
-    full_name: string
-    shops?: { name: string; logo_url: string | null } | undefined
-  } | null = null
-
+  let shopUser = null
   if (!isSuperAdmin) {
-    const { data } = await supabase
+    const { data } = await adminClient
       .from('shop_users')
-      .select('role, full_name, shops(name, logo_url)')
-      .eq('auth_user_id', user.id)   // ← correct column name
+      .select(`
+        id, role, full_name, phone, shop_id,
+        shops ( name, logo_url )
+      `)
+      .eq('auth_user_id', user.id)
+      .eq('is_active', true)
       .single()
 
-    if (data) {
-      shopUser = {
-        role:      data.role as string,
-        full_name: data.full_name as string,
-        shops:     Array.isArray(data.shops)
-                     ? (data.shops[0] ?? undefined)
-                     : (data.shops as { name: string; logo_url: string | null } | undefined) ?? undefined
-      }
-    }
+    shopUser = data
+    if (!shopUser) redirect('/login')
   }
 
-  const userPhone = user.phone ?? user.email ?? 'Admin'
-
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#0f172a' }}>
+    <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--surface)' }}>
       <Sidebar
         isSuperAdmin={isSuperAdmin}
         shopUser={shopUser}
-        userPhone={userPhone}
+        userPhone={user.phone ?? ''}
       />
-      <main style={{
-        marginLeft: '256px',
-        flex: 1,
-        minHeight: '100vh',
-        padding: '28px 32px',
-        overflowY: 'auto',
-        background: '#0f172a'
-      }}>
-        {children}
+      <main className="flex-1 overflow-y-auto">
+        <div className="p-6 lg:p-8">
+          {children}
+        </div>
       </main>
     </div>
   )
