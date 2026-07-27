@@ -16,14 +16,8 @@ export default async function ShopsPage() {
       subscription_status,
       trial_ends_at,
       created_at,
-      updated_at,
-      shop_users!inner(
-        full_name,
-        role,
-        auth_user_id
-      )
+      updated_at
     `)
-    .eq('shop_users.role', 'owner')
     .order('created_at', { ascending: false })
 
   if (error) {
