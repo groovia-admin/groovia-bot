@@ -37,7 +37,7 @@ export interface Shop {
 export interface ShopUser {
   id: string
   shop_id: string
-  auth_user_id: string | null   // NOTE: column is auth_user_id, NOT user_id
+  auth_user_id: string        // Required FK to auth.users.id; column is auth_user_id, NOT user_id
   full_name: string
   role: ShopRole
   is_active: boolean

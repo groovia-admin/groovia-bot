@@ -15,7 +15,7 @@ interface SidebarProps {
   shopUser: {
     role: string
     full_name: string
-    shops?: { name: string; logo_url: string | null }
+    shops?: { name: string; logo_url: string | null } | null
   } | null
   userPhone: string
 }
