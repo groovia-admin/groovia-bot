@@ -3,36 +3,49 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import Sidebar from '@/components/Sidebar'
 
+type ShopUserForSidebar = {
+  role: string
+  full_name: string
+  shops?: { name: string; logo_url: string | null } | null
+}
+
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // Admin client for privilege checks — bypasses RLS so we get accurate results
   const adminClient = createAdminClient()
 
   const { data: adminRecord } = await adminClient
     .from('platform_admins')
     .select('user_id')
     .eq('user_id', user.id)
-    .single()
+    .maybeSingle()
 
   const isSuperAdmin = !!adminRecord
 
-  let shopUser = null
+  let shopUser: ShopUserForSidebar | null = null
+
   if (!isSuperAdmin) {
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from('shop_users')
       .select(`
-        id, role, full_name, phone, shop_id,
+        role,
+        full_name,
         shops ( name, logo_url )
       `)
       .eq('auth_user_id', user.id)
       .eq('is_active', true)
-      .single()
+      .maybeSingle()
 
-    shopUser = data
-    if (!shopUser) redirect('/login')
+    if (error || !data) redirect('/login')
+
+    const shop = Array.isArray(data.shops) ? data.shops[0] ?? null : data.shops
+    shopUser = {
+      role: data.role,
+      full_name: data.full_name,
+      shops: shop,
+    }
   }
 
   return (
@@ -40,7 +53,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <Sidebar
         isSuperAdmin={isSuperAdmin}
         shopUser={shopUser}
-        userPhone={user.phone ?? ''}
+        userPhone={user.phone ?? user.email ?? ''}
       />
       <main className="flex-1 overflow-y-auto">
         <div className="p-6 lg:p-8">

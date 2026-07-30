@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import ShopsClient from '@/components/shops/ShopsClient'
 
 export default async function ShopsPage() {
