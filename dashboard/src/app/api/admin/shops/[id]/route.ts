@@ -15,6 +15,26 @@ type CreateShopBody = {
   ownerEmail?: unknown
 }
 
+type UpdateShopBody = {
+  is_active?: unknown
+  subscription_status?: unknown
+}
+
+type ShopRouteContext = {
+  params: Promise<{
+    id: string
+  }>
+}
+
+const SUBSCRIPTION_STATUSES = new Set([
+  'trial',
+  'active',
+  'past_due',
+  'cancelled',
+  'expired',
+  'suspended',
+])
+
 function getText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -387,6 +407,126 @@ export async function POST(request: Request) {
     },
     {
       status: 201,
+      headers: {
+        'Cache-Control':
+          'no-store, no-cache, must-revalidate',
+      },
+    }
+  )
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: ShopRouteContext
+) {
+  const authorization = await requirePlatformAdmin()
+
+  if ('error' in authorization) {
+    return authorization.error
+  }
+
+  let body: UpdateShopBody
+
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    )
+  }
+
+  const changes: {
+    is_active?: boolean
+    subscription_status?: string
+  } = {}
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'is_active'
+    )
+  ) {
+    if (typeof body.is_active !== 'boolean') {
+      return NextResponse.json(
+        { error: 'is_active must be true or false' },
+        { status: 400 }
+      )
+    }
+
+    changes.is_active = body.is_active
+  }
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      body,
+      'subscription_status'
+    )
+  ) {
+    if (
+      typeof body.subscription_status !== 'string' ||
+      !SUBSCRIPTION_STATUSES.has(
+        body.subscription_status
+      )
+    ) {
+      return NextResponse.json(
+        { error: 'Invalid subscription status' },
+        { status: 400 }
+      )
+    }
+
+    changes.subscription_status =
+      body.subscription_status
+  }
+
+  if (Object.keys(changes).length === 0) {
+    return NextResponse.json(
+      {
+        error:
+          'Provide is_active or subscription_status to update a shop',
+      },
+      { status: 400 }
+    )
+  }
+
+  const { id } = await params
+  const { data: shop, error } = await authorization.adminClient
+    .from('shops')
+    .update(changes)
+    .eq('id', id)
+    .select(`
+      id,
+      slug,
+      name,
+      city,
+      state,
+      is_active,
+      subscription_status,
+      trial_ends_at,
+      created_at,
+      updated_at
+    `)
+    .maybeSingle()
+
+  if (error) {
+    console.error('Failed to update shop:', error)
+
+    return NextResponse.json(
+      { error: 'Failed to update the shop' },
+      { status: 500 }
+    )
+  }
+
+  if (!shop) {
+    return NextResponse.json(
+      { error: 'Shop not found' },
+      { status: 404 }
+    )
+  }
+
+  return NextResponse.json(
+    { shop },
+    {
       headers: {
         'Cache-Control':
           'no-store, no-cache, must-revalidate',
