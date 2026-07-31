@@ -189,6 +189,10 @@ export default function ShopsClient({
 
   const [addError, setAddError] = useState("");
 
+  const [pinLoading, setPinLoading] = useState(false);
+
+  const [pinError, setPinError] = useState("");
+
   const [toast, setToast] = useState("");
 
   const [createdOwner, setCreatedOwner] =
@@ -233,6 +237,53 @@ export default function ShopsClient({
       name,
       slug,
     }));
+  }
+
+  async function lookupPinCode(pinCode: string) {
+    const normalizedPin = pinCode.replace(/\D/g, "");
+
+    if (normalizedPin.length !== 6) {
+      setPinError("");
+      return;
+    }
+
+    setPinLoading(true);
+    setPinError("");
+
+    try {
+      const response = await fetch(`https://api.postalpincode.in/pincode/${normalizedPin}`);
+
+      if (!response.ok) {
+        throw new Error("PIN code lookup failed");
+      }
+
+      const data = await response.json();
+      const result = data?.[0];
+
+      if (
+        result?.Status !== "Success" ||
+        !Array.isArray(result?.PostOffice) ||
+        result.PostOffice.length === 0
+      ) {
+        setPinError("PIN code was not found. Please enter the city and state manually.");
+        return;
+      }
+
+      const postOffice = result.PostOffice[0];
+
+      setForm((current) => ({
+        ...current,
+        postal_code: normalizedPin,
+        city: postOffice.District || current.city,
+        state: postOffice.State || current.state,
+      }));
+    } catch (error) {
+      console.error("PIN code lookup failed:", error);
+
+      setPinError("Unable to look up this PIN code. Please enter the city and state manually.");
+    } finally {
+      setPinLoading(false);
+    }
   }
 
   function closeAddModal() {
@@ -405,6 +456,8 @@ export default function ShopsClient({
         },
         body: JSON.stringify({
           ...form,
+          postalCode: form.postal_code,
+          area: form.area,
           owner_phone: normalizedPhone,
 
           /*
@@ -1427,6 +1480,62 @@ export default function ShopsClient({
                   />
                 </div>
 
+                <div>
+                  <label style={S.label}>PIN code *</label>
+
+                  <input
+                    style={S.input}
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="postal-code"
+                    value={form.postal_code}
+                    onChange={(event) => {
+                      const postalCode = event.target.value.replace(/\D/g, "").slice(0, 6);
+
+                      setForm((current) => ({
+                        ...current,
+                        postal_code: postalCode,
+                      }));
+
+                      if (postalCode.length < 6) {
+                        setPinError("");
+                      }
+
+                      if (postalCode.length === 6) {
+                        void lookupPinCode(postalCode);
+                      }
+                    }}
+                    placeholder="380015"
+                    maxLength={6}
+                    required
+                    disabled={saving}
+                  />
+
+                  {pinLoading && (
+                    <p
+                      style={{
+                        margin: "5px 0 0",
+                        fontSize: 12,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      Looking up city and state...
+                    </p>
+                  )}
+
+                  {pinError && (
+                    <p
+                      style={{
+                        margin: "5px 0 0",
+                        fontSize: 12,
+                        color: "#f87171",
+                      }}
+                    >
+                      {pinError}
+                    </p>
+                  )}
+                </div>
+
                 <div
                   style={{
                     display: "grid",
@@ -1435,7 +1544,7 @@ export default function ShopsClient({
                   }}
                 >
                   <div>
-                    <label style={S.label}>City</label>
+                    <label style={S.label}>City *</label>
 
                     <input
                       style={S.input}
@@ -1447,12 +1556,13 @@ export default function ShopsClient({
                         }))
                       }
                       placeholder="Ahmedabad"
+                      required
                       disabled={saving}
                     />
                   </div>
 
                   <div>
-                    <label style={S.label}>State</label>
+                    <label style={S.label}>State *</label>
 
                     <input
                       style={S.input}
@@ -1464,9 +1574,27 @@ export default function ShopsClient({
                         }))
                       }
                       placeholder="Gujarat"
+                      required
                       disabled={saving}
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label style={S.label}>Area / Locality</label>
+
+                  <input
+                    style={S.input}
+                    value={form.area}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        area: event.target.value,
+                      }))
+                    }
+                    placeholder="Satellite"
+                    disabled={saving}
+                  />
                 </div>
 
                 <div>

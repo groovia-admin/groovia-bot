@@ -17,6 +17,9 @@ type CreateShopBody = {
   ownerPhone?: unknown
   owner_phone?: unknown
   description?: unknown
+  postalCode?: unknown
+  postal_code?: unknown
+  area?: unknown
 }
 
 type UpdateShopBody = {
@@ -242,6 +245,9 @@ export async function POST(
   const description =
     getText(body.description)
 
+  const postalCode = getText(body.postalCode ?? body.postal_code)
+  const area = getText(body.area)
+
   const rawOwnerPhone = getText(
     body.ownerPhone ??
     body.owner_phone
@@ -319,6 +325,18 @@ export async function POST(
       {
         status: 400,
       }
+    )
+  }
+
+  if (!/^\d{6}$/.test(postalCode)) {
+  return NextResponse.json(
+    {
+      error:
+        'Enter a valid 6-digit PIN code',
+    },
+    {
+      status: 400,
+    }
     )
   }
 
@@ -573,30 +591,28 @@ export async function POST(
   const shop =
     createdShops[0]
 
-  if (
-    description
-  ) {
-    const {
-      error:
-        descriptionUpdateError,
-    } =
-      await adminClient
-        .from('shops')
-        .update({
-          description,
-        })
-        .eq(
-          'id',
-          shop.id
-        )
+  const shopUpdates: Record<string, string> = {}
 
-    if (
-      descriptionUpdateError
-    ) {
-      console.error(
-        'Shop description update failed:',
-        descriptionUpdateError
-      )
+  if (description) {
+    shopUpdates.description = description
+  }
+
+  if (area) {
+    shopUpdates.area = area
+  }
+
+  if (postalCode) {
+    shopUpdates.postal_code = postalCode
+  }
+
+  if (Object.keys(shopUpdates).length > 0) {
+    const { error: shopUpdateError } = await adminClient
+      .from('shops')
+      .update(shopUpdates)
+      .eq('id', shop.id)
+
+    if (shopUpdateError) {
+      console.error('Shop metadata update failed:', shopUpdateError)
     }
   }
 
