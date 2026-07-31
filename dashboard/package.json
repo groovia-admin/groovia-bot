@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@getbrevo/brevo": "^6.0.2",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.45.0",
     "clsx": "^2.1.0",
