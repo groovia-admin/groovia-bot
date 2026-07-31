@@ -15,6 +15,8 @@ export interface Shop {
   name: string
   description: string | null
   logo_url: string | null
+  area: string | null
+  phone_number: string | null
   address_line_1: string | null
   address_line_2: string | null
   city: string | null
