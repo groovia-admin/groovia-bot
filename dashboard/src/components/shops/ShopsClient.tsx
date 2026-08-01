@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceToNow, isPast } from "date-fns";
 import {
   AlertTriangle,
@@ -176,6 +176,28 @@ export default function ShopsClient({
   );
 
   const [openMenu, setOpenMenu] = useState<string | null>(null);
+
+  const [menuAnchor, setMenuAnchor] = useState<{
+    top: number;
+    bottom: number;
+    left: number;
+    right: number;
+  } | null>(null);
+
+  const [menuOpenUpward, setMenuOpenUpward] = useState(false);
+
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    if (!openMenu || !menuAnchor || !menuRef.current) {
+      setMenuOpenUpward(false);
+      return;
+    }
+    const menuHeight = menuRef.current.offsetHeight;
+    const spaceBelow = window.innerHeight - menuAnchor.bottom;
+    const spaceAbove = menuAnchor.top;
+    setMenuOpenUpward(spaceBelow < menuHeight + 8 && spaceAbove > spaceBelow);
+  }, [openMenu, menuAnchor]);
 
   const [showAdd, setShowAdd] = useState(false);
 
@@ -1052,14 +1074,26 @@ export default function ShopsClient({
                               borderRadius: 6,
                               opacity: isUpdating ? 0.5 : 1,
                             }}
-                            onClick={() =>
-                              setOpenMenu(openMenu === shop.id ? null : shop.id)
-                            }
+                            onClick={(e) => {
+                              if (openMenu === shop.id) {
+                                setOpenMenu(null);
+                                return;
+                              }
+                              const rect =
+                                e.currentTarget.getBoundingClientRect();
+                              setMenuAnchor({
+                                top: rect.top,
+                                bottom: rect.bottom,
+                                left: rect.left,
+                                right: rect.right,
+                              });
+                              setOpenMenu(shop.id);
+                            }}
                           >
                             <MoreVertical size={16} />
                           </button>
 
-                          {openMenu === shop.id && (
+                          {openMenu === shop.id && menuAnchor && (
                             <>
                               <div
                                 style={{
@@ -1071,10 +1105,21 @@ export default function ShopsClient({
                               />
 
                               <div
+                                ref={menuRef}
                                 style={{
-                                  position: "absolute",
-                                  right: 0,
-                                  top: 32,
+                                  position: "fixed",
+                                  left: Math.min(
+                                    Math.max(8, menuAnchor.right - 200),
+                                    window.innerWidth - 208,
+                                  ),
+                                  ...(menuOpenUpward
+                                    ? {
+                                        bottom:
+                                          window.innerHeight -
+                                          menuAnchor.top +
+                                          4,
+                                      }
+                                    : { top: menuAnchor.bottom + 4 }),
                                   zIndex: 20,
                                   width: 200,
                                   background: "#1e293b",

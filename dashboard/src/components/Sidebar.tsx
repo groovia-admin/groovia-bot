@@ -100,7 +100,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-3 overflow-y-auto space-y-0.5">
+      <nav className="flex-1 min-h-0 py-4 px-3 overflow-y-auto space-y-0.5">
         {navItems.map(item => {
           const Icon = item.icon
           const active = isActive(item)
