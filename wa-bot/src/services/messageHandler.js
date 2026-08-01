@@ -1,4 +1,5 @@
 const logger = require('../utils/logger');
+const config = require('../config');
 
 // ── Deduplication ──────────────────────────────────────────────
 const processedMessages = new Set();
@@ -12,12 +13,12 @@ function markProcessed(id) {
 async function sendWhatsAppMessage(to, text) {
   try {
     const res = await fetch(
-      `https://graph.facebook.com/v23.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
+      `https://graph.facebook.com/${config.graphApiVersion}/${config.phoneNumberId}/messages`,
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.META_WHATSAPP_TOKEN}`,
+          'Authorization': `Bearer ${config.whatsappToken}`,
         },
         body: JSON.stringify({
           messaging_product: 'whatsapp',
@@ -45,32 +46,23 @@ async function sendWhatsAppMessage(to, text) {
 }
 
 // ── Command parser ─────────────────────────────────────────────
-// Parses shopkeeper replies like:
-//   ACCEPT ORD-20250801-1001
-//   REJECT ORD-20250801-1001 Out of stock
-//   READY ORD-20250801-1001
 function parseCommand(text) {
   if (!text) return null;
   const upper = text.trim().toUpperCase();
 
-  // ACCEPT <order_number>
-  const acceptMatch = upper.match(/^ACCEPT\s+(ORD-[\w-]+)$/i);
+  const acceptMatch = text.trim().match(/^ACCEPT\s+(ORD-[\w-]+)$/i);
   if (acceptMatch) return { command: 'ACCEPT', orderNumber: acceptMatch[1].toUpperCase() };
 
-  // REJECT <order_number> [reason]
   const rejectMatch = text.trim().match(/^REJECT\s+(ORD-[\w-]+)(?:\s+(.+))?$/i);
   if (rejectMatch) return { command: 'REJECT', orderNumber: rejectMatch[1].toUpperCase(), reason: rejectMatch[2] || 'Rejected by shopkeeper' };
 
-  // READY <order_number>
-  const readyMatch = upper.match(/^READY\s+(ORD-[\w-]+)$/i);
+  const readyMatch = text.trim().match(/^READY\s+(ORD-[\w-]+)$/i);
   if (readyMatch) return { command: 'READY', orderNumber: readyMatch[1].toUpperCase() };
 
-  // COMPLETE / DONE <order_number>
-  const completeMatch = upper.match(/^(?:COMPLETE|DONE)\s+(ORD-[\w-]+)$/i);
+  const completeMatch = text.trim().match(/^(?:COMPLETE|DONE)\s+(ORD-[\w-]+)$/i);
   if (completeMatch) return { command: 'COMPLETE', orderNumber: completeMatch[1].toUpperCase() };
 
-  // HELP
-  if (upper === 'HELP' || upper === 'HI' || upper === 'HELLO') return { command: 'HELP' };
+  if (['HELP', 'HI', 'HELLO', 'START'].includes(upper)) return { command: 'HELP' };
 
   return null;
 }
@@ -92,7 +84,7 @@ function getSupabase() {
   return _supabase;
 }
 
-// ── Order command handlers ─────────────────────────────────────
+// ── Order command handler ──────────────────────────────────────
 async function handleOrderCommand(from, parsed) {
   const supabase = getSupabase();
 
@@ -111,34 +103,38 @@ async function handleOrderCommand(from, parsed) {
     .single();
 
   if (error || !order) {
-    await sendWhatsAppMessage(from, `❌ Order *${orderNumber}* not found. Please check the order number and try again.`);
+    await sendWhatsAppMessage(from,
+      `❌ Order *${orderNumber}* not found.\nPlease check the order number and try again.`
+    );
     return;
   }
 
-  // Validate transition
+  // Validate status transition
   const validTransitions = {
-    ACCEPT:   { from: 'pending',   to: 'accepted' },
-    REJECT:   { from: 'pending',   to: 'rejected' },
-    READY:    { from: 'accepted',  to: 'ready' },
-    COMPLETE: { from: 'ready',     to: 'completed' },
+    ACCEPT:   { from: 'pending',  to: 'accepted'  },
+    REJECT:   { from: 'pending',  to: 'rejected'  },
+    READY:    { from: 'accepted', to: 'ready'     },
+    COMPLETE: { from: 'ready',    to: 'completed' },
   };
 
   const transition = validTransitions[command];
   if (order.status !== transition.from) {
     await sendWhatsAppMessage(from,
-      `⚠️ Cannot ${command.toLowerCase()} order *${orderNumber}*.\nCurrent status: *${order.status.toUpperCase()}*\nOrder must be *${transition.from.toUpperCase()}* to ${command.toLowerCase()} it.`
+      `⚠️ Cannot ${command.toLowerCase()} order *${orderNumber}*.\n` +
+      `Current status: *${order.status.toUpperCase()}*\n` +
+      `Order must be *${transition.from.toUpperCase()}* to use this command.`
     );
     return;
   }
 
-  // Update order status
+  // Build update payload
   const updateData = {
     status: transition.to,
     last_updated_via: 'whatsapp',
     updated_at: new Date().toISOString(),
   };
   if (command === 'ACCEPT')   updateData.accepted_at   = new Date().toISOString();
-  if (command === 'REJECT')   { updateData.rejected_at = new Date().toISOString(); updateData.rejection_reason = reason; }
+  if (command === 'REJECT')  { updateData.rejected_at  = new Date().toISOString(); updateData.rejection_reason = reason; }
   if (command === 'READY')    updateData.ready_at      = new Date().toISOString();
   if (command === 'COMPLETE') updateData.completed_at  = new Date().toISOString();
 
@@ -153,28 +149,25 @@ async function handleOrderCommand(from, parsed) {
     return;
   }
 
-  // Log status change
+  // Write audit log
   await supabase.from('order_status_logs').insert({
     order_id:    order.id,
     status_from: order.status,
     status_to:   transition.to,
     changed_via: 'whatsapp',
     notes:       reason || null,
-  }).then(() => {}).catch(() => {});
+  }).catch(() => {});
 
   // Confirm to shopkeeper
-  const confirmMessages = {
+  const replies = {
     ACCEPT:   `✅ Order *${orderNumber}* accepted!\nCustomer will be notified.`,
     REJECT:   `❌ Order *${orderNumber}* rejected.\nReason: ${reason}\nCustomer will be notified.`,
-    READY:    `🎉 Order *${orderNumber}* marked as ready for pickup!\nCustomer will be notified.`,
-    COMPLETE: `✔️ Order *${orderNumber}* marked as completed. Well done!`,
+    READY:    `🎉 Order *${orderNumber}* is ready for pickup!\nCustomer will be notified.`,
+    COMPLETE: `✔️ Order *${orderNumber}* completed. Well done!`,
   };
 
-  await sendWhatsAppMessage(from, confirmMessages[command]);
-
-  // TODO: Notify customer (fetch customer phone from order_customer_details)
-  // This will be wired once customer phone is stored
-  logger.info({ orderNumber, newStatus: transition.to }, `Order status updated via WhatsApp`);
+  await sendWhatsAppMessage(from, replies[command]);
+  logger.info({ orderNumber, from: order.status, to: transition.to }, 'Order updated via WhatsApp');
 }
 
 // ── Main webhook handler ───────────────────────────────────────
@@ -214,9 +207,8 @@ async function handleIncomingMessage(message, value) {
   logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
 
   if (type !== 'text') {
-    // For non-text messages, just acknowledge
     await sendWhatsAppMessage(from,
-      `Hi ${name}! 👋 I can only process text commands right now.\n\nReply *HELP* to see available commands.`
+      `Hi ${name}! 👋 I only understand text commands right now.\nReply *HELP* to see what I can do.`
     );
     return;
   }
@@ -227,33 +219,31 @@ async function handleIncomingMessage(message, value) {
   logger.info({ text, parsed }, 'Text message received');
 
   if (!parsed) {
-    // Unknown message — send help
     await sendWhatsAppMessage(from,
       `Hi ${name}! 👋 I didn't understand that.\n\n` +
-      `Here are the commands I understand:\n\n` +
+      `Here are the commands I know:\n\n` +
       `*ACCEPT ORD-XXXX* — Accept an order\n` +
       `*REJECT ORD-XXXX reason* — Reject with reason\n` +
-      `*READY ORD-XXXX* — Mark order ready for pickup\n` +
-      `*COMPLETE ORD-XXXX* — Mark order completed\n` +
+      `*READY ORD-XXXX* — Mark ready for pickup\n` +
+      `*COMPLETE ORD-XXXX* — Mark completed\n` +
       `*HELP* — Show this menu\n\n` +
-      `_Powered by Groovia_ 🛒`
+      `_Groovia_ 🛒`
     );
     return;
   }
 
   if (parsed.command === 'HELP') {
     await sendWhatsAppMessage(from,
-      `*Groovia Order Commands* 📦\n\n` +
+      `*Groovia Commands* 📦\n\n` +
       `*ACCEPT ORD-XXXX*\nAccept a pending order\n\n` +
       `*REJECT ORD-XXXX [reason]*\nReject with optional reason\n\n` +
       `*READY ORD-XXXX*\nMark order ready for pickup\n\n` +
-      `*COMPLETE ORD-XXXX*\nMark order as delivered/completed\n\n` +
-      `_Need help? Contact admin@groovia.co.in_`
+      `*COMPLETE ORD-XXXX*\nMark as completed\n\n` +
+      `_Need help? admin@groovia.co.in_`
     );
     return;
   }
 
-  // Process order command
   await handleOrderCommand(from, parsed);
 }
 
