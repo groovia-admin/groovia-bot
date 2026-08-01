@@ -2,10 +2,10 @@
   "name": "groovia-bot",
   "version": "1.0.0",
   "description": "Production WhatsApp Webhook for Groovia",
-  "main": "src/index.js",
+  "main": "wa-bot/src/index.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "start": "node wa-bot/src/index.js",
+    "dev": "nodemon wa-bot/src/index.js"
   },
   "engines": {
     "node": ">=18.0.0"
