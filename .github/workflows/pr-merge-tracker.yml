@@ -13,6 +13,8 @@ on:
       - 'dashboard/**'
       - 'wa-bot/**'
 
+run-name: "PR #${{ github.event.pull_request.number }} merged: ${{ github.event.pull_request.title }}"
+
 permissions:
   contents: write
 
