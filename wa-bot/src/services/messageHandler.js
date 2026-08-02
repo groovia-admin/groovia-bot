@@ -1,5 +1,10 @@
 const logger = require('../utils/logger');
 const config = require('../config');
+const {
+  getSupabase,
+  resolveShopByPhoneNumberId,
+  resolveShopUserByPhone,
+} = require('./shopResolver');
 
 // ── Deduplication ──────────────────────────────────────────────
 const processedMessages = new Set();
@@ -67,25 +72,8 @@ function parseCommand(text) {
   return null;
 }
 
-// ── Supabase client (lazy init) ────────────────────────────────
-let _supabase = null;
-function getSupabase() {
-  if (_supabase) return _supabase;
-  try {
-    const { createClient } = require('@supabase/supabase-js');
-    _supabase = createClient(
-      process.env.SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-      { auth: { autoRefreshToken: false, persistSession: false } }
-    );
-  } catch (err) {
-    logger.warn('Supabase not configured — order commands will not work');
-  }
-  return _supabase;
-}
-
 // ── Order command handler ──────────────────────────────────────
-async function handleOrderCommand(from, parsed) {
+async function handleOrderCommand(from, parsed, shopId, shopUser) {
   const supabase = getSupabase();
 
   if (!supabase) {
@@ -95,11 +83,13 @@ async function handleOrderCommand(from, parsed) {
 
   const { command, orderNumber, reason } = parsed;
 
-  // Find order
+  // Find order — scoped to the sender's resolved shop, so a spoofed or
+  // guessed order number belonging to a different shop can never match.
   const { data: order, error } = await supabase
     .from('orders')
     .select('id, order_number, status, total_amount, shop_id')
     .eq('order_number', orderNumber)
+    .eq('shop_id', shopId)
     .single();
 
   if (error || !order) {
@@ -150,6 +140,10 @@ async function handleOrderCommand(from, parsed) {
   }
 
   // Write audit log
+  // NOTE: not adding a changed_by_shop_user column here yet — this table
+  // isn't in the typed schema anywhere in the repo, so its real columns
+  // aren't verifiable from code. Confirm the schema before extending this
+  // insert; shopUser.id/fullName are available in scope when that's ready.
   await supabase.from('order_status_logs').insert({
     order_id:    order.id,
     status_from: order.status,
@@ -206,6 +200,28 @@ async function handleIncomingMessage(message, value) {
 
   logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
 
+  // Resolve which shop this message belongs to (via the WABA number that
+  // received it) and verify the sender is a recognized, active member of
+  // that shop — before doing anything else. There's no customer-facing
+  // flow in this bot; every sender must be staff of the receiving shop.
+  const phoneNumberId = value.metadata?.phone_number_id;
+  const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
+
+  if (!shopId) {
+    logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
+    await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
+    return;
+  }
+
+  const shopUser = await resolveShopUserByPhone(shopId, from);
+
+  if (!shopUser) {
+    await sendWhatsAppMessage(from,
+      `Hi ${name}! You're not registered as staff for this shop.\nContact your shop owner to be added.`
+    );
+    return;
+  }
+
   if (type !== 'text') {
     await sendWhatsAppMessage(from,
       `Hi ${name}! 👋 I only understand text commands right now.\nReply *HELP* to see what I can do.`
@@ -216,7 +232,7 @@ async function handleIncomingMessage(message, value) {
   const text   = message.text?.body?.trim() || '';
   const parsed = parseCommand(text);
 
-  logger.info({ text, parsed }, 'Text message received');
+  logger.info({ text, parsed, shopId, role: shopUser.role }, 'Text message received');
 
   if (!parsed) {
     await sendWhatsAppMessage(from,
@@ -244,7 +260,7 @@ async function handleIncomingMessage(message, value) {
     return;
   }
 
-  await handleOrderCommand(from, parsed);
+  await handleOrderCommand(from, parsed, shopId, shopUser);
 }
 
 function handleStatusUpdate(status) {
