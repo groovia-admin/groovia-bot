@@ -1,10 +1,11 @@
 const logger = require('../utils/logger');
-const config = require('../config');
 const {
   getSupabase,
   resolveShopByPhoneNumberId,
   resolveShopUserByPhone,
 } = require('./shopResolver');
+const { sendWhatsAppMessage } = require('./whatsappClient');
+const { notifyCustomer } = require('./customerNotifier');
 
 // ── Deduplication ──────────────────────────────────────────────
 const processedMessages = new Set();
@@ -12,42 +13,6 @@ const DEDUP_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 function markProcessed(id) {
   processedMessages.add(id);
   setTimeout(() => processedMessages.delete(id), DEDUP_TTL_MS).unref();
-}
-
-// ── WhatsApp sender ────────────────────────────────────────────
-async function sendWhatsAppMessage(to, text) {
-  try {
-    const res = await fetch(
-      `https://graph.facebook.com/${config.graphApiVersion}/${config.phoneNumberId}/messages`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.whatsappToken}`,
-        },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          recipient_type: 'individual',
-          to,
-          type: 'text',
-          text: { body: text },
-        }),
-      }
-    );
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      logger.error({ to, error: data }, '❌ WhatsApp send failed');
-      return false;
-    }
-
-    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp message sent');
-    return true;
-  } catch (err) {
-    logger.error({ err, to }, '❌ WhatsApp send error');
-    return false;
-  }
 }
 
 // ── Command parser ─────────────────────────────────────────────
@@ -151,6 +116,15 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     changed_via: 'whatsapp',
     notes:       reason || null,
   }).catch(() => {});
+
+  // Notify the customer — best-effort. Must never affect the staff-facing
+  // reply below, even if the template isn't approved yet, the order has
+  // no phone snapshot, or Meta's API errors.
+  try {
+    await notifyCustomer(order.id, transition.to);
+  } catch (err) {
+    logger.error({ err, orderNumber, command }, 'Customer notify failed');
+  }
 
   // Confirm to shopkeeper
   const replies = {

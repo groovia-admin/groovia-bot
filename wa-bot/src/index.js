@@ -2,6 +2,7 @@ const express = require('express');
 const config = require('./config');
 const logger = require('./utils/logger');
 const webhookRouter = require('./routes/webhook');
+const internalRouter = require('./routes/internal');
 
 const app = express();
 
@@ -31,6 +32,9 @@ app.get('/', (_req, res) => {
 
 // Webhook
 app.use('/webhook', webhookRouter);
+
+// Internal (server-to-server, e.g. dashboard-triggered notifications)
+app.use('/internal', internalRouter);
 
 // 404
 app.use((_req, res) => res.sendStatus(404));
