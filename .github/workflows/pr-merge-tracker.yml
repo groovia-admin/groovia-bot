@@ -1,0 +1,137 @@
+name: PR Merge Tracker
+
+# Runs when a PR touching dashboard/ or wa-bot/ is merged into main.
+# Records how long the PR was open before merging, both as a run summary
+# (visible in the Actions tab for that run) and as a row appended to
+# .github/pr-merge-history.md (the running history).
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+      - 'wa-bot/**'
+
+permissions:
+  contents: write
+
+jobs:
+  record-merge:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Determine changed area
+        id: area
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          files=$(gh pr view "$PR_NUMBER" --json files -q '.files[].path')
+          has_dashboard=false
+          has_wabot=false
+          while IFS= read -r f; do
+            case "$f" in
+              dashboard/*) has_dashboard=true ;;
+              wa-bot/*) has_wabot=true ;;
+            esac
+          done <<< "$files"
+          if [ "$has_dashboard" = true ] && [ "$has_wabot" = true ]; then
+            area="dashboard + wa-bot"
+          elif [ "$has_dashboard" = true ]; then
+            area="dashboard"
+          elif [ "$has_wabot" = true ]; then
+            area="wa-bot"
+          else
+            area="other"
+          fi
+          echo "area=$area" >> "$GITHUB_OUTPUT"
+
+      - name: Compute time to merge
+        id: duration
+        env:
+          CREATED_AT: ${{ github.event.pull_request.created_at }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+        run: |
+          created_epoch=$(date -d "$CREATED_AT" +%s)
+          merged_epoch=$(date -d "$MERGED_AT" +%s)
+          diff=$(( merged_epoch - created_epoch ))
+          days=$(( diff / 86400 ))
+          hours=$(( (diff % 86400) / 3600 ))
+          minutes=$(( (diff % 3600) / 60 ))
+          human="${days}d ${hours}h ${minutes}m"
+          echo "human=$human" >> "$GITHUB_OUTPUT"
+          echo "merged_at_local=$(date -d "$MERGED_AT" '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
+
+      - name: Append to history log
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
+          AREA: ${{ steps.area.outputs.area }}
+          DURATION: ${{ steps.duration.outputs.human }}
+          MERGED_AT_LOCAL: ${{ steps.duration.outputs.merged_at_local }}
+        run: |
+          FILE=.github/pr-merge-history.md
+          if [ ! -f "$FILE" ]; then
+            {
+              echo "# PR Merge History"
+              echo ""
+              echo "| PR | Title | Area | Author | Merged By | Merged At (UTC) | Time to Merge |"
+              echo "|----|-------|------|--------|-----------|------------------|----------------|"
+            } > "$FILE"
+          fi
+          # Escape pipe characters in the title so they don't break the markdown table
+          SAFE_TITLE=$(printf '%s' "$PR_TITLE" | sed 's/|/\\|/g')
+          echo "| #$PR_NUMBER | $SAFE_TITLE | $AREA | @$PR_AUTHOR | @$MERGED_BY | $MERGED_AT_LOCAL | $DURATION |" >> "$FILE"
+
+      - name: Write run summary
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          AREA: ${{ steps.area.outputs.area }}
+          DURATION: ${{ steps.duration.outputs.human }}
+          MERGED_AT_LOCAL: ${{ steps.duration.outputs.merged_at_local }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          {
+            echo "### PR #$PR_NUMBER merged"
+            echo ""
+            echo "- **Title:** $PR_TITLE"
+            echo "- **Area:** $AREA"
+            echo "- **Merged at:** $MERGED_AT_LOCAL"
+            echo "- **Time to merge:** $DURATION"
+            echo "- [View PR]($PR_URL)"
+            echo ""
+            echo "Full history: [.github/pr-merge-history.md](../../blob/main/.github/pr-merge-history.md)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit history log
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .github/pr-merge-history.md
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "Log merge time for PR #${{ github.event.pull_request.number }} [skip ci]"
+
+          attempt=0
+          until git push origin HEAD:main; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 5 ]; then
+              echo "Failed to push after $attempt attempts"
+              exit 1
+            fi
+            git fetch origin main
+            git rebase origin/main
+            sleep $((RANDOM % 5 + 1))
+          done
