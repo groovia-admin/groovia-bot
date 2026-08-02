@@ -273,31 +273,19 @@ export default function ShopsClient({
     setPinError("");
 
     try {
-      const response = await fetch(`https://api.postalpincode.in/pincode/${normalizedPin}`);
-
-      if (!response.ok) {
-        throw new Error("PIN code lookup failed");
-      }
-
+      const response = await fetch(`/api/location/pincode/${normalizedPin}`);
       const data = await response.json();
-      const result = data?.[0];
 
-      if (
-        result?.Status !== "Success" ||
-        !Array.isArray(result?.PostOffice) ||
-        result.PostOffice.length === 0
-      ) {
-        setPinError("PIN code was not found. Please enter the city and state manually.");
+      if (!response.ok || !data.success) {
+        setPinError(data.message || "PIN code was not found. Please enter the city and state manually.");
         return;
       }
-
-      const postOffice = result.PostOffice[0];
 
       setForm((current) => ({
         ...current,
         postal_code: normalizedPin,
-        city: postOffice.District || current.city,
-        state: postOffice.State || current.state,
+        city: data.city || current.city,
+        state: data.state || current.state,
       }));
     } catch (error) {
       console.error("PIN code lookup failed:", error);
