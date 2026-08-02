@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Search, ChevronDown, ChevronRight,
@@ -69,6 +69,7 @@ export default function MasterCatalogClient() {
   const [loading, setLoading]               = useState(true)
   const [toast, setToast]                   = useState('')
   const [search, setSearch]                 = useState('')
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Add product/category modal
   const [showAddProduct, setShowAddProduct] = useState<string | null>(null) // category id
@@ -78,8 +79,9 @@ export default function MasterCatalogClient() {
   const [saving, setSaving]                 = useState(false)
 
   function showToast(msg: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current)
     setToast(msg)
-    setTimeout(() => setToast(''), 3000)
+    toastTimer.current = setTimeout(() => setToast(''), 3000)
   }
 
   // ── Load data ──────────────────────────────────────────────────────────────
