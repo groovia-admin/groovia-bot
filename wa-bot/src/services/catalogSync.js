@@ -44,6 +44,17 @@ async function syncShopCatalog(shopId) {
     return { success: false, error: 'Supabase not configured' };
   }
 
+  const { data: shop, error: shopError } = await supabase
+    .from('shops')
+    .select('currency_code')
+    .eq('id', shopId)
+    .single();
+
+  if (shopError) {
+    logger.error({ error: shopError, shopId }, 'Failed to load shop for catalog sync');
+    return { success: false, error: 'Failed to load shop' };
+  }
+
   const { data: products, error } = await supabase
     .from('products')
     .select('id, name, description, price, image_url, is_available')
@@ -65,7 +76,7 @@ async function syncShopCatalog(shopId) {
       name: product.name,
       description: product.description || product.name,
       price: Math.round(Number(product.price) * 100), // Meta expects minor units
-      currency: 'INR',
+      currency: shop.currency_code || 'INR',
       availability: product.is_available ? 'in stock' : 'out of stock',
       condition: 'new',
       image_link: product.image_url || undefined,
