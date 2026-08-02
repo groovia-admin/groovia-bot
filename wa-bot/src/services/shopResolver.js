@@ -4,6 +4,18 @@ const logger = require('../utils/logger');
 let _supabase = null;
 function getSupabase() {
   if (_supabase) return _supabase;
+
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    logger.warn(
+      {
+        hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
+        hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      },
+      'Supabase not configured — missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
+    );
+    return null;
+  }
+
   try {
     const { createClient } = require('@supabase/supabase-js');
     _supabase = createClient(
@@ -12,7 +24,7 @@ function getSupabase() {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
   } catch (err) {
-    logger.warn('Supabase not configured — shop resolution will not work');
+    logger.warn({ err }, 'Supabase client initialization failed');
   }
   return _supabase;
 }
