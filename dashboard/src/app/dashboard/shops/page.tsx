@@ -1,10 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireSuperAdmin } from '@/lib/auth/require-role'
 import ShopsClient from '@/components/shops/ShopsClient'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
 export default async function ShopsPage() {
+  await requireSuperAdmin()
+
   const adminClient = createAdminClient()
 
   const { data: shops, error } =

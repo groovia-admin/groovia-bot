@@ -49,11 +49,14 @@ const MANAGER_NAV = [
   { href: '/dashboard/customers', label: 'Customers', icon: Users },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
   { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
 
 const STAFF_NAV = [
   { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag },
+  { href: '/dashboard/products', label: 'Products', icon: Package },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes },
 ]
 
 function getNav(isSuperAdmin: boolean, role: string) {

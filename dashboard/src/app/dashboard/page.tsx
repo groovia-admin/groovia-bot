@@ -1,29 +1,19 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
 import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  // Use admin client for platform_admins check — RLS on anon client
-  // may return null even for valid admins if session cookie timing is off
-  const adminClient = createAdminClient()
-
-  const { data: adminRecord } = await adminClient
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .single()
-
-  const isSuperAdmin = !!adminRecord
+  const context = await getViewerContext()
+  if (context.kind === 'unauthenticated') redirect('/login')
 
   // ── Super Admin Overview ───────────────────────────────────
-  if (isSuperAdmin) {
+  if (context.kind === 'super_admin') {
+    const adminClient = createAdminClient()
+
     const [
       { count: totalShops },
       { count: activeShops },
@@ -106,16 +96,9 @@ export default async function DashboardPage() {
   }
 
   // ── Merchant Overview ──────────────────────────────────────
-  const { data: shopUser } = await supabase
-    .from('shop_users')
-    .select('shop_id, role, full_name, shops(name)')
-    .eq('auth_user_id', user.id)
-    .eq('is_active', true)
-    .single()
-
-  if (!shopUser) redirect('/login')
-
-  const shopId = shopUser.shop_id
+  const supabase = await createClient()
+  const shopId = context.shopId
+  const showRevenue = context.role !== 'staff'
   const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
 
   const [
@@ -151,10 +134,10 @@ export default async function DashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-white">
-          Good {getGreeting()}, {shopUser.full_name?.split(' ')[0] ?? 'there'}
+          Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
         </h1>
         <p className="text-slate-400 text-sm mt-0.5">
-          {(shopUser.shops as any)?.name ?? 'Your store'} — here's today at a glance
+          {context.shopName ?? 'Your store'} — here's today at a glance
         </p>
       </div>
 
@@ -200,9 +183,11 @@ export default async function DashboardPage() {
                       </p>
                     </div>
                   </div>
-                  <p className="text-sm font-medium text-slate-200">
-                    ₹{Number(order.total_amount).toFixed(2)}
-                  </p>
+                  {showRevenue && (
+                    <p className="text-sm font-medium text-slate-200">
+                      ₹{Number(order.total_amount).toFixed(2)}
+                    </p>
+                  )}
                 </div>
               )
             })}

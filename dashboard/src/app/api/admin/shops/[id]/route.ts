@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { normalizeIndianPhone } from '@/lib/phone'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
-const INDIA_PHONE_REGEX = /^[6-9]\d{9}$/
 
 type CreateShopBody = {
   shopName?: unknown
@@ -46,26 +46,6 @@ function getText(value: unknown) {
   return typeof value === 'string'
     ? value.trim()
     : ''
-}
-
-function normalizeIndianPhone(
-  value: string
-): string | null {
-  let digits = value.replace(/\D/g, '')
-
-  // Accept +91XXXXXXXXXX or 91XXXXXXXXXX
-  if (
-    digits.length === 12 &&
-    digits.startsWith('91')
-  ) {
-    digits = digits.slice(2)
-  }
-
-  if (!INDIA_PHONE_REGEX.test(digits)) {
-    return null
-  }
-
-  return `+91${digits}`
 }
 
 async function requirePlatformAdmin() {
@@ -384,10 +364,6 @@ export async function POST(
 
   let ownerCreated = false
 
-  let temporaryPassword:
-    | string
-    | null = null
-
   const {
     data: existingUsers,
     error: existingUserError,
@@ -417,7 +393,15 @@ export async function POST(
     )
   }
 
+  // Match by phone (the auth channel going forward) first, falling back
+  // to email for accounts created before the phone-OTP switch.
   const existingOwner =
+    existingUsers.users.find(
+      user => user.phone === ownerPhone.replace('+', '')
+    ) ??
+    existingUsers.users.find(
+      user => user.phone === ownerPhone
+    ) ??
     existingUsers.users.find(
       user =>
         user.email
@@ -428,12 +412,6 @@ export async function POST(
   if (existingOwner) {
     ownerId = existingOwner.id
   } else {
-    temporaryPassword =
-      `GrooVia@${crypto
-        .randomUUID()
-        .replace(/-/g, '')
-        .slice(0, 12)}`
-
     const {
       data: createdUser,
       error: createUserError,
@@ -444,9 +422,9 @@ export async function POST(
         .createUser({
           email:
             ownerEmail,
-          password:
-            temporaryPassword,
-          email_confirm:
+          phone:
+            ownerPhone,
+          phone_confirm:
             true,
           user_metadata: {
             full_name:
@@ -616,6 +594,19 @@ export async function POST(
     }
   }
 
+  // Belt-and-suspenders: ensure the owner's shop_users row carries their
+  // phone number regardless of whether create_shop_with_owner already
+  // sets it, since phone is now the owner's sign-in channel.
+  const { error: ownerShopUserUpdateError } = await adminClient
+    .from('shop_users')
+    .update({ phone_number: ownerPhone })
+    .eq('shop_id', shop.id)
+    .eq('auth_user_id', ownerId)
+
+  if (ownerShopUserUpdateError) {
+    console.error('Owner shop_users phone update failed:', ownerShopUserUpdateError)
+  }
+
   return NextResponse.json(
     {
       success:
@@ -630,7 +621,6 @@ export async function POST(
           ownerPhone,
         created:
           ownerCreated,
-        temporaryPassword,
       },
     },
     {

@@ -48,7 +48,7 @@ type AddForm = {
 
 type CreatedOwnerCredentials = {
   email: string;
-  temporaryPassword: string | null;
+  phone: string;
   shopName: string;
   isExistingOwner: boolean;
 };
@@ -61,8 +61,8 @@ type ApiShopResponse = {
   owner?: {
     id?: string;
     email?: string;
+    phone?: string;
     created?: boolean;
-    temporaryPassword?: string | null;
   };
 };
 
@@ -522,12 +522,13 @@ export default function ShopsClient({
       }
 
       const ownerEmail = result.owner?.email || form.owner_email;
+      const ownerPhone = result.owner?.phone || form.owner_phone;
 
       const ownerCreated = result.owner?.created === true;
 
       setCreatedOwner({
         email: ownerEmail,
-        temporaryPassword: result.owner?.temporaryPassword ?? null,
+        phone: ownerPhone,
         shopName: result.shop.name,
         isExistingOwner: !ownerCreated,
       });
@@ -1393,6 +1394,20 @@ export default function ShopsClient({
                   </div>
                 </div>
 
+                <div>
+                  <label style={S.label}>Owner phone</label>
+
+                  <div
+                    style={{
+                      ...S.input,
+                      fontFamily: "monospace",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {createdOwner.phone}
+                  </div>
+                </div>
+
                 {createdOwner.isExistingOwner ? (
                   <div
                     style={{
@@ -1405,38 +1420,22 @@ export default function ShopsClient({
                       lineHeight: 1.5,
                     }}
                   >
-                    This owner already has a GrooVia account. Their existing
-                    password was not changed.
+                    This owner already has a GrooVia account. They can sign in
+                    with their existing phone number.
                   </div>
                 ) : (
-                  <>
-                    <div>
-                      <label style={S.label}>Temporary password</label>
-
-                      <div
-                        style={{
-                          ...S.input,
-                          fontFamily: "monospace",
-                          wordBreak: "break-all",
-                        }}
-                      >
-                        {createdOwner.temporaryPassword ||
-                          "Password was not returned. Reset the owner password from Supabase Auth."}
-                      </div>
-                    </div>
-
-                    <p
-                      style={{
-                        fontSize: 11,
-                        color: "#fbbf24",
-                        lineHeight: 1.5,
-                        margin: 0,
-                      }}
-                    >
-                      Save these credentials now. The temporary password is not
-                      stored in the dashboard after this window is closed.
-                    </p>
-                  </>
+                  <p
+                    style={{
+                      fontSize: 11,
+                      color: "#fbbf24",
+                      lineHeight: 1.5,
+                      margin: 0,
+                    }}
+                  >
+                    No password needed — the owner signs in from the login
+                    page with this phone number and a one-time code sent via
+                    SMS.
+                  </p>
                 )}
 
                 <button

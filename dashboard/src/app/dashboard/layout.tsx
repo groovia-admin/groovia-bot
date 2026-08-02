@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
 
 type ShopUserForSidebar = {
@@ -14,39 +14,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const adminClient = createAdminClient()
+  const context = await getViewerContext()
+  if (context.kind === 'unauthenticated') redirect('/login')
 
-  const { data: adminRecord } = await adminClient
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
+  const isSuperAdmin = context.kind === 'super_admin'
 
-  const isSuperAdmin = !!adminRecord
-
-  let shopUser: ShopUserForSidebar | null = null
-
-  if (!isSuperAdmin) {
-    const { data, error } = await adminClient
-      .from('shop_users')
-      .select(`
-        role,
-        full_name,
-        shops ( name, logo_url )
-      `)
-      .eq('auth_user_id', user.id)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (error || !data) redirect('/login')
-
-    const shop = Array.isArray(data.shops) ? data.shops[0] ?? null : data.shops
-    shopUser = {
-      role: data.role,
-      full_name: data.full_name,
-      shops: shop,
-    }
-  }
+  const shopUser: ShopUserForSidebar | null =
+    context.kind === 'shop_user'
+      ? {
+          role: context.role,
+          full_name: context.fullName,
+          shops: context.shopName
+            ? { name: context.shopName, logo_url: context.shopLogoUrl }
+            : null,
+        }
+      : null
 
   return (
     <div className="flex h-screen overflow-hidden" style={{ backgroundColor: 'var(--surface)' }}>
