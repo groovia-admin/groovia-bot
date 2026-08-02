@@ -46,7 +46,7 @@ async function syncShopCatalog(shopId) {
 
   const { data: shop, error: shopError } = await supabase
     .from('shops')
-    .select('currency_code')
+    .select('name, currency_code')
     .eq('id', shopId)
     .single();
 
@@ -94,7 +94,26 @@ async function syncShopCatalog(shopId) {
 
   const currencyCode = shop.currency_code || 'INR';
 
-  const requests = products.map((product) => ({
+  // image_link is a required items_batch field — products.image_url is a
+  // free-typed field on the dashboard and often empty. Pushing an item
+  // without one would just get that single item rejected by Meta, so
+  // skip it up front and report it instead of finding out from a
+  // per-item validation error buried in the batch response.
+  const withImage = products.filter((p) => p.image_url);
+  const missingImage = products.filter((p) => !p.image_url);
+
+  if (missingImage.length > 0) {
+    logger.warn(
+      { shopId, count: missingImage.length, productIds: missingImage.map((p) => p.id) },
+      'Skipping products with no image_url — required by items_batch'
+    );
+  }
+
+  if (withImage.length === 0) {
+    return { success: true, synced: 0, skipped: missingImage.map((p) => p.id) };
+  }
+
+  const requests = withImage.map((product) => ({
     method: 'UPDATE',
     retailer_id: product.id,
     data: {
@@ -105,10 +124,14 @@ async function syncShopCatalog(shopId) {
       price: `${Number(product.price).toFixed(2)} ${currencyCode}`,
       availability: product.is_available ? 'in stock' : 'out of stock',
       condition: 'new',
-      image_link: product.image_url || undefined,
+      image_link: product.image_url,
       // Required `link` field — no storefront exists, so this deep-links
       // back into a chat with the shop's own WhatsApp number instead.
       link: `https://wa.me/${displayPhone}?text=${encodeURIComponent(`Hi! I'm interested in ${product.name}`)}`,
+      // Required field with no source in our schema today — products
+      // aren't branded goods with a per-item manufacturer on file, so
+      // the shop's own name is the closest honest value.
+      brand: shop.name || 'Groovia',
     },
   }));
 
@@ -132,8 +155,8 @@ async function syncShopCatalog(shopId) {
       return { success: false, error: data?.error?.message || 'Catalog sync failed' };
     }
 
-    logger.info({ shopId, count: products.length }, 'Catalog synced to Meta');
-    return { success: true, synced: products.length };
+    logger.info({ shopId, count: withImage.length }, 'Catalog synced to Meta');
+    return { success: true, synced: withImage.length, skipped: missingImage.map((p) => p.id) };
   } catch (err) {
     logger.error({ err, shopId }, 'Catalog sync error');
     return { success: false, error: err.message };

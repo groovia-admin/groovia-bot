@@ -1,6 +1,23 @@
 const logger = require('../utils/logger');
 const config = require('../config');
 
+// Surfaces the actual Graph API error (code/message/fbtrace_id) instead of
+// a blind "send failed" — the id-mismatch class of bug (e.g. #131009,
+// content id not in catalog) is invisible without this.
+function logSendFailure(msg, context, data) {
+  const err = data?.error || {};
+  logger.error(
+    {
+      ...context,
+      code: err.code,
+      message: err.message,
+      details: err.error_user_msg || err.error_data?.details,
+      fbtraceId: err.fbtrace_id,
+    },
+    msg
+  );
+}
+
 // ── Plain text message (used for staff-facing replies, always inside the
 // 24h customer service window since it's always a direct reply) ──
 async function sendWhatsAppMessage(to, text, overrides = {}) {
@@ -29,7 +46,7 @@ async function sendWhatsAppMessage(to, text, overrides = {}) {
     const data = await res.json();
 
     if (!res.ok) {
-      logger.error({ to, error: data }, '❌ WhatsApp send failed');
+      logSendFailure('❌ WhatsApp send failed', { to }, data);
       return false;
     }
 
@@ -73,7 +90,7 @@ async function sendWhatsAppTemplate(to, templateName, languageCode, components, 
     const data = await res.json();
 
     if (!res.ok) {
-      logger.error({ to, templateName, error: data }, '❌ WhatsApp template send failed');
+      logSendFailure('❌ WhatsApp template send failed', { to, templateName }, data);
       return false;
     }
 
@@ -121,7 +138,7 @@ async function sendCatalogMessage(to, bodyText, thumbnailProductId, overrides = 
     const data = await res.json();
 
     if (!res.ok) {
-      logger.error({ to, error: data }, '❌ WhatsApp catalog message send failed');
+      logSendFailure('❌ WhatsApp catalog message send failed', { to }, data);
       return false;
     }
 
@@ -169,7 +186,7 @@ async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
     const data = await res.json();
 
     if (!res.ok) {
-      logger.error({ to, error: data }, '❌ WhatsApp button message send failed');
+      logSendFailure('❌ WhatsApp button message send failed', { to }, data);
       return false;
     }
 
