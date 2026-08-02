@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const config = require('../config');
 const logger = require('../utils/logger');
 const { notifyCustomer } = require('../services/customerNotifier');
+const { syncShopCatalog } = require('../services/catalogSync');
 
 const router = express.Router();
 
@@ -48,6 +49,21 @@ router.post('/orders/:orderId/notify', requireInternalSecret, async (req, res) =
     logger.error({ err, orderId, status }, 'Internal notify endpoint failed');
     return res.status(500).json({ error: 'Failed to send notification' });
   }
+});
+
+// POST /internal/shops/:shopId/sync-catalog
+// On-demand push of a shop's active products to its Meta Commerce
+// Catalog (retailer_id = products.id). Not automatic on product save —
+// call this after editing products, or on a manual "Sync catalog" action.
+router.post('/shops/:shopId/sync-catalog', requireInternalSecret, async (req, res) => {
+  const { shopId } = req.params;
+
+  if (!shopId) {
+    return res.status(400).json({ error: 'shopId is required' });
+  }
+
+  const result = await syncShopCatalog(shopId);
+  return res.status(result.success ? 200 : 502).json(result);
 });
 
 module.exports = router;
