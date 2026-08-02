@@ -55,6 +55,29 @@ async function syncShopCatalog(shopId) {
     return { success: false, error: 'Failed to load shop' };
   }
 
+  // The catalog's required `link` field needs somewhere for a tap to go.
+  // There's no storefront, so it's a wa.me deep link back to this shop's
+  // own WhatsApp number — without one connected there's nothing valid to
+  // put there, so treat it as a hard prerequisite rather than guessing.
+  const { data: connection, error: connectionError } = await supabase
+    .from('whatsapp_connections')
+    .select('display_phone_number')
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (connectionError) {
+    logger.error({ error: connectionError, shopId }, 'Failed to load WhatsApp connection for catalog sync');
+    return { success: false, error: 'Failed to load WhatsApp connection' };
+  }
+
+  const displayPhone = connection?.display_phone_number?.replace(/[^0-9]/g, '');
+  if (!displayPhone) {
+    return {
+      success: false,
+      error: 'No WhatsApp display phone number connected for this shop — connect WhatsApp before syncing the catalog.',
+    };
+  }
+
   const { data: products, error } = await supabase
     .from('products')
     .select('id, name, description, price, image_url, is_available')
@@ -69,17 +92,23 @@ async function syncShopCatalog(shopId) {
     return { success: true, synced: 0 };
   }
 
+  const currencyCode = shop.currency_code || 'INR';
+
   const requests = products.map((product) => ({
     method: 'UPDATE',
     retailer_id: product.id,
     data: {
       name: product.name,
       description: product.description || product.name,
-      price: Math.round(Number(product.price) * 100), // Meta expects minor units
-      currency: shop.currency_code || 'INR',
+      // Meta's items_batch price format is a single string: "<amount> <ISO currency>"
+      // (e.g. "9.99 USD") — not minor units, and there's no separate currency field.
+      price: `${Number(product.price).toFixed(2)} ${currencyCode}`,
       availability: product.is_available ? 'in stock' : 'out of stock',
       condition: 'new',
       image_link: product.image_url || undefined,
+      // Required `link` field — no storefront exists, so this deep-links
+      // back into a chat with the shop's own WhatsApp number instead.
+      link: `https://wa.me/${displayPhone}?text=${encodeURIComponent(`Hi! I'm interested in ${product.name}`)}`,
     },
   }));
 
