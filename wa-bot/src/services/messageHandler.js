@@ -4,8 +4,28 @@ const {
   resolveShopByPhoneNumberId,
   resolveShopUserByPhone,
 } = require('./shopResolver');
-const { sendWhatsAppMessage } = require('./whatsappClient');
+const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
+const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
+const {
+  buildCartFromOrderMessage,
+  cartTotal,
+  createOrderFromSession,
+  notifyShopOfNewOrder,
+} = require('./orderCreator');
+
+// Static for now — the demo's "recommended based on time of day" logic is
+// a deliberate scope cut for the core loop.
+const PICKUP_SLOTS = [
+  { id: 'slot_1', label: '6:00–6:30 PM' },
+  { id: 'slot_2', label: '6:30–7:00 PM' },
+  { id: 'slot_3', label: '7:00–7:30 PM' },
+];
+
+const PAYMENT_OPTIONS = [
+  { id: 'pay_cash', label: 'Cash at counter', value: 'cash' },
+  { id: 'pay_upi', label: 'UPI / GPay', value: 'upi' },
+];
 
 // ── Deduplication ──────────────────────────────────────────────
 const processedMessages = new Set();
@@ -138,6 +158,165 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   logger.info({ orderNumber, from: order.status, to: transition.to }, 'Order updated via WhatsApp');
 }
 
+// ── Customer ordering flow ──────────────────────────────────────
+// Item selection itself happens in WhatsApp's native Catalog+Cart (a
+// `type: 'order'` message arrives once the customer submits it) — this
+// only manages the short conversation after that: pickup slot, payment
+// method, then confirm.
+
+async function sendGreeting(from, shopId, name) {
+  const supabase = getSupabase();
+  let shopName = 'our shop';
+
+  if (supabase) {
+    const { data: shop } = await supabase.from('shops').select('name').eq('id', shopId).maybeSingle();
+    if (shop?.name) shopName = shop.name;
+  }
+
+  await sendCatalogMessage(
+    from,
+    `Namaste ${name}! 👋 Welcome to *${shopName}*.\n\nTap below to browse and order.`
+  );
+}
+
+async function sendSlotPrompt(from, total) {
+  await sendWhatsAppMessage(from, `🛒 *Cart total: ₹${total.toFixed(2)}*\n\n⏰ When would you like to pick up?`);
+  await sendButtonMessage(
+    from,
+    'Choose a pickup slot:',
+    PICKUP_SLOTS.map((s) => ({ id: s.id, title: s.label }))
+  );
+}
+
+async function sendPaymentPrompt(from) {
+  await sendButtonMessage(
+    from,
+    '💳 Payment method:',
+    PAYMENT_OPTIONS.map((p) => ({ id: p.id, title: p.label }))
+  );
+}
+
+async function sendConfirmPrompt(from, session) {
+  const itemLines = session.cart_items
+    .map((i) => `${i.name} × ${i.quantity} — ₹${i.subtotal.toFixed(2)}`)
+    .join('\n');
+  const paymentLabel = PAYMENT_OPTIONS.find((p) => p.value === session.payment_method)?.label || session.payment_method;
+
+  const text =
+    `📋 *Confirm your order*\n\n${itemLines}\n\n` +
+    `Total: ₹${session.cart_total.toFixed(2)}\n` +
+    `⏰ Pickup: ${session.pickup_slot_label}\n` +
+    `💵 Payment: ${paymentLabel}`;
+
+  await sendWhatsAppMessage(from, text);
+  await sendButtonMessage(from, 'Confirm?', [
+    { id: 'confirm_yes', title: '✅ Place order' },
+    { id: 'confirm_no', title: '❌ Cancel' },
+  ]);
+}
+
+async function handleSessionButtonReply(from, shopId, session, buttonId) {
+  if (session.step === 'awaiting_slot') {
+    const slot = PICKUP_SLOTS.find((s) => s.id === buttonId);
+    if (!slot) {
+      await sendSlotPrompt(from, session.cart_total);
+      return;
+    }
+    await updateSession(session.id, { step: 'awaiting_payment', pickup_slot_label: slot.label });
+    await sendPaymentPrompt(from);
+    return;
+  }
+
+  if (session.step === 'awaiting_payment') {
+    const option = PAYMENT_OPTIONS.find((p) => p.id === buttonId);
+    if (!option) {
+      await sendPaymentPrompt(from);
+      return;
+    }
+    const updated = await updateSession(session.id, { step: 'awaiting_confirm', payment_method: option.value });
+    await sendConfirmPrompt(from, updated);
+    return;
+  }
+
+  if (session.step === 'awaiting_confirm') {
+    if (buttonId === 'confirm_no') {
+      await deleteSession(session.id);
+      await sendWhatsAppMessage(from, 'Order cancelled. Message *Hi* anytime to start again.');
+      return;
+    }
+
+    if (buttonId === 'confirm_yes') {
+      const order = await createOrderFromSession(shopId, from, session);
+      await deleteSession(session.id);
+
+      if (!order) {
+        await sendWhatsAppMessage(from, '⚠️ Sorry, something went wrong placing your order. Please try again.');
+        return;
+      }
+
+      await sendWhatsAppMessage(
+        from,
+        `✅ *Order ${order.order_number} placed!*\n\nWaiting for the shop to confirm — we'll message you.`
+      );
+
+      try {
+        await notifyShopOfNewOrder(shopId, order, session);
+      } catch (err) {
+        logger.error({ err, orderId: order.id }, 'Failed to notify shop of new order');
+      }
+    }
+  }
+}
+
+async function handleCustomerMessage(from, message, shopId, name) {
+  const session = await getSession(shopId, from);
+
+  if (message.type === 'order' && message.order) {
+    const { items, skipped } = await buildCartFromOrderMessage(shopId, message.order.product_items || []);
+
+    if (items.length === 0) {
+      await sendWhatsAppMessage(from, '😕 Sorry, none of those items are available right now.');
+      return;
+    }
+
+    const total = cartTotal(items);
+    const created = await createSession(shopId, from, {
+      cartItems: items,
+      cartTotal: total,
+      customerName: name,
+    });
+
+    if (!created) {
+      await sendWhatsAppMessage(from, '⚠️ Something went wrong. Please try again.');
+      return;
+    }
+
+    if (skipped.length > 0) {
+      await sendWhatsAppMessage(
+        from,
+        `Note: ${skipped.length} item(s) in your cart weren't available and were left out.`
+      );
+    }
+
+    await sendSlotPrompt(from, total);
+    return;
+  }
+
+  if (message.type === 'interactive' && message.interactive?.type === 'button_reply' && session) {
+    await handleSessionButtonReply(from, shopId, session, message.interactive.button_reply.id);
+    return;
+  }
+
+  if (session) {
+    if (session.step === 'awaiting_slot') await sendSlotPrompt(from, session.cart_total);
+    else if (session.step === 'awaiting_payment') await sendPaymentPrompt(from);
+    else if (session.step === 'awaiting_confirm') await sendConfirmPrompt(from, session);
+    return;
+  }
+
+  await sendGreeting(from, shopId, name);
+}
+
 // ── Main webhook handler ───────────────────────────────────────
 async function handleWebhookPayload(payload) {
   try {
@@ -175,9 +354,7 @@ async function handleIncomingMessage(message, value) {
   logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
 
   // Resolve which shop this message belongs to (via the WABA number that
-  // received it) and verify the sender is a recognized, active member of
-  // that shop — before doing anything else. There's no customer-facing
-  // flow in this bot; every sender must be staff of the receiving shop.
+  // received it) before doing anything else.
   const phoneNumberId = value.metadata?.phone_number_id;
   const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
 
@@ -189,10 +366,11 @@ async function handleIncomingMessage(message, value) {
 
   const shopUser = await resolveShopUserByPhone(shopId, from);
 
+  // Not a recognized staff member of this shop -> treat as a customer,
+  // not a rejection. Staff (owner/manager/staff, any role) keep the
+  // command flow below; everyone else gets the ordering conversation.
   if (!shopUser) {
-    await sendWhatsAppMessage(from,
-      `Hi ${name}! You're not registered as staff for this shop.\nContact your shop owner to be added.`
-    );
+    await handleCustomerMessage(from, message, shopId, name);
     return;
   }
 

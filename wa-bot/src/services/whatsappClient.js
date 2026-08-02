@@ -85,4 +85,105 @@ async function sendWhatsAppTemplate(to, templateName, languageCode, components, 
   }
 }
 
-module.exports = { sendWhatsAppMessage, sendWhatsAppTemplate };
+// ── Native catalog invite (greeting -> "View catalog" native button) ──
+async function sendCatalogMessage(to, bodyText, thumbnailProductId, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'catalog_message',
+            body: { text: bodyText },
+            action: {
+              name: 'catalog_message',
+              parameters: thumbnailProductId
+                ? { thumbnail_product_retailer_id: thumbnailProductId }
+                : undefined,
+            },
+          },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logger.error({ to, error: data }, '❌ WhatsApp catalog message send failed');
+      return false;
+    }
+
+    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp catalog message sent');
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, '❌ WhatsApp catalog message send error');
+    return false;
+  }
+}
+
+// ── Button reply prompt (slot / payment / confirm — max 3 buttons) ──
+async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'button',
+            body: { text: bodyText },
+            action: {
+              buttons: buttons.map((b) => ({
+                type: 'reply',
+                reply: { id: b.id, title: b.title },
+              })),
+            },
+          },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logger.error({ to, error: data }, '❌ WhatsApp button message send failed');
+      return false;
+    }
+
+    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp button message sent');
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, '❌ WhatsApp button message send error');
+    return false;
+  }
+}
+
+module.exports = {
+  sendWhatsAppMessage,
+  sendWhatsAppTemplate,
+  sendCatalogMessage,
+  sendButtonMessage,
+};
