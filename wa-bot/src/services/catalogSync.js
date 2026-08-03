@@ -118,7 +118,11 @@ async function syncShopCatalog(shopId) {
       // the retailer_id everywhere else (cart submissions, Commerce
       // Manager) — it's the same value, just nested here.
       id: product.id,
-      name: product.name,
+      // The item's display name field is `title`, not `name` — `name` is
+      // silently ignored by items_batch (no error), which is why this was
+      // showing up blank in Commerce Manager despite a "successful" sync.
+      // Max 100 chars per Meta's spec.
+      title: product.name.slice(0, 100),
       description: product.description || product.name,
       // Meta's items_batch price format is a single string: "<amount> <ISO currency>"
       // (e.g. "9.99 USD") — not minor units, and there's no separate currency field.
