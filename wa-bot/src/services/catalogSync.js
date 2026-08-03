@@ -2,28 +2,19 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const { getSupabase } = require('./shopResolver');
 
-// Deliberately NOT added to config.js's requiredEnv — Meta Commerce
-// Catalog setup (creating the catalog, enabling cart, confirming token
-// scope) is a real-world prerequisite that hasn't happened yet as of
-// writing this. Making it a hard boot requirement would crash-loop the
-// whole bot the moment this code deploys, for a feature nobody has
-// finished setting up on Meta's side yet. Sync just fails clearly at
-// call time instead if it's missing.
+// Catalog id is per-shop, not global — each shop has its own WABA and
+// therefore its own Commerce Catalog (confirmed design: one catalog per
+// WABA). It lives on that shop's whatsapp_connections row, not in an
+// env var, since a single Railway env var can't represent "shop A's
+// catalog is 123, shop B's is 456". The access token is still global
+// for now (config.whatsappToken / META_CATALOG_ACCESS_TOKEN override) —
+// that's only wrong if different shops end up on entirely separate
+// Meta Business Managers, which hasn't come up yet.
 //
 // NOTE: whether config.whatsappToken's permissions actually cover the
 // Catalog API is unverified — if catalog pushes fail with a permissions
 // error, a separate catalog-scoped token may be needed from Meta
 // Business Settings (set META_CATALOG_ACCESS_TOKEN to override).
-function getCatalogConfig() {
-  const catalogId = process.env.META_CATALOG_ID;
-  const accessToken = process.env.META_CATALOG_ACCESS_TOKEN || config.whatsappToken;
-
-  if (!catalogId) {
-    return { error: 'META_CATALOG_ID is not set — create/link a Meta Commerce Catalog first.' };
-  }
-
-  return { catalogId, accessToken };
-}
 
 /**
  * Pushes a shop's active products to the Meta Commerce Catalog, one-way,
@@ -33,11 +24,7 @@ function getCatalogConfig() {
  * mapping table.
  */
 async function syncShopCatalog(shopId) {
-  const { catalogId, accessToken, error: configError } = getCatalogConfig();
-  if (configError) {
-    logger.error({ shopId }, configError);
-    return { success: false, error: configError };
-  }
+  const accessToken = process.env.META_CATALOG_ACCESS_TOKEN || config.whatsappToken;
 
   const supabase = getSupabase();
   if (!supabase) {
@@ -61,13 +48,21 @@ async function syncShopCatalog(shopId) {
   // put there, so treat it as a hard prerequisite rather than guessing.
   const { data: connection, error: connectionError } = await supabase
     .from('whatsapp_connections')
-    .select('display_phone_number')
+    .select('display_phone_number, catalog_id')
     .eq('shop_id', shopId)
     .maybeSingle();
 
   if (connectionError) {
     logger.error({ error: connectionError, shopId }, 'Failed to load WhatsApp connection for catalog sync');
     return { success: false, error: 'Failed to load WhatsApp connection' };
+  }
+
+  const catalogId = connection?.catalog_id;
+  if (!catalogId) {
+    return {
+      success: false,
+      error: 'No Meta Commerce Catalog id on file for this shop — add it in WhatsApp connection settings first.',
+    };
   }
 
   const displayPhone = connection?.display_phone_number?.replace(/[^0-9]/g, '');

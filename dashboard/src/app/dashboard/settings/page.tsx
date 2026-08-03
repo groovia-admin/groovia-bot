@@ -16,7 +16,7 @@ export default async function SettingsPage() {
     const adminClient = createAdminClient()
     const { data, error } = await adminClient
       .from('whatsapp_connections')
-      .select('phone_number_id, business_account_id, display_phone_number, connection_status')
+      .select('phone_number_id, business_account_id, display_phone_number, catalog_id, connection_status')
       .eq('shop_id', context.shopId)
       .maybeSingle()
 
