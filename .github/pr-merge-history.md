@@ -7,3 +7,4 @@
 | #37 | Fix catalog sync price format and add required link field | wa-bot | @groovia-admin | @groovia-admin | 2026-08-02 15:53 UTC | 0d 0h 0m |
 | #38 | Add required brand field, skip imageless products, surface Graph API … | wa-bot | @groovia-admin | @groovia-admin | 2026-08-02 16:13 UTC | 0d 0h 0m |
 | #39 | Bot product image upload | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-03 09:22 UTC | 0d 0h 0m |
+| #40 | Fix items_batch request envelope: add item_type, move id into data | wa-bot | @groovia-admin | @groovia-admin | 2026-08-03 14:43 UTC | 0d 0h 0m |
