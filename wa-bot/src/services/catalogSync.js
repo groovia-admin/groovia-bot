@@ -110,8 +110,14 @@ async function syncShopCatalog(shopId) {
 
   const requests = withImage.map((product) => ({
     method: 'UPDATE',
-    retailer_id: product.id,
     data: {
+      // The item identifier for items_batch lives inside `data.id`, not a
+      // top-level `retailer_id` sibling field — confirmed against Meta's
+      // reference after the (#100) "item_type is required" error surfaced
+      // that the request envelope was wrong. This `id` is what Meta calls
+      // the retailer_id everywhere else (cart submissions, Commerce
+      // Manager) — it's the same value, just nested here.
+      id: product.id,
       name: product.name,
       description: product.description || product.name,
       // Meta's items_batch price format is a single string: "<amount> <ISO currency>"
@@ -139,7 +145,9 @@ async function syncShopCatalog(shopId) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ requests }),
+        // item_type is a required top-level field, sibling to requests —
+        // missing it is exactly what (#100) "item_type is required" means.
+        body: JSON.stringify({ item_type: 'PRODUCT_ITEM', requests }),
       }
     );
 
