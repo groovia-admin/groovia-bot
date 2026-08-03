@@ -6,6 +6,7 @@ type Connection = {
   phone_number_id: string;
   business_account_id: string | null;
   display_phone_number: string | null;
+  catalog_id: string | null;
   connection_status: string;
 } | null;
 
@@ -34,6 +35,7 @@ export default function WhatsappConnectionForm({ initialConnection }: { initialC
   const [phoneNumberId, setPhoneNumberId] = useState(initialConnection?.phone_number_id ?? "");
   const [businessAccountId, setBusinessAccountId] = useState(initialConnection?.business_account_id ?? "");
   const [displayPhoneNumber, setDisplayPhoneNumber] = useState(initialConnection?.display_phone_number ?? "");
+  const [catalogId, setCatalogId] = useState(initialConnection?.catalog_id ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(Boolean(initialConnection));
@@ -52,6 +54,7 @@ export default function WhatsappConnectionForm({ initialConnection }: { initialC
           phone_number_id: phoneNumberId,
           business_account_id: businessAccountId,
           display_phone_number: displayPhoneNumber,
+          catalog_id: catalogId,
         }),
       });
 
@@ -120,27 +123,39 @@ export default function WhatsappConnectionForm({ initialConnection }: { initialC
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
-          <label style={labelStyle}>WhatsApp Business Account ID (optional)</label>
+          <label style={labelStyle}>WhatsApp Business Account ID</label>
           <input
             style={inputStyle}
             value={businessAccountId}
             onChange={(e) => setBusinessAccountId(e.target.value)}
+            required
           />
         </div>
         <div>
-          <label style={labelStyle}>Display phone number (optional)</label>
+          <label style={labelStyle}>Display phone number</label>
           <input
             style={inputStyle}
             value={displayPhoneNumber}
             onChange={(e) => setDisplayPhoneNumber(e.target.value)}
             placeholder="+91 98765 43210"
+            required
           />
         </div>
       </div>
 
+      <div>
+        <label style={labelStyle}>Meta Commerce Catalog ID (optional — add once the catalog is created)</label>
+        <input
+          style={inputStyle}
+          value={catalogId}
+          onChange={(e) => setCatalogId(e.target.value)}
+          placeholder="e.g. 919958720377010"
+        />
+      </div>
+
       <button
         type="submit"
-        disabled={saving || !phoneNumberId.trim()}
+        disabled={saving || !phoneNumberId.trim() || !businessAccountId.trim() || !displayPhoneNumber.trim()}
         style={{
           display: "inline-flex",
           alignItems: "center",

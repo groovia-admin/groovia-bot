@@ -25,7 +25,7 @@ async function buildCartFromOrderMessage(shopId, productItems) {
 
   const { data: products, error } = await supabase
     .from('products')
-    .select('id, name, unit, price, is_available')
+    .select('id, name, unit, price, is_available, stock_quantity')
     .eq('shop_id', shopId)
     .in('id', ids);
 
@@ -42,7 +42,7 @@ async function buildCartFromOrderMessage(shopId, productItems) {
     const product = byId.get(item.product_retailer_id);
     const quantity = Number(item.quantity) || 0;
 
-    if (!product || !product.is_available || quantity <= 0) {
+    if (!product || !product.is_available || quantity <= 0 || quantity > product.stock_quantity) {
       skipped.push(item);
       continue;
     }
