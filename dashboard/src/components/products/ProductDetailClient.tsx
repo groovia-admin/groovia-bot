@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Upload } from "lucide-react";
 
 type Category = {
   id: string;
@@ -92,6 +92,40 @@ export default function ProductDetailClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setError("");
+
+    try {
+      const uploadData = new FormData();
+      uploadData.append("file", file);
+
+      const response = await fetch("/api/shop/products/upload-image", {
+        method: "POST",
+        body: uploadData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "Failed to upload image");
+        return;
+      }
+
+      setForm((f) => ({ ...f, image_url: data.url }));
+    } catch {
+      setError("Failed to upload image. Please try again.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -262,12 +296,54 @@ export default function ProductDetailClient({
         </div>
 
         <div>
-          <label style={S.label}>Image URL (optional)</label>
+          <label style={S.label}>Product image</label>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            {form.image_url ? (
+              <img
+                src={form.image_url}
+                alt=""
+                style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid #334155" }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 8,
+                  border: "1px dashed #334155",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#64748b",
+                  fontSize: 10,
+                  textAlign: "center",
+                }}
+              >
+                No image
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handleImageUpload}
+              style={{ display: "none" }}
+            />
+            <button
+              type="button"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+              style={{ ...S.btn("#334155", "#f1f5f9"), opacity: uploading ? 0.5 : 1 }}
+            >
+              <Upload size={14} />
+              {uploading ? "Uploading…" : form.image_url ? "Replace image" : "Upload image"}
+            </button>
+          </div>
           <input
-            style={S.input}
+            style={{ ...S.input, marginTop: 10 }}
             value={form.image_url}
             onChange={(e) => setForm((f) => ({ ...f, image_url: e.target.value }))}
-            placeholder="https://…"
+            placeholder="or paste an image URL directly"
           />
         </div>
 
