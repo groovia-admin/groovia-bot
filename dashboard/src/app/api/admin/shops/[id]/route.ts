@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeIndianPhone } from '@/lib/phone'
+import { logAuditEvent } from '@/lib/audit/log'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SLUG_REGEX = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -107,6 +108,8 @@ async function requirePlatformAdmin() {
 
   return {
     adminClient,
+    userId: user.id,
+    actorName: user.email ?? user.id,
   }
 }
 
@@ -607,6 +610,17 @@ export async function POST(
     console.error('Owner shop_users phone update failed:', ownerShopUserUpdateError)
   }
 
+  await logAuditEvent({
+    shopId: shop.id,
+    actorUserId: authorization.userId,
+    actorType: 'super_admin',
+    action: 'shop.created',
+    entityType: 'shop',
+    entityId: shop.id,
+    newValues: { name: shopName, slug, city, state, owner_name: ownerName, owner_phone: ownerPhone },
+    metadata: { actor_name: authorization.actorName, target_name: shopName },
+  })
+
   return NextResponse.json(
     {
       success:
@@ -763,6 +777,12 @@ export async function PATCH(
   } =
     await params
 
+  const { data: previousShop } = await authorization.adminClient
+    .from('shops')
+    .select('name, is_active, subscription_status')
+    .eq('id', id)
+    .maybeSingle()
+
   const {
     data:
       shop,
@@ -828,6 +848,27 @@ export async function PATCH(
         }
       )
   }
+
+  let action = 'shop.updated'
+  if ('is_active' in changes && !('subscription_status' in changes)) {
+    action = changes.is_active ? 'shop.activated' : 'shop.deactivated'
+  } else if ('subscription_status' in changes && !('is_active' in changes)) {
+    action = 'shop.subscription_updated'
+  }
+
+  await logAuditEvent({
+    shopId: id,
+    actorUserId: authorization.userId,
+    actorType: 'super_admin',
+    action,
+    entityType: 'shop',
+    entityId: id,
+    oldValues: previousShop
+      ? { is_active: previousShop.is_active, subscription_status: previousShop.subscription_status }
+      : null,
+    newValues: changes,
+    metadata: { actor_name: authorization.actorName, target_name: previousShop?.name ?? shop.name },
+  })
 
   return NextResponse.json(
     {

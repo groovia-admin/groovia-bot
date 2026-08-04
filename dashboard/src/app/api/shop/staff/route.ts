@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole } from '@/lib/auth/require-shop-role'
 import { normalizeIndianPhone } from '@/lib/phone'
+import { logAuditEvent } from '@/lib/audit/log'
 
 type CreateStaffBody = {
   fullName?: unknown
@@ -146,6 +147,17 @@ export async function POST(request: Request) {
     console.error('Failed to add staff:', insertError)
     return NextResponse.json({ error: 'Failed to add staff member' }, { status: 500 })
   }
+
+  await logAuditEvent({
+    shopId,
+    actorUserId: authorization.userId,
+    actorType: authorization.role,
+    action: 'staff.created',
+    entityType: 'shop_user',
+    entityId: staffRow.id,
+    newValues: { full_name: fullName, role, phone_number: phoneNumber, is_active: true },
+    metadata: { actor_name: authorization.actorName, target_name: fullName },
+  })
 
   return NextResponse.json(
     { success: true, staff: staffRow },

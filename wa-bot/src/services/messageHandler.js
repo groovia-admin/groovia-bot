@@ -421,15 +421,20 @@ async function handleStaffEditReply(from, shopId, editSession, text) {
 async function sendGreeting(from, shopId, name) {
   const supabase = getSupabase();
   let shopName = 'our shop';
+  let welcomeMessage = null;
 
   if (supabase) {
-    const { data: shop } = await supabase.from('shops').select('name').eq('id', shopId).maybeSingle();
+    const [{ data: shop }, { data: settings }] = await Promise.all([
+      supabase.from('shops').select('name').eq('id', shopId).maybeSingle(),
+      supabase.from('shop_settings').select('welcome_message').eq('shop_id', shopId).maybeSingle(),
+    ]);
     if (shop?.name) shopName = shop.name;
+    if (settings?.welcome_message) welcomeMessage = settings.welcome_message;
   }
 
   await sendCatalogMessage(
     from,
-    `Namaste ${name}! 👋 Welcome to *${shopName}*.\n\nTap below to browse and order.`
+    welcomeMessage || `Namaste ${name}! 👋 Welcome to *${shopName}*.\n\nTap below to browse and order.`
   );
 }
 
