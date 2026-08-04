@@ -117,9 +117,8 @@ async function isKnownActiveNumber(phone: string): Promise<boolean> {
 }
 
 // ── WhatsApp send (Authentication template, copy-code button) ──
-// NOTE: verify the button parameter shape (`type`/`copy_code` field names)
-// against Meta's current WhatsApp Business Platform docs when you create
-// and test-send the template — Meta has revised this payload shape before.
+// Copy-code button parameter confirmed against a live Graph API call:
+// the parameter type/field name is `coupon_code`, not `copy_code`.
 async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolean; error?: string }> {
   const token = Deno.env.get('WHATSAPP_TOKEN');
   const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
@@ -149,7 +148,7 @@ async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolea
             type: 'button',
             sub_type: 'copy_code',
             index: '0',
-            parameters: [{ type: 'copy_code', copy_code: otp }],
+            parameters: [{ type: 'coupon_code', coupon_code: otp }],
           },
         ],
       },
@@ -242,6 +241,11 @@ async function handleRequest(req: Request): Promise<Response> {
     return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  // This is the path that was previously silent in the logs — the hook
+  // correctly returned a 500 (visible in Supabase's Auth logs as "Hook
+  // errored out") but never logged *why*, since returning an error object
+  // isn't the same as calling console.error.
+  console.error(`WhatsApp send failed: ${waResult.error}; SMS fallback: ${smsResult.error}`);
   return hookError(500, `WhatsApp send failed (${waResult.error}); SMS fallback: ${smsResult.error}`);
 }
 
