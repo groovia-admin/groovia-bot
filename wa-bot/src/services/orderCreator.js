@@ -151,18 +151,22 @@ async function createOrderFromSession(shopId, phone, session) {
     subtotal: item.subtotal,
   }));
 
-  const { error: itemsError } = await supabase.from('order_items').insert(orderItems);
+  // Neither insert depends on the other (both only need order.id, already
+  // in hand) — running them in parallel instead of sequentially shaves a
+  // full round trip off order placement.
+  const [{ error: itemsError }, { error: detailsError }] = await Promise.all([
+    supabase.from('order_items').insert(orderItems),
+    supabase.from('order_customer_details').insert({
+      order_id: order.id,
+      customer_id: customerId,
+      customer_name_snapshot: session.customer_name || null,
+      customer_phone_snapshot: phone,
+    }),
+  ]);
 
   if (itemsError) {
     logger.error({ error: itemsError, orderId: order.id }, 'Failed to insert order items');
   }
-
-  const { error: detailsError } = await supabase.from('order_customer_details').insert({
-    order_id: order.id,
-    customer_id: customerId,
-    customer_name_snapshot: session.customer_name || null,
-    customer_phone_snapshot: phone,
-  });
 
   if (detailsError) {
     logger.error({ error: detailsError, orderId: order.id }, 'Failed to insert order customer details');
