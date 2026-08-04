@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { logAuditEvent } from '@/lib/audit/log'
 
 type UpdateStaffBody = {
   role?: unknown
@@ -57,6 +58,14 @@ export async function PATCH(request: Request, { params }: StaffRouteContext) {
     )
   }
 
+  // Read the pre-update state so the audit entry can record what changed.
+  const { data: previousStaff } = await adminClient
+    .from('shop_users')
+    .select('role, is_active, full_name')
+    .eq('id', id)
+    .eq('shop_id', shopId)
+    .maybeSingle()
+
   // Scoped by shop_id (in addition to id) so an owner can never touch
   // another shop's staff row, even by guessing a UUID.
   const { data: staff, error } = await adminClient
@@ -76,6 +85,25 @@ export async function PATCH(request: Request, { params }: StaffRouteContext) {
   if (!staff) {
     return NextResponse.json({ error: 'Staff member not found' }, { status: 404 })
   }
+
+  let action = 'staff.updated'
+  if ('role' in changes && !('is_active' in changes)) {
+    action = 'staff.role_changed'
+  } else if ('is_active' in changes && !('role' in changes)) {
+    action = changes.is_active ? 'staff.activated' : 'staff.deactivated'
+  }
+
+  await logAuditEvent({
+    shopId,
+    actorUserId: authorization.userId,
+    actorType: authorization.role,
+    action,
+    entityType: 'shop_user',
+    entityId: staff.id,
+    oldValues: previousStaff ? { role: previousStaff.role, is_active: previousStaff.is_active } : null,
+    newValues: changes,
+    metadata: { actor_name: authorization.actorName, target_name: staff.full_name },
+  })
 
   return NextResponse.json(
     { staff },

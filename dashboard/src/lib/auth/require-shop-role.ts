@@ -9,6 +9,8 @@ type RequireShopRoleResult =
       adminClient: ReturnType<typeof createAdminClient>
       shopId: string
       role: ShopRole
+      userId: string
+      actorName: string
     }
 
 /**
@@ -36,7 +38,7 @@ export async function requireShopRole(
 
   const { data: shopUser, error: shopUserError } = await adminClient
     .from('shop_users')
-    .select('shop_id, role')
+    .select('shop_id, role, full_name')
     .eq('auth_user_id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -73,5 +75,7 @@ export async function requireShopRole(
     adminClient,
     shopId: shopUser.shop_id,
     role: shopUser.role as ShopRole,
+    userId: user.id,
+    actorName: shopUser.full_name,
   }
 }
