@@ -13,6 +13,14 @@ const {
   createOrderFromSession,
   notifyShopOfNewOrder,
 } = require('./orderCreator');
+const {
+  getEditSession,
+  startEditSession,
+  endEditSession,
+  getOrderWithItems,
+  formatItemList,
+  removeItems,
+} = require('./orderEditor');
 
 // Static for now — the demo's "recommended based on time of day" logic is
 // a deliberate scope cut for the core loop.
@@ -140,18 +148,29 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  // Write audit log
+  // Write audit log — best-effort. supabase-js query builders are
+  // thenables (awaitable), not real Promise instances, so they have no
+  // .catch() method; chaining one directly throws a TypeError instead of
+  // suppressing the error the way it looks like it should. A plain
+  // try/await/catch is the correct way to make this non-fatal.
   // NOTE: not adding a changed_by_shop_user column here yet — this table
   // isn't in the typed schema anywhere in the repo, so its real columns
   // aren't verifiable from code. Confirm the schema before extending this
   // insert; shopUser.id/fullName are available in scope when that's ready.
-  await supabase.from('order_status_logs').insert({
-    order_id:    order.id,
-    status_from: order.status,
-    status_to:   transition.to,
-    changed_via: 'whatsapp',
-    notes:       reason || null,
-  }).catch(() => {});
+  try {
+    const { error: logError } = await supabase.from('order_status_logs').insert({
+      order_id:    order.id,
+      status_from: order.status,
+      status_to:   transition.to,
+      changed_via: 'whatsapp',
+      notes:       reason || null,
+    });
+    if (logError) {
+      logger.error({ error: logError, orderId: order.id }, 'Failed to write order_status_logs entry');
+    }
+  } catch (err) {
+    logger.error({ err, orderId: order.id }, 'order_status_logs insert threw');
+  }
 
   // Notify the customer — best-effort. Must never affect the staff-facing
   // reply below, even if the template isn't approved yet, the order has
@@ -161,6 +180,12 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   } catch (err) {
     logger.error({ err, orderNumber: order.order_number, command }, 'Customer notify failed');
   }
+
+  // Clear any lingering edit session — e.g. staff tapped Accept/Reject
+  // straight from the button message instead of typing "done" first.
+  // Harmless no-op if none exists; without this a stale session would
+  // hijack the next unrelated text message as if it were edit input.
+  await endEditSession(shopId, from);
 
   // Confirm to shopkeeper
   const replies = {
@@ -183,8 +208,9 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
 }
 
 // ── Staff button-tap handler ─────────────────────────────────────
-// Button ids are "<accept|reject|ready|complete>_<orderId>" — the order is
-// identified by its own id, not typed, so there's nothing to get wrong.
+// Button ids are "<accept|reject|ready|complete|edit>_<orderId>" — the
+// order is identified by its own id, not typed, so there's nothing to
+// get wrong.
 const STAFF_BUTTON_COMMANDS = {
   accept: 'ACCEPT',
   reject: 'REJECT',
@@ -192,7 +218,48 @@ const STAFF_BUTTON_COMMANDS = {
   complete: 'COMPLETE',
 };
 
+// Re-sent after every edit (an item removed, or "done") so staff always
+// see the current total and can Accept/Reject/keep Editing — same three
+// actions offered on the original new-order notification.
+async function sendOrderActionButtons(from, order, items) {
+  const body =
+    `📋 *Order ${order.order_number}* — ₹${Number(order.total_amount).toFixed(2)}\n\n` +
+    `Items:\n${formatItemList(items)}`;
+
+  await sendButtonMessage(from, body, [
+    { id: `accept_${order.id}`, title: '✅ Accept' },
+    { id: `reject_${order.id}`, title: '❌ Reject' },
+    { id: `edit_${order.id}`, title: '✏️ Edit' },
+  ]);
+}
+
+async function sendEditPrompt(from, shopId, orderId) {
+  const loaded = await getOrderWithItems(orderId, shopId);
+  if (!loaded) {
+    await sendWhatsAppMessage(from, '❌ Order not found.');
+    return;
+  }
+
+  if (loaded.order.status !== 'pending') {
+    await sendWhatsAppMessage(from, `⚠️ Order *${loaded.order.order_number}* can no longer be edited (already ${loaded.order.status}).`);
+    return;
+  }
+
+  await startEditSession(shopId, from, orderId);
+
+  await sendWhatsAppMessage(from,
+    `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
+    `Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done* when finished.`
+  );
+}
+
 async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
+  const editMatch = /^edit_(.+)$/.exec(buttonId || '');
+  if (editMatch) {
+    await sendEditPrompt(from, shopId, editMatch[1]);
+    return;
+  }
+
   const match = /^(accept|reject|ready|complete)_(.+)$/.exec(buttonId || '');
   if (!match) return;
 
@@ -204,6 +271,61 @@ async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
     { command, orderId, reason: 'Rejected by shopkeeper' },
     shopId,
     shopUser
+  );
+}
+
+// ── Staff order-edit reply handler ────────────────────────────────
+// Only reached while a staff_order_edits row exists for this phone —
+// see handleIncomingMessage, which checks for one before falling through
+// to the normal ACCEPT/REJECT/... command parser.
+async function handleStaffEditReply(from, shopId, editSession, text) {
+  const loaded = await getOrderWithItems(editSession.order_id, shopId);
+  if (!loaded) {
+    await endEditSession(shopId, from);
+    await sendWhatsAppMessage(from, '❌ Order not found. Edit cancelled.');
+    return;
+  }
+
+  const trimmed = (text || '').trim().toLowerCase();
+
+  if (trimmed === 'done') {
+    await endEditSession(shopId, from);
+    await sendOrderActionButtons(from, loaded.order, loaded.items);
+    return;
+  }
+
+  // Parse "2" / "1,3" / "1, 3, 4" into 1-based item numbers.
+  const numbers = trimmed
+    .split(',')
+    .map((part) => Number(part.trim()))
+    .filter((n) => Number.isInteger(n) && n >= 1 && n <= loaded.items.length);
+
+  if (numbers.length === 0) {
+    await sendWhatsAppMessage(from,
+      `Didn't catch that. Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done*.`
+    );
+    return;
+  }
+
+  const itemIdsToRemove = numbers.map((n) => loaded.items[n - 1].id);
+  const result = await removeItems(editSession.order_id, itemIdsToRemove);
+
+  if (!result) {
+    await sendWhatsAppMessage(from, '⚠️ Something went wrong removing that. Please try again.');
+    return;
+  }
+
+  if (result.blocked) {
+    await sendWhatsAppMessage(from,
+      `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
+    );
+    return;
+  }
+
+  const updated = await getOrderWithItems(editSession.order_id, shopId);
+  await sendWhatsAppMessage(from,
+    `Removed. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\n` +
+    `Reply with more item number(s) to remove, or type *done* when finished.`
   );
 }
 
@@ -426,6 +548,17 @@ async function handleIncomingMessage(message, value) {
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
     await handleStaffButtonReply(from, shopId, shopUser, message.interactive.button_reply.id);
     return;
+  }
+
+  // If this staff member is mid-edit on an order, any text reply is
+  // interpreted as edit input (item numbers / "done"), not a command —
+  // must be checked before the command parser below.
+  if (type === 'text') {
+    const editSession = await getEditSession(shopId, from);
+    if (editSession) {
+      await handleStaffEditReply(from, shopId, editSession, message.text?.body || '');
+      return;
+    }
   }
 
   if (type !== 'text') {

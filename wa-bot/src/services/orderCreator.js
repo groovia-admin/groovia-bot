@@ -214,6 +214,7 @@ async function notifyShopOfNewOrder(shopId, order, session) {
   const buttons = [
     { id: `accept_${order.id}`, title: '✅ Accept' },
     { id: `reject_${order.id}`, title: '❌ Reject' },
+    { id: `edit_${order.id}`, title: '✏️ Edit' },
   ];
 
   await Promise.all(
