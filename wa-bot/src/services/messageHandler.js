@@ -57,7 +57,20 @@ function parseCommand(text) {
   return null;
 }
 
+// Offered as a tap-to-advance button after a successful transition, so
+// staff never have to type a command for the rest of the lifecycle —
+// only the very first step (a new order arriving) can't avoid a choice,
+// and that's now also buttons (see notifyShopOfNewOrder).
+const NEXT_STEP_BUTTON = {
+  accepted: (order) => ({ id: `ready_${order.id}`, title: '📦 Mark ready' }),
+  ready:    (order) => ({ id: `complete_${order.id}`, title: '✅ Mark complete' }),
+};
+
 // ── Order command handler ──────────────────────────────────────
+// `parsed` identifies the order either by orderNumber (typed commands,
+// e.g. "ACCEPT ORD-1234") or orderId (button taps, which carry the id
+// directly rather than making staff type anything) — exactly one of the
+// two is set by the caller.
 async function handleOrderCommand(from, parsed, shopId, shopUser) {
   const supabase = getSupabase();
 
@@ -66,20 +79,23 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  const { command, orderNumber, reason } = parsed;
+  const { command, orderNumber, orderId, reason } = parsed;
 
   // Find order — scoped to the sender's resolved shop, so a spoofed or
-  // guessed order number belonging to a different shop can never match.
-  const { data: order, error } = await supabase
+  // guessed order number/id belonging to a different shop can never match.
+  let query = supabase
     .from('orders')
     .select('id, order_number, status, total_amount, shop_id')
-    .eq('order_number', orderNumber)
-    .eq('shop_id', shopId)
-    .single();
+    .eq('shop_id', shopId);
+  query = orderId ? query.eq('id', orderId) : query.eq('order_number', orderNumber);
+
+  const { data: order, error } = await query.single();
 
   if (error || !order) {
     await sendWhatsAppMessage(from,
-      `❌ Order *${orderNumber}* not found.\nPlease check the order number and try again.`
+      orderNumber
+        ? `❌ Order *${orderNumber}* not found.\nPlease check the order number and try again.`
+        : `❌ Order not found. It may already have been updated by someone else.`
     );
     return;
   }
@@ -95,9 +111,9 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   const transition = validTransitions[command];
   if (order.status !== transition.from) {
     await sendWhatsAppMessage(from,
-      `⚠️ Cannot ${command.toLowerCase()} order *${orderNumber}*.\n` +
+      `⚠️ Cannot ${command.toLowerCase()} order *${order.order_number}*.\n` +
       `Current status: *${order.status.toUpperCase()}*\n` +
-      `Order must be *${transition.from.toUpperCase()}* to use this command.`
+      `It must be *${transition.from.toUpperCase()}* for this action — someone may have already updated it.`
     );
     return;
   }
@@ -119,8 +135,8 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     .eq('id', order.id);
 
   if (updateError) {
-    logger.error({ updateError, orderNumber }, 'Order update failed');
-    await sendWhatsAppMessage(from, `❌ Failed to update order *${orderNumber}*. Please try again.`);
+    logger.error({ updateError, orderNumber: order.order_number }, 'Order update failed');
+    await sendWhatsAppMessage(from, `❌ Failed to update order *${order.order_number}*. Please try again.`);
     return;
   }
 
@@ -141,21 +157,54 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   // reply below, even if the template isn't approved yet, the order has
   // no phone snapshot, or Meta's API errors.
   try {
-    await notifyCustomer(order.id, transition.to);
+    await notifyCustomer(order.id, transition.to, order.shop_id);
   } catch (err) {
-    logger.error({ err, orderNumber, command }, 'Customer notify failed');
+    logger.error({ err, orderNumber: order.order_number, command }, 'Customer notify failed');
   }
 
   // Confirm to shopkeeper
   const replies = {
-    ACCEPT:   `✅ Order *${orderNumber}* accepted!\nCustomer will be notified.`,
-    REJECT:   `❌ Order *${orderNumber}* rejected.\nReason: ${reason}\nCustomer will be notified.`,
-    READY:    `🎉 Order *${orderNumber}* is ready for pickup!\nCustomer will be notified.`,
-    COMPLETE: `✔️ Order *${orderNumber}* completed. Well done!`,
+    ACCEPT:   `✅ Order *${order.order_number}* accepted!\nCustomer will be notified.`,
+    REJECT:   `❌ Order *${order.order_number}* rejected.\nReason: ${reason}\nCustomer will be notified.`,
+    READY:    `🎉 Order *${order.order_number}* is ready for pickup!\nCustomer will be notified.`,
+    COMPLETE: `✔️ Order *${order.order_number}* completed. Well done!`,
   };
 
   await sendWhatsAppMessage(from, replies[command]);
-  logger.info({ orderNumber, from: order.status, to: transition.to }, 'Order updated via WhatsApp');
+
+  // Tap-to-advance to the next step, if there is one (nothing follows
+  // REJECT or COMPLETE).
+  const nextButton = NEXT_STEP_BUTTON[transition.to]?.(order);
+  if (nextButton) {
+    await sendButtonMessage(from, 'Ready for the next step?', [nextButton]);
+  }
+
+  logger.info({ orderNumber: order.order_number, from: order.status, to: transition.to }, 'Order updated via WhatsApp');
+}
+
+// ── Staff button-tap handler ─────────────────────────────────────
+// Button ids are "<accept|reject|ready|complete>_<orderId>" — the order is
+// identified by its own id, not typed, so there's nothing to get wrong.
+const STAFF_BUTTON_COMMANDS = {
+  accept: 'ACCEPT',
+  reject: 'REJECT',
+  ready: 'READY',
+  complete: 'COMPLETE',
+};
+
+async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
+  const match = /^(accept|reject|ready|complete)_(.+)$/.exec(buttonId || '');
+  if (!match) return;
+
+  const [, action, orderId] = match;
+  const command = STAFF_BUTTON_COMMANDS[action];
+
+  await handleOrderCommand(
+    from,
+    { command, orderId, reason: 'Rejected by shopkeeper' },
+    shopId,
+    shopUser
+  );
 }
 
 // ── Customer ordering flow ──────────────────────────────────────
@@ -371,6 +420,11 @@ async function handleIncomingMessage(message, value) {
   // command flow below; everyone else gets the ordering conversation.
   if (!shopUser) {
     await handleCustomerMessage(from, message, shopId, name);
+    return;
+  }
+
+  if (type === 'interactive' && message.interactive?.type === 'button_reply') {
+    await handleStaffButtonReply(from, shopId, shopUser, message.interactive.button_reply.id);
     return;
   }
 

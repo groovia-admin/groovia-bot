@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { getSupabase } = require('./shopResolver');
-const { sendWhatsAppMessage } = require('./whatsappClient');
+const { sendButtonMessage } = require('./whatsappClient');
 
 function generateOrderNumber() {
   return `ORD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -177,6 +177,12 @@ async function createOrderFromSession(shopId, phone, session) {
  * commands) that a new order came in. No shop-side push for new orders
  * existed before this — staff previously had no way to know an order
  * arrived except checking some other way.
+ *
+ * Sent as a tappable Accept/Reject button message rather than plain text
+ * asking staff to type "ACCEPT ORD-XXXX" — typing an exact order number
+ * on a phone keyboard is slow and error-prone. The button id carries the
+ * order's own id, so there's nothing to type or get wrong; whoever taps
+ * first wins (handleOrderCommand's status check rejects a second tap).
  */
 async function notifyShopOfNewOrder(shopId, order, session) {
   const supabase = getSupabase();
@@ -203,11 +209,15 @@ async function notifyShopOfNewOrder(shopId, order, session) {
     `👤 ${session.customer_name || 'Customer'}\n` +
     `⏰ Pickup: ${session.pickup_slot_label}\n` +
     `💵 Payment: ${session.payment_method}\n\n` +
-    `Items:\n${itemLines}\n\n` +
-    `Reply *ACCEPT ${order.order_number}* or *REJECT ${order.order_number}*`;
+    `Items:\n${itemLines}`;
+
+  const buttons = [
+    { id: `accept_${order.id}`, title: '✅ Accept' },
+    { id: `reject_${order.id}`, title: '❌ Reject' },
+  ];
 
   await Promise.all(
-    (staff || []).map((s) => sendWhatsAppMessage(s.phone_number, message))
+    (staff || []).map((s) => sendButtonMessage(s.phone_number, message, buttons))
   );
 }
 
