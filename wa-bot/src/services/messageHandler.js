@@ -245,7 +245,11 @@ async function sendEditPrompt(from, shopId, orderId) {
     return;
   }
 
-  await startEditSession(shopId, from, orderId);
+  const started = await startEditSession(shopId, from, orderId);
+  if (!started) {
+    await sendWhatsAppMessage(from, '⚠️ Could not start editing right now. Please try again, or Accept/Reject as-is.');
+    return;
+  }
 
   await sendWhatsAppMessage(from,
     `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
