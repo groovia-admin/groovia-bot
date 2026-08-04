@@ -1,0 +1,5 @@
+[functions.send-whatsapp-otp]
+# The hook is authenticated by its own Standard Webhooks signature
+# (verified inside index.ts against SEND_SMS_HOOK_SECRET), not a Supabase
+# user JWT — a real login attempt has no session yet at this point.
+verify_jwt = false
