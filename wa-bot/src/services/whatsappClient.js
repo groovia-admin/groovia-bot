@@ -198,9 +198,54 @@ async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
   }
 }
 
+// ── List message (tap-to-select from up to 10 rows, single-select) ──
+// sections: [{ title, rows: [{ id, title, description }] }]
+async function sendListMessage(to, bodyText, buttonText, sections, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'list',
+            body: { text: bodyText },
+            action: { button: buttonText, sections },
+          },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logSendFailure('❌ WhatsApp list message send failed', { to }, data);
+      return false;
+    }
+
+    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp list message sent');
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, '❌ WhatsApp list message send error');
+    return false;
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
   sendCatalogMessage,
   sendButtonMessage,
+  sendListMessage,
 };

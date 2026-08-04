@@ -4,7 +4,7 @@ const {
   resolveShopByPhoneNumberId,
   resolveShopUserByPhone,
 } = require('./shopResolver');
-const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage } = require('./whatsappClient');
+const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
 const {
@@ -233,6 +233,36 @@ async function sendOrderActionButtons(from, order, items) {
   ]);
 }
 
+// WhatsApp list messages cap at 10 rows total — one is reserved for the
+// "Done" row, so at most 9 items can be listed. Orders bigger than that
+// fall back to the reply-with-a-number flow, which has no such limit.
+const MAX_EDIT_LIST_ITEMS = 9;
+
+function buildEditListSections(order, items) {
+  const rows = items.map((item) => ({
+    id: `remove_${item.id}`,
+    title: item.product_name_snapshot.slice(0, 24),
+    description: `Qty ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`.slice(0, 72),
+  }));
+
+  rows.push({
+    id: `edit_done_${order.id}`,
+    title: '✅ Done',
+    description: 'Keep the rest, back to Accept/Reject',
+  });
+
+  return [{ title: 'Order items', rows }];
+}
+
+async function sendEditListPrompt(from, order, items) {
+  const body =
+    `✏️ *Editing ${order.order_number}*\n\n` +
+    `Total: ₹${Number(order.total_amount).toFixed(2)}\n\n` +
+    `Tap an item to remove it, or "Done" to keep the rest.`;
+
+  await sendListMessage(from, body, 'Select item', buildEditListSections(order, items));
+}
+
 async function sendEditPrompt(from, shopId, orderId) {
   const loaded = await getOrderWithItems(orderId, shopId);
   if (!loaded) {
@@ -245,12 +275,65 @@ async function sendEditPrompt(from, shopId, orderId) {
     return;
   }
 
-  await startEditSession(shopId, from, orderId);
+  const started = await startEditSession(shopId, from, orderId);
+  if (!started) {
+    await sendWhatsAppMessage(from, '⚠️ Could not start editing right now. Please try again, or Accept/Reject as-is.');
+    return;
+  }
 
-  await sendWhatsAppMessage(from,
-    `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
-    `Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done* when finished.`
-  );
+  if (loaded.items.length > MAX_EDIT_LIST_ITEMS) {
+    await sendWhatsAppMessage(from,
+      `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
+      `Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done* when finished.`
+    );
+    return;
+  }
+
+  await sendEditListPrompt(from, loaded.order, loaded.items);
+}
+
+// ── Staff list-tap handler (the edit flow's "remove one item" UI) ────
+// Only reached while a staff_order_edits row exists — mirrors
+// handleStaffEditReply's text-based equivalent, which stays in place
+// both as the >9-item fallback and as a safety net if someone types
+// instead of tapping.
+async function handleStaffListReply(from, shopId, listReplyId) {
+  const editSession = await getEditSession(shopId, from);
+  if (!editSession) return;
+
+  const doneMatch = /^edit_done_(.+)$/.exec(listReplyId || '');
+  if (doneMatch) {
+    await endEditSession(shopId, from);
+    const loaded = await getOrderWithItems(editSession.order_id, shopId);
+    if (loaded) await sendOrderActionButtons(from, loaded.order, loaded.items);
+    return;
+  }
+
+  const removeMatch = /^remove_(.+)$/.exec(listReplyId || '');
+  if (!removeMatch) return;
+
+  const result = await removeItems(editSession.order_id, [removeMatch[1]]);
+
+  if (!result) {
+    await sendWhatsAppMessage(from, '⚠️ Something went wrong removing that. Please try again.');
+    return;
+  }
+
+  if (result.blocked) {
+    await sendWhatsAppMessage(from,
+      `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
+    );
+    return;
+  }
+
+  const loaded = await getOrderWithItems(editSession.order_id, shopId);
+  if (!loaded) {
+    await endEditSession(shopId, from);
+    await sendWhatsAppMessage(from, '❌ Order not found. Edit cancelled.');
+    return;
+  }
+
+  await sendEditListPrompt(from, loaded.order, loaded.items);
 }
 
 async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
@@ -552,6 +635,11 @@ async function handleIncomingMessage(message, value) {
 
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
     await handleStaffButtonReply(from, shopId, shopUser, message.interactive.button_reply.id);
+    return;
+  }
+
+  if (type === 'interactive' && message.interactive?.type === 'list_reply') {
+    await handleStaffListReply(from, shopId, message.interactive.list_reply.id);
     return;
   }
 
