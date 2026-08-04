@@ -57,16 +57,22 @@ export default function LoginPage() {
 
     setLoading(true)
 
-    // shouldCreateUser: false — staff/manager accounts are provisioned in
-    // advance by the shop owner, so an unrecognized phone must not be able
-    // to self-register just by requesting an OTP.
-    const { error } = await supabase.auth.signInWithOtp({
-      phone: normalized,
-      options: { shouldCreateUser: false },
-    })
+    try {
+      const response = await fetch('/api/auth/request-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalized }),
+      })
 
-    if (error) {
-      setError('Phone not recognized. Contact your shop owner to be added as staff.')
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to send OTP. Please try again.')
+        setLoading(false)
+        return
+      }
+    } catch {
+      setError('Failed to send OTP. Please try again.')
       setLoading(false)
       return
     }
