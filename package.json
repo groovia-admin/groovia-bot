@@ -12,10 +12,9 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.45.0",
-    "axios": "^1.7.7",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "next": "^15.3.8",
+    "express-rate-limit": "8.6.1",
     "pino": "^9.4.0",
     "pino-pretty": "^11.2.2"
   },
