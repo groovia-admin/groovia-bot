@@ -141,7 +141,7 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   // reply below, even if the template isn't approved yet, the order has
   // no phone snapshot, or Meta's API errors.
   try {
-    await notifyCustomer(order.id, transition.to);
+    await notifyCustomer(order.id, transition.to, order.shop_id);
   } catch (err) {
     logger.error({ err, orderNumber, command }, 'Customer notify failed');
   }
