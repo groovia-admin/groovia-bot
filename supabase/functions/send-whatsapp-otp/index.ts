@@ -54,8 +54,23 @@ async function verifyWebhookSignature(req: Request, rawBody: string, secret: str
     return false;
   }
 
-  const secretB64 = secret.replace(/^v1,whsec_/, '');
-  const keyBytes = Uint8Array.from(atob(secretB64), (c) => c.charCodeAt(0));
+  // Trim whitespace/newlines (a common artifact of pasting into a shell
+  // command) and tolerate base64url encoding (-/_ instead of +//) in case
+  // the secret ever arrives in that form — atob() only accepts standard
+  // base64, so normalize before decoding rather than assume the exact form.
+  let secretB64 = secret.trim().replace(/^v1,whsec_/, '').trim();
+  secretB64 = secretB64.replace(/-/g, '+').replace(/_/g, '/');
+  while (secretB64.length % 4 !== 0) secretB64 += '=';
+
+  let keyBytes: Uint8Array;
+  try {
+    keyBytes = Uint8Array.from(atob(secretB64), (c) => c.charCodeAt(0));
+  } catch (err) {
+    console.error(
+      `SEND_SMS_HOOK_SECRET failed to base64-decode after normalization (length ${secretB64.length}): ${err instanceof Error ? err.message : err}`
+    );
+    return false;
+  }
 
   const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
 
@@ -179,7 +194,7 @@ async function sendSmsFallback(phone: string, otp: string): Promise<{ ok: boolea
   return { ok: true };
 }
 
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   const rawBody = await req.text();
 
   const secret = Deno.env.get('SEND_SMS_HOOK_SECRET');
@@ -228,4 +243,13 @@ Deno.serve(async (req: Request) => {
   }
 
   return hookError(500, `WhatsApp send failed (${waResult.error}); SMS fallback: ${smsResult.error}`);
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (err) {
+    console.error(`Unhandled error in send-whatsapp-otp: ${err instanceof Error ? err.stack || err.message : err}`);
+    return hookError(500, 'Internal error');
+  }
 });
