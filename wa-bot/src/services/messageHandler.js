@@ -140,18 +140,29 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  // Write audit log
+  // Write audit log — best-effort. supabase-js query builders are
+  // thenables (awaitable), not real Promise instances, so they have no
+  // .catch() method; chaining one directly throws a TypeError instead of
+  // suppressing the error the way it looks like it should. A plain
+  // try/await/catch is the correct way to make this non-fatal.
   // NOTE: not adding a changed_by_shop_user column here yet — this table
   // isn't in the typed schema anywhere in the repo, so its real columns
   // aren't verifiable from code. Confirm the schema before extending this
   // insert; shopUser.id/fullName are available in scope when that's ready.
-  await supabase.from('order_status_logs').insert({
-    order_id:    order.id,
-    status_from: order.status,
-    status_to:   transition.to,
-    changed_via: 'whatsapp',
-    notes:       reason || null,
-  }).catch(() => {});
+  try {
+    const { error: logError } = await supabase.from('order_status_logs').insert({
+      order_id:    order.id,
+      status_from: order.status,
+      status_to:   transition.to,
+      changed_via: 'whatsapp',
+      notes:       reason || null,
+    });
+    if (logError) {
+      logger.error({ error: logError, orderId: order.id }, 'Failed to write order_status_logs entry');
+    }
+  } catch (err) {
+    logger.error({ err, orderId: order.id }, 'order_status_logs insert threw');
+  }
 
   // Notify the customer — best-effort. Must never affect the staff-facing
   // reply below, even if the template isn't approved yet, the order has
