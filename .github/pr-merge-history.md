@@ -11,3 +11,4 @@
 | #41 | Fix items_batch product name field: title, not name | wa-bot | @groovia-admin | @groovia-admin | 2026-08-03 15:28 UTC | 0d 0h 0m |
 | #42 | Bot security review fixes | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 04:32 UTC | 0d 0h 2m |
 | #43 | Replace typed ACCEPT/REJECT commands with tap-to-act buttons for staff | wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 04:33 UTC | 0d 0h 0m |
+| #44 | Bot fix order status log catch crash | wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 05:17 UTC | 0d 0h 0m |
