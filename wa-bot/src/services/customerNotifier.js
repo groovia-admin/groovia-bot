@@ -7,7 +7,15 @@ const { sendWhatsAppTemplate } = require('./whatsappClient');
  * Sends the WhatsApp template matching `status` (an orders.status value,
  * e.g. 'accepted' | 'ready' | 'completed' | 'rejected' | 'cancelled') to
  * the customer who placed `orderId`. Looks up everything itself — callers
- * only need to know the order id and its new status.
+ * only need to know the order id, its shop, and its new status.
+ *
+ * shopId is required and enforced in the query below (not just checked
+ * after the fact) — the /internal/orders/:orderId/notify route has no
+ * other authorization beyond the shared internal secret, so this is the
+ * only thing stopping a caller who knows any orderId from triggering a
+ * notification for an order belonging to a shop it has no relationship
+ * to. The WhatsApp-triggered path (messageHandler.js) already scopes its
+ * own order lookups by shop_id for the same reason.
  *
  * Uses order_customer_details.customer_phone_snapshot (the phone captured
  * at order-creation time) rather than the possibly-since-changed
@@ -19,10 +27,15 @@ const { sendWhatsAppTemplate } = require('./whatsappClient');
  * success path (the staff-facing reply, or the dashboard's status
  * update) — callers should not let this throw uncaught.
  */
-async function notifyCustomer(orderId, status) {
+async function notifyCustomer(orderId, status, shopId) {
   const template = getTemplate(status);
   if (!template) {
     logger.warn({ orderId, status }, 'No template registered for this status — skipping notify');
+    return false;
+  }
+
+  if (!shopId) {
+    logger.warn({ orderId, status }, 'No shopId provided — refusing to notify');
     return false;
   }
 
@@ -41,6 +54,7 @@ async function notifyCustomer(orderId, status) {
        order_customer_details ( customer_name_snapshot, customer_phone_snapshot )`
     )
     .eq('id', orderId)
+    .eq('shop_id', shopId)
     .maybeSingle();
 
   if (error || !order) {

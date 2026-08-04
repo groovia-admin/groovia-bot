@@ -1,10 +1,19 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const config = require('./config');
 const logger = require('./utils/logger');
 const webhookRouter = require('./routes/webhook');
 const internalRouter = require('./routes/internal');
 
 const app = express();
+
+// Railway (and any platform load balancer) sits in front of this app, so
+// requests arrive with X-Forwarded-For rather than a real peer IP. Without
+// this, express-rate-limit either buckets all traffic under one IP or
+// refuses to start (it detects the header and errors if trust proxy isn't
+// configured, since blindly trusting it without one would let a client
+// spoof its own rate-limit bucket).
+app.set('trust proxy', 1);
 
 // Capture raw body for HMAC signature verification
 app.use(
@@ -14,6 +23,26 @@ app.use(
     },
   })
 );
+
+// Webhook traffic is real customer/staff messages — generous enough not to
+// throttle a genuinely busy shop, tight enough to blunt a flood aimed at
+// exhausting Meta API quota or Supabase connections (each POST costs a
+// signature computation before it's rejected either way).
+const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Internal traffic is server-to-server (the dashboard backend only) — low
+// legitimate volume expected, so this can be much tighter.
+const internalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
 // Health check
 app.get('/health', (_req, res) => {
@@ -31,10 +60,10 @@ app.get('/', (_req, res) => {
 });
 
 // Webhook
-app.use('/webhook', webhookRouter);
+app.use('/webhook', webhookLimiter, webhookRouter);
 
 // Internal (server-to-server, e.g. dashboard-triggered notifications)
-app.use('/internal', internalRouter);
+app.use('/internal', internalLimiter, internalRouter);
 
 // 404
 app.use((_req, res) => res.sendStatus(404));

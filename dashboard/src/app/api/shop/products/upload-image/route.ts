@@ -4,10 +4,38 @@ import { requireShopRole } from '@/lib/auth/require-shop-role'
 
 const BUCKET = 'product-images'
 const MAX_BYTES = 5 * 1024 * 1024
-const ALLOWED_TYPES: Record<string, string> = {
+const ALLOWED_EXTENSIONS: Record<string, string> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
+}
+
+// Identifies the actual image format from its file signature (magic
+// bytes) rather than trusting the client-supplied Content-Type, which is
+// trivially spoofable — a non-image (or HTML/SVG polyglot) could otherwise
+// be uploaded with a .jpg extension into this public bucket.
+function sniffImageType(bytes: Uint8Array): string | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+    bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a
+  ) {
+    return 'image/png'
+  }
+
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 && // "RIFF"
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50 // "WEBP"
+  ) {
+    return 'image/webp'
+  }
+
+  return null
 }
 
 export async function POST(request: Request) {
@@ -18,6 +46,14 @@ export async function POST(request: Request) {
   }
 
   const { adminClient, shopId } = authorization
+
+  // Reject an oversized upload from the Content-Length header before
+  // request.formData() buffers the whole body into memory — the file.size
+  // check below runs too late to prevent that buffering.
+  const contentLength = Number(request.headers.get('content-length') || 0)
+  if (contentLength > MAX_BYTES + 2048) {
+    return NextResponse.json({ error: 'Image must be under 5MB' }, { status: 413 })
+  }
 
   let formData: FormData
 
@@ -33,14 +69,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No file provided' }, { status: 400 })
   }
 
-  const ext = ALLOWED_TYPES[file.type]
-
-  if (!ext) {
-    return NextResponse.json({ error: 'Only JPEG, PNG, or WebP images are allowed' }, { status: 400 })
-  }
-
   if (file.size > MAX_BYTES) {
     return NextResponse.json({ error: 'Image must be under 5MB' }, { status: 400 })
+  }
+
+  const bytes = new Uint8Array(await file.arrayBuffer())
+  const sniffedType = sniffImageType(bytes)
+  const ext = sniffedType ? ALLOWED_EXTENSIONS[sniffedType] : undefined
+
+  if (!sniffedType || !ext) {
+    return NextResponse.json(
+      { error: 'File content is not a valid JPEG, PNG, or WebP image' },
+      { status: 400 }
+    )
   }
 
   // Path is namespaced by shop so one shop's uploads can never collide with
@@ -49,7 +90,7 @@ export async function POST(request: Request) {
 
   const { error: uploadError } = await adminClient.storage
     .from(BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false })
+    .upload(path, bytes, { contentType: sniffedType, upsert: false })
 
   if (uploadError) {
     console.error('Product image upload failed:', uploadError)

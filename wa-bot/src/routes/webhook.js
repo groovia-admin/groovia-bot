@@ -3,6 +3,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const verifySignature = require('../middleware/verifySignature');
 const { handleWebhookPayload } = require('../services/messageHandler');
+const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
 
 const router = express.Router();
 
@@ -12,7 +13,7 @@ router.get('/', (req, res) => {
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === config.verifyToken) {
+  if (mode === 'subscribe' && timingSafeEqualStrings(token, config.verifyToken)) {
     logger.info('✅ Webhook verified');
     return res.status(200).send(challenge);
   }
