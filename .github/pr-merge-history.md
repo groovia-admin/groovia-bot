@@ -15,3 +15,4 @@
 | #45 | Let staff remove out-of-stock items from an order before accepting | wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 05:18 UTC | 0d 0h 0m |
 | #46 | Bot fix edit session silent failure | wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 08:40 UTC | 0d 0h 0m |
 | #47 | Add audit logging and a real shop-settings UI backed by shop_settings | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-04 11:24 UTC | 0d 0h 0m |
+| #49 | Bot login logs and owner email fix | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 09:37 UTC | 0d 0h 0m |
