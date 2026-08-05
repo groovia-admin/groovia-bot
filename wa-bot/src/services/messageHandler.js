@@ -6,6 +6,7 @@ const {
 } = require('./shopResolver');
 const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
+const { logMessage } = require('./conversationLogger');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
 const {
   buildCartFromOrderMessage,
@@ -432,17 +433,16 @@ async function sendGreeting(from, shopId, name) {
     if (settings?.welcome_message) welcomeMessage = settings.welcome_message;
   }
 
-  await sendCatalogMessage(
-    from,
-    welcomeMessage || `Namaste ${name}! 👋 Welcome to *${shopName}*.\n\nTap below to browse and order.`
-  );
+  const greetingText = welcomeMessage || `Namaste ${name}! 👋 Welcome to *${shopName}*.\n\nTap below to browse and order.`;
+  await sendCatalogMessage(from, greetingText);
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', greetingText);
 }
 
 // One interactive message instead of two sequential sends (a plain text
 // message followed by a button message) — each send is its own Graph API
 // round trip, and the button message's own body text can carry everything
 // the first message said, so there's no reason to pay for two.
-async function sendSlotPrompt(from, total, note) {
+async function sendSlotPrompt(shopId, from, total, note) {
   const body =
     (note ? `${note}\n\n` : '') +
     `🛒 *Cart total: ₹${total.toFixed(2)}*\n\n⏰ When would you like to pick up?`;
@@ -452,17 +452,20 @@ async function sendSlotPrompt(from, total, note) {
     body,
     PICKUP_SLOTS.map((s) => ({ id: s.id, title: s.label }))
   );
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', body);
 }
 
-async function sendPaymentPrompt(from) {
+async function sendPaymentPrompt(shopId, from) {
+  const body = '💳 Payment method:';
   await sendButtonMessage(
     from,
-    '💳 Payment method:',
+    body,
     PAYMENT_OPTIONS.map((p) => ({ id: p.id, title: p.label }))
   );
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', body);
 }
 
-async function sendConfirmPrompt(from, session) {
+async function sendConfirmPrompt(shopId, from, session) {
   const itemLines = session.cart_items
     .map((i) => `${i.name} × ${i.quantity} — ₹${i.subtotal.toFixed(2)}`)
     .join('\n');
@@ -479,35 +482,38 @@ async function sendConfirmPrompt(from, session) {
     { id: 'confirm_yes', title: '✅ Place order' },
     { id: 'confirm_no', title: '❌ Cancel' },
   ]);
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
 }
 
 async function handleSessionButtonReply(from, shopId, session, buttonId) {
   if (session.step === 'awaiting_slot') {
     const slot = PICKUP_SLOTS.find((s) => s.id === buttonId);
     if (!slot) {
-      await sendSlotPrompt(from, session.cart_total);
+      await sendSlotPrompt(shopId, from, session.cart_total);
       return;
     }
     await updateSession(session.id, { step: 'awaiting_payment', pickup_slot_label: slot.label });
-    await sendPaymentPrompt(from);
+    await sendPaymentPrompt(shopId, from);
     return;
   }
 
   if (session.step === 'awaiting_payment') {
     const option = PAYMENT_OPTIONS.find((p) => p.id === buttonId);
     if (!option) {
-      await sendPaymentPrompt(from);
+      await sendPaymentPrompt(shopId, from);
       return;
     }
     const updated = await updateSession(session.id, { step: 'awaiting_confirm', payment_method: option.value });
-    await sendConfirmPrompt(from, updated);
+    await sendConfirmPrompt(shopId, from, updated);
     return;
   }
 
   if (session.step === 'awaiting_confirm') {
     if (buttonId === 'confirm_no') {
       await deleteSession(session.id);
-      await sendWhatsAppMessage(from, 'Order cancelled. Message *Hi* anytime to start again.');
+      const cancelText = 'Order cancelled. Message *Hi* anytime to start again.';
+      await sendWhatsAppMessage(from, cancelText);
+      logMessage(shopId, from, 'outbound', 'system', 'text', cancelText);
       return;
     }
 
@@ -516,14 +522,15 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
       await deleteSession(session.id);
 
       if (!order) {
-        await sendWhatsAppMessage(from, '⚠️ Sorry, something went wrong placing your order. Please try again.');
+        const failText = '⚠️ Sorry, something went wrong placing your order. Please try again.';
+        await sendWhatsAppMessage(from, failText);
+        logMessage(shopId, from, 'outbound', 'system', 'text', failText);
         return;
       }
 
-      await sendWhatsAppMessage(
-        from,
-        `✅ *Order ${order.order_number} placed!*\n\nWaiting for the shop to confirm — we'll message you.`
-      );
+      const placedText = `✅ *Order ${order.order_number} placed!*\n\nWaiting for the shop to confirm — we'll message you.`;
+      await sendWhatsAppMessage(from, placedText);
+      logMessage(shopId, from, 'outbound', 'system', 'text', placedText);
 
       try {
         await notifyShopOfNewOrder(shopId, order, session);
@@ -535,13 +542,17 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
 }
 
 async function handleCustomerMessage(from, message, shopId, name) {
+  logInboundCustomerMessage(shopId, from, message);
+
   const session = await getSession(shopId, from);
 
   if (message.type === 'order' && message.order) {
     const { items, skipped } = await buildCartFromOrderMessage(shopId, message.order.product_items || []);
 
     if (items.length === 0) {
-      await sendWhatsAppMessage(from, '😕 Sorry, none of those items are available right now.');
+      const noneText = '😕 Sorry, none of those items are available right now.';
+      await sendWhatsAppMessage(from, noneText);
+      logMessage(shopId, from, 'outbound', 'system', 'text', noneText);
       return;
     }
 
@@ -553,7 +564,9 @@ async function handleCustomerMessage(from, message, shopId, name) {
     });
 
     if (!created) {
-      await sendWhatsAppMessage(from, '⚠️ Something went wrong. Please try again.');
+      const wrongText = '⚠️ Something went wrong. Please try again.';
+      await sendWhatsAppMessage(from, wrongText);
+      logMessage(shopId, from, 'outbound', 'system', 'text', wrongText);
       return;
     }
 
@@ -562,7 +575,7 @@ async function handleCustomerMessage(from, message, shopId, name) {
         ? `Note: ${skipped.length} item(s) in your cart weren't available and were left out.`
         : null;
 
-    await sendSlotPrompt(from, total, skippedNote);
+    await sendSlotPrompt(shopId, from, total, skippedNote);
     return;
   }
 
@@ -572,13 +585,40 @@ async function handleCustomerMessage(from, message, shopId, name) {
   }
 
   if (session) {
-    if (session.step === 'awaiting_slot') await sendSlotPrompt(from, session.cart_total);
-    else if (session.step === 'awaiting_payment') await sendPaymentPrompt(from);
-    else if (session.step === 'awaiting_confirm') await sendConfirmPrompt(from, session);
+    if (session.step === 'awaiting_slot') await sendSlotPrompt(shopId, from, session.cart_total);
+    else if (session.step === 'awaiting_payment') await sendPaymentPrompt(shopId, from);
+    else if (session.step === 'awaiting_confirm') await sendConfirmPrompt(shopId, from, session);
     return;
   }
 
   await sendGreeting(from, shopId, name);
+}
+
+// Best-effort summary of the inbound message for the owner-visible
+// conversation log — item selection happens in WhatsApp's native
+// Catalog+Cart, so a `type: 'order'` message has no single text body.
+function logInboundCustomerMessage(shopId, from, message) {
+  // whatsapp_messages.message_type has a narrow check constraint (verified
+  // live: text/image/interactive pass, catalog/button/order/list don't) —
+  // map WhatsApp's own message.type down to one of those rather than pass
+  // it straight through.
+  let content = `[${message.type}]`;
+  let loggedType = 'text';
+  const externalId = message.id;
+
+  if (message.type === 'text') {
+    content = message.text?.body || content;
+    loggedType = 'text';
+  } else if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
+    content = message.interactive.button_reply.title || message.interactive.button_reply.id;
+    loggedType = 'interactive';
+  } else if (message.type === 'order' && message.order) {
+    const itemCount = message.order.product_items?.length || 0;
+    content = `[Order submitted] ${itemCount} item(s)`;
+    loggedType = 'text';
+  }
+
+  logMessage(shopId, from, 'inbound', 'customer', loggedType, content, externalId);
 }
 
 // ── Main webhook handler ───────────────────────────────────────

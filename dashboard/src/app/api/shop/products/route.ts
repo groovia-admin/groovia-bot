@@ -30,7 +30,7 @@ export async function GET() {
   const { data: products, error } = await adminClient
     .from('products')
     .select(
-      'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories ( name )'
+      'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories!products_category_id_fkey ( name )'
     )
     .eq('shop_id', shopId)
     .order('created_at', { ascending: false })
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
       last_updated_source: 'dashboard',
     })
     .select(
-      'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories ( name )'
+      'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories!products_category_id_fkey ( name )'
     )
     .single()
 
