@@ -3,6 +3,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { notifyCustomer } = require('../services/customerNotifier');
 const { syncShopCatalog } = require('../services/catalogSync');
+const { resendPendingOrderAlerts } = require('../services/orderCreator');
 const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
 
 const router = express.Router();
@@ -59,6 +60,23 @@ router.post('/shops/:shopId/sync-catalog', requireInternalSecret, async (req, re
   }
 
   const result = await syncShopCatalog(shopId);
+  return res.status(result.success ? 200 : 502).json(result);
+});
+
+// POST /internal/shops/:shopId/resend-pending-alerts
+// One-time (or repeatable) catch-up for orders that went 'pending'
+// before delivery tracking existed, or whose alert otherwise never got
+// a tracked row — those never had a chance to hit the retry/template-
+// fallback path. Safe to call more than once: only orders still
+// 'pending' are touched.
+router.post('/shops/:shopId/resend-pending-alerts', requireInternalSecret, async (req, res) => {
+  const { shopId } = req.params;
+
+  if (!shopId) {
+    return res.status(400).json({ error: 'shopId is required' });
+  }
+
+  const result = await resendPendingOrderAlerts(shopId);
   return res.status(result.success ? 200 : 502).json(result);
 });
 

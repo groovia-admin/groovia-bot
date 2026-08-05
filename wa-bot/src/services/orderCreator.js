@@ -199,6 +199,38 @@ async function createOrderFromSession(shopId, phone, session) {
  * order's own id, so there's nothing to type or get wrong; whoever taps
  * first wins (handleOrderCommand's status check rejects a second tap).
  */
+// Shared by the live path (fresh session, just-created order) and
+// resendPendingOrderAlerts (historical orders reconstructed from the DB,
+// no session left in memory) — same body/button shape either way.
+function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, paymentMethod, itemsText }) {
+  const body =
+    `🆕 *New order ${order.order_number}* — ₹${Number(total).toFixed(2)}\n\n` +
+    `👤 ${customerName || 'Customer'}\n` +
+    `⏰ Pickup: ${pickupSlot}\n` +
+    `💵 Payment: ${paymentMethod}\n\n` +
+    `Items:\n${itemsText}`;
+
+  const buttons = [
+    { id: `accept_${order.id}`, title: '✅ Accept' },
+    { id: `reject_${order.id}`, title: '❌ Reject' },
+    { id: `edit_${order.id}`, title: '✏️ Edit' },
+  ];
+
+  // Everything the template fallback / retry loop would need to
+  // reconstruct this exact notification later, without another DB round
+  // trip — stored once here rather than re-derived at retry time.
+  return {
+    orderNumber: order.order_number,
+    total,
+    customerName: customerName || 'Customer',
+    pickupSlot,
+    paymentMethod,
+    itemsText,
+    body,
+    buttons,
+  };
+}
+
 async function notifyShopOfNewOrder(shopId, order, session) {
   const supabase = getSupabase();
   if (!supabase) return;
@@ -219,36 +251,90 @@ async function notifyShopOfNewOrder(shopId, order, session) {
     .map((item) => `${item.name} × ${item.quantity} — ₹${item.subtotal.toFixed(2)}`)
     .join('\n');
 
-  const body =
-    `🆕 *New order ${order.order_number}* — ₹${session.cart_total.toFixed(2)}\n\n` +
-    `👤 ${session.customer_name || 'Customer'}\n` +
-    `⏰ Pickup: ${session.pickup_slot_label}\n` +
-    `💵 Payment: ${session.payment_method}\n\n` +
-    `Items:\n${itemsText}`;
-
-  const buttons = [
-    { id: `accept_${order.id}`, title: '✅ Accept' },
-    { id: `reject_${order.id}`, title: '❌ Reject' },
-    { id: `edit_${order.id}`, title: '✏️ Edit' },
-  ];
-
-  // Everything the template fallback / retry loop would need to
-  // reconstruct this exact notification later, without another DB round
-  // trip — stored once here rather than re-derived at retry time.
-  const payload = {
-    orderNumber: order.order_number,
+  const payload = buildNewOrderAlertPayload(order, {
+    customerName: session.customer_name,
     total: session.cart_total,
-    customerName: session.customer_name || 'Customer',
     pickupSlot: session.pickup_slot_label,
     paymentMethod: session.payment_method,
     itemsText,
-    body,
-    buttons,
-  };
+  });
 
   await Promise.all(
     (staff || []).map((s) => sendTrackedNewOrderAlert(order.id, s.phone_number, payload))
   );
+}
+
+/**
+ * One-time (or repeatable) catch-up for orders that went 'pending'
+ * before the delivery-tracking system existed, or whose alert simply
+ * never got a tracked row for some other reason — those never had a
+ * chance to hit the retry/template-fallback path since there was
+ * nothing to correlate a failed status webhook against. Re-sends the
+ * alert (through the same tracked path, so failures from here forward
+ * ARE covered) to every currently-pending order for a shop.
+ *
+ * Safe to call more than once: only orders still in 'pending' are
+ * touched, so anything already accepted/rejected in the meantime is
+ * skipped automatically by the query itself.
+ */
+async function resendPendingOrderAlerts(shopId) {
+  const supabase = getSupabase();
+  if (!supabase) return { success: false, error: 'Supabase not configured' };
+
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select(
+      `id, order_number, total_amount, pickup_slot_label, payment_method,
+       order_items ( product_name_snapshot, quantity, subtotal ),
+       order_customer_details ( customer_name_snapshot )`
+    )
+    .eq('shop_id', shopId)
+    .eq('status', 'pending');
+
+  if (error) {
+    logger.error({ error, shopId }, 'Failed to load pending orders for resend');
+    return { success: false, error: 'Failed to load pending orders' };
+  }
+
+  if (!orders || orders.length === 0) {
+    return { success: true, ordersResent: 0 };
+  }
+
+  const { data: staff, error: staffError } = await supabase
+    .from('shop_users')
+    .select('phone_number')
+    .eq('shop_id', shopId)
+    .eq('is_active', true)
+    .not('phone_number', 'is', null);
+
+  if (staffError) {
+    logger.error({ error: staffError, shopId }, 'Failed to load staff for pending-order resend');
+    return { success: false, error: 'Failed to load staff' };
+  }
+
+  for (const order of orders) {
+    const details = Array.isArray(order.order_customer_details)
+      ? order.order_customer_details[0]
+      : order.order_customer_details;
+
+    const itemsText = (order.order_items || [])
+      .map((item) => `${item.product_name_snapshot} × ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`)
+      .join('\n');
+
+    const payload = buildNewOrderAlertPayload(order, {
+      customerName: details?.customer_name_snapshot,
+      total: order.total_amount,
+      pickupSlot: order.pickup_slot_label,
+      paymentMethod: order.payment_method,
+      itemsText,
+    });
+
+    await Promise.all(
+      (staff || []).map((s) => sendTrackedNewOrderAlert(order.id, s.phone_number, payload))
+    );
+  }
+
+  return { success: true, ordersResent: orders.length };
 }
 
 /**
@@ -391,4 +477,5 @@ module.exports = {
   notifyShopOfNewOrder,
   retryNewOrderAlert,
   sendNewOrderAlertTemplateFallback,
+  resendPendingOrderAlerts,
 };
