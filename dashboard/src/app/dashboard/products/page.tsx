@@ -16,7 +16,7 @@ export default async function ProductsPage() {
   const [{ data: categories, error: categoriesError }, { data: products, error: productsError }] = await Promise.all([
     adminClient
       .from('categories')
-      .select('id, name, description, display_order, is_active')
+      .select('id, name, description, display_order, is_active, master_category_id')
       .eq('shop_id', context.shopId)
       .order('display_order', { ascending: true }),
     adminClient

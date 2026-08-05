@@ -66,7 +66,7 @@ export async function PATCH(request: Request, { params }: CategoryRouteContext) 
     .update(changes)
     .eq('id', id)
     .eq('shop_id', shopId)
-    .select('id, name, description, image_url, display_order, is_active, created_at')
+    .select('id, name, description, image_url, display_order, is_active, master_category_id, created_at')
     .maybeSingle()
 
   if (error) {
@@ -96,6 +96,32 @@ export async function DELETE(request: Request, { params }: CategoryRouteContext)
 
   const { adminClient, shopId } = authorization
   const { id } = await params
+
+  // Categories synced from the Master Catalog (master_category_id set) are
+  // platform-managed — a shop owner can't delete them, only a super admin
+  // disabling it from the Master Catalog page can.
+  const { data: category, error: categoryLookupError } = await adminClient
+    .from('categories')
+    .select('id, master_category_id')
+    .eq('id', id)
+    .eq('shop_id', shopId)
+    .maybeSingle()
+
+  if (categoryLookupError) {
+    console.error('Category lookup failed before deletion:', categoryLookupError)
+    return NextResponse.json({ error: 'Failed to remove category' }, { status: 500 })
+  }
+
+  if (!category) {
+    return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+  }
+
+  if (category.master_category_id) {
+    return NextResponse.json(
+      { error: 'This category comes from the platform catalog and can’t be deleted here — contact support to have it disabled.' },
+      { status: 403 }
+    )
+  }
 
   // Untag every product in this category first — category_id is nullable
   // specifically so a category can be removed without deleting or
