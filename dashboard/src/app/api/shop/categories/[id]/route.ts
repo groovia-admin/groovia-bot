@@ -83,3 +83,48 @@ export async function PATCH(request: Request, { params }: CategoryRouteContext) 
     { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
   )
 }
+
+export async function DELETE(request: Request, { params }: CategoryRouteContext) {
+  // Deletion is permanent (unlike the is_active toggle above), so it's
+  // restricted to owner/manager rather than the broader staff access PATCH
+  // allows.
+  const authorization = await requireShopRole(['owner', 'manager'])
+
+  if ('error' in authorization) {
+    return authorization.error
+  }
+
+  const { adminClient, shopId } = authorization
+  const { id } = await params
+
+  // Untag every product in this category first — category_id is nullable
+  // specifically so a category can be removed without deleting or
+  // orphaning the products that were in it.
+  const { error: untagError } = await adminClient
+    .from('products')
+    .update({ category_id: null })
+    .eq('category_id', id)
+    .eq('shop_id', shopId)
+
+  if (untagError) {
+    console.error('Failed to untag products before category deletion:', untagError)
+    return NextResponse.json({ error: 'Failed to remove category' }, { status: 500 })
+  }
+
+  const { error, count } = await adminClient
+    .from('categories')
+    .delete({ count: 'exact' })
+    .eq('id', id)
+    .eq('shop_id', shopId)
+
+  if (error) {
+    console.error('Failed to delete category:', error)
+    return NextResponse.json({ error: 'Failed to remove category' }, { status: 500 })
+  }
+
+  if (!count) {
+    return NextResponse.json({ error: 'Category not found' }, { status: 404 })
+  }
+
+  return NextResponse.json({ success: true })
+}

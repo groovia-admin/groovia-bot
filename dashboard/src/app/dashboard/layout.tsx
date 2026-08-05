@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
+import { ToastProvider } from '@/components/ui/ToastProvider'
 
 type ShopUserForSidebar = {
   role: string
@@ -38,9 +39,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
         userPhone={user.phone ?? user.email ?? ''}
       />
       <main className="flex-1 overflow-y-auto">
-        <div className="p-6 lg:p-8">
-          {children}
-        </div>
+        <ToastProvider>
+          <div className="p-6 lg:p-8">
+            {children}
+          </div>
+        </ToastProvider>
       </main>
     </div>
   )

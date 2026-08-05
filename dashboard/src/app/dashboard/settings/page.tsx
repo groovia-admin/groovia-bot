@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import WhatsappConnectionForm from '@/components/settings/WhatsappConnectionForm'
+import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
 import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
@@ -51,6 +52,14 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-4">
+      {context.kind === 'shop_user' && isOwner && (
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Shop Profile</h2>
+          <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
+          <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+        </div>
+      )}
+
       {context.kind === 'shop_user' && (
         <>
           <div style={cardStyle}>

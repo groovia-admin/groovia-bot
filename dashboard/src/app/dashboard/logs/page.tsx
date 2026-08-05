@@ -22,7 +22,12 @@ export default async function LogsPage() {
   const isSuperAdmin = context.kind === 'super_admin'
 
   const [{ data: logs, error }, shopsResult] = await Promise.all([
-    isSuperAdmin ? baseQuery : baseQuery.eq('shop_id', context.shopId),
+    // Owners/managers see only their own shop's actors — platform-admin
+    // actions (e.g. a super admin changing this shop's subscription) stay
+    // out of the tenant-facing log, even when they touched this shop_id.
+    isSuperAdmin
+      ? baseQuery
+      : baseQuery.eq('shop_id', context.shopId).neq('actor_type', 'super_admin'),
     isSuperAdmin
       ? adminClient.from('shops').select('id, name').order('name', { ascending: true })
       : Promise.resolve({ data: null, error: null }),

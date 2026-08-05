@@ -21,43 +21,45 @@ interface SidebarProps {
   userPhone: string
 }
 
-// Nav items per role
+// Nav items per role — each carries its own accent color so the sidebar
+// isn't a wall of uniform gray; the active state's brand highlight still
+// wins visually since these only apply while inactive (see icon className).
 const SUPER_ADMIN_NAV = [
-  { href: '/dashboard',         label: 'Overview',       icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/shops',   label: 'Shops',          icon: Store },
-  { href: '/dashboard/catalog', label: 'Master Catalog', icon: Package },  // ← ADD THIS
-  { href: '/dashboard/logs',    label: 'Audit Logs',     icon: ScrollText },
-  { href: '/dashboard/settings',label: 'Settings',       icon: Settings },
+  { href: '/dashboard',         label: 'Overview',       icon: LayoutDashboard, exact: true, color: '#3b82f6' },
+  { href: '/dashboard/shops',   label: 'Shops',          icon: Store,           color: '#f59e0b' },
+  { href: '/dashboard/catalog', label: 'Master Catalog', icon: Package,         color: '#a855f7' },
+  { href: '/dashboard/logs',    label: 'Audit Logs',     icon: ScrollText,      color: '#06b6d4' },
+  { href: '/dashboard/settings',label: 'Settings',       icon: Settings,        color: '#64748b' },
 ]
 
 const OWNER_NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/dashboard/products', label: 'Products', icon: Package },
-  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes },
-  { href: '/dashboard/customers', label: 'Customers', icon: Users },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
-  { href: '/dashboard/staff', label: 'Staff', icon: ClipboardList },
-  { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true, color: '#3b82f6' },
+  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag, color: '#f59e0b' },
+  { href: '/dashboard/products', label: 'Products', icon: Package, color: '#a855f7' },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes, color: '#22c55e' },
+  { href: '/dashboard/customers', label: 'Customers', icon: Users, color: '#ec4899' },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2, color: '#06b6d4' },
+  { href: '/dashboard/staff', label: 'Staff', icon: ClipboardList, color: '#6366f1' },
+  { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText, color: '#eab308' },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, color: '#64748b' },
 ]
 
 const MANAGER_NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/dashboard/products', label: 'Products', icon: Package },
-  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes },
-  { href: '/dashboard/customers', label: 'Customers', icon: Users },
-  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2 },
-  { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true, color: '#3b82f6' },
+  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag, color: '#f59e0b' },
+  { href: '/dashboard/products', label: 'Products', icon: Package, color: '#a855f7' },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes, color: '#22c55e' },
+  { href: '/dashboard/customers', label: 'Customers', icon: Users, color: '#ec4899' },
+  { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2, color: '#06b6d4' },
+  { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText, color: '#eab308' },
+  { href: '/dashboard/settings', label: 'Settings', icon: Settings, color: '#64748b' },
 ]
 
 const STAFF_NAV = [
-  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true },
-  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag },
-  { href: '/dashboard/products', label: 'Products', icon: Package },
-  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes },
+  { href: '/dashboard', label: 'Overview', icon: LayoutDashboard, exact: true, color: '#3b82f6' },
+  { href: '/dashboard/orders', label: 'Orders', icon: ShoppingBag, color: '#f59e0b' },
+  { href: '/dashboard/products', label: 'Products', icon: Package, color: '#a855f7' },
+  { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes, color: '#22c55e' },
 ]
 
 function getNav(isSuperAdmin: boolean, role: string) {
@@ -123,7 +125,10 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
                   : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
               )}
             >
-              <Icon className={clsx('w-4 h-4 flex-shrink-0', active ? 'text-brand' : 'text-slate-500 group-hover:text-slate-300')} />
+              <Icon
+                className="w-4 h-4 flex-shrink-0"
+                style={active ? undefined : { color: item.color }}
+              />
               {item.label}
               {item.label === 'Orders' && (
                 <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none">

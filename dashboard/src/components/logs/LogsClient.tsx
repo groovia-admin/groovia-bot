@@ -34,6 +34,7 @@ const ACTION_LABEL: Record<string, string> = {
   "settings.updated": "Shop settings updated",
   "auth.login": "Signed in",
   "auth.logout": "Signed out",
+  "shop.logo_updated": "Shop logo updated",
 };
 
 const ACTOR_BADGE: Record<ActorType, [string, string]> = {

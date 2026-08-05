@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { inputStyle, labelStyle, saveButtonStyle, noticeStyle, errorStyle, successStyle, ToggleRow } from "./settingsStyles";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export type DeliverySettings = {
   allow_pickup: boolean;
@@ -32,6 +33,7 @@ function numberOrNull(value: string): number | null {
 }
 
 export default function DeliverySettingsForm({ initial }: { initial: Partial<DeliverySettings> | null }) {
+  const toast = useToast();
   const merged = { ...DEFAULTS, ...(initial ?? {}) };
 
   const [allowPickup, setAllowPickup] = useState(merged.allow_pickup);
@@ -73,12 +75,15 @@ export default function DeliverySettingsForm({ initial }: { initial: Partial<Del
 
       if (!response.ok) {
         setError(data.error || "Failed to save order & delivery settings");
+        toast(data.error || "Failed to save order & delivery settings", "error");
         return;
       }
 
       setSaved(true);
+      toast("Order & delivery settings saved");
     } catch {
       setError("Failed to save order & delivery settings. Please try again.");
+      toast("Failed to save order & delivery settings", "error");
     } finally {
       setSaving(false);
     }

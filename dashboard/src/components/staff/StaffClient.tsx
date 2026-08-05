@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Plus, ShieldCheck, UserX, UserCheck } from "lucide-react";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type StaffRole = "owner" | "manager" | "staff";
 
@@ -99,6 +100,7 @@ const ROLE_BADGE: Record<StaffRole, [string, string]> = {
 };
 
 export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[] }) {
+  const toast = useToast();
   const [staff, setStaff] = useState<StaffRow[]>(initialStaff);
   const [showAdd, setShowAdd] = useState(false);
   const [fullName, setFullName] = useState("");
@@ -131,6 +133,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
 
       if (!response.ok) {
         setError(data.error || "Failed to add staff member");
+        toast(data.error || "Failed to add staff member", "error");
         return;
       }
 
@@ -139,8 +142,10 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       setPhone("");
       setRole("staff");
       setShowAdd(false);
+      toast(`${data.staff.full_name} added as ${data.staff.role}`);
     } catch {
       setError("Failed to add staff member. Please try again.");
+      toast("Failed to add staff member", "error");
     } finally {
       setSaving(false);
     }
@@ -165,6 +170,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       }
 
       setStaff((prev) => prev.map((row) => (row.id === id ? data.staff : row)));
+      toast(`${data.staff.full_name} updated`);
     } catch {
       setError("Failed to update staff member. Please try again.");
     } finally {
@@ -206,7 +212,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
         <form onSubmit={handleAdd} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 160px", gap: 14 }}>
             <div>
-              <label style={S.label}>Full name</label>
+              <label style={S.label}>Full name *</label>
               <input
                 style={S.input}
                 value={fullName}
@@ -215,7 +221,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
               />
             </div>
             <div>
-              <label style={S.label}>Phone number</label>
+              <label style={S.label}>Phone number *</label>
               <div style={{ display: "flex" }}>
                 <span
                   style={{
