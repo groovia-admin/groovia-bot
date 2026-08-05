@@ -19,13 +19,21 @@ export default async function LogsPage() {
     .order('created_at', { ascending: false })
     .limit(200)
 
-  const { data: logs, error } =
-    context.kind === 'super_admin'
-      ? await baseQuery
-      : await baseQuery.eq('shop_id', context.shopId)
+  const isSuperAdmin = context.kind === 'super_admin'
+
+  const [{ data: logs, error }, shopsResult] = await Promise.all([
+    isSuperAdmin ? baseQuery : baseQuery.eq('shop_id', context.shopId),
+    isSuperAdmin
+      ? adminClient.from('shops').select('id, name').order('name', { ascending: true })
+      : Promise.resolve({ data: null, error: null }),
+  ])
 
   if (error) {
     console.error('Failed to load audit logs:', error)
+  }
+
+  if (shopsResult.error) {
+    console.error('Failed to load shops for log filter:', shopsResult.error)
   }
 
   const rows = (logs ?? []).map((log) => {
@@ -45,5 +53,11 @@ export default async function LogsPage() {
     }
   })
 
-  return <LogsClient initialLogs={rows} showShopColumn={context.kind === 'super_admin'} />
+  return (
+    <LogsClient
+      initialLogs={rows}
+      showShopColumn={isSuperAdmin}
+      shops={isSuperAdmin ? (shopsResult.data ?? []) : null}
+    />
+  )
 }

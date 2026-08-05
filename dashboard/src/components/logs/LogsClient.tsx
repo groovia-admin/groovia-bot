@@ -32,6 +32,8 @@ const ACTION_LABEL: Record<string, string> = {
   "shop.subscription_updated": "Subscription status updated",
   "shop.updated": "Shop updated",
   "settings.updated": "Shop settings updated",
+  "auth.login": "Signed in",
+  "auth.logout": "Signed out",
 };
 
 const ACTOR_BADGE: Record<ActorType, [string, string]> = {
@@ -126,23 +128,69 @@ function DiffRow({ oldValues, newValues }: { oldValues: Record<string, unknown> 
   );
 }
 
-export default function LogsClient({ initialLogs, showShopColumn }: { initialLogs: LogRow[]; showShopColumn: boolean }) {
+type ShopOption = { id: string; name: string };
+
+export default function LogsClient({
+  initialLogs,
+  showShopColumn,
+  shops,
+}: {
+  initialLogs: LogRow[];
+  showShopColumn: boolean;
+  shops?: ShopOption[] | null;
+}) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const logs = initialLogs;
+  const [shopFilter, setShopFilter] = useState<string>("all");
+
+  const logs = useMemo(
+    () => (shopFilter === "all" ? initialLogs : initialLogs.filter((row) => row.shop_id === shopFilter)),
+    [initialLogs, shopFilter],
+  );
 
   const columnCount = useMemo(() => (showShopColumn ? 5 : 4), [showShopColumn]);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>
-          {showShopColumn ? "Audit Logs" : "Activity Logs"}
-        </h1>
-        <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-          {showShopColumn
-            ? "Platform-wide record of shop and staff changes."
-            : "Record of staff and account changes for this shop."}
-        </p>
+      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>
+            {showShopColumn ? "Audit Logs" : "Activity Logs"}
+          </h1>
+          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+            {showShopColumn
+              ? "Platform-wide record of shop and staff changes."
+              : "Record of staff and account changes for this shop."}
+          </p>
+        </div>
+
+        {showShopColumn && shops && shops.length > 0 && (
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
+              Filter by shop
+            </label>
+            <select
+              value={shopFilter}
+              onChange={(e) => setShopFilter(e.target.value)}
+              style={{
+                padding: "7px 12px",
+                borderRadius: 8,
+                border: "1px solid #334155",
+                background: "#0f172a",
+                color: "#f1f5f9",
+                fontSize: 13,
+                fontFamily: "inherit",
+                minWidth: 200,
+              }}
+            >
+              <option value="all">All shops</option>
+              {shops.map((shop) => (
+                <option key={shop.id} value={shop.id}>
+                  {shop.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       <div style={S.card}>

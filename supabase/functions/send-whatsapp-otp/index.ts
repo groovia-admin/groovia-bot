@@ -54,8 +54,23 @@ async function verifyWebhookSignature(req: Request, rawBody: string, secret: str
     return false;
   }
 
-  const secretB64 = secret.replace(/^v1,whsec_/, '');
-  const keyBytes = Uint8Array.from(atob(secretB64), (c) => c.charCodeAt(0));
+  // Trim whitespace/newlines (a common artifact of pasting into a shell
+  // command) and tolerate base64url encoding (-/_ instead of +//) in case
+  // the secret ever arrives in that form — atob() only accepts standard
+  // base64, so normalize before decoding rather than assume the exact form.
+  let secretB64 = secret.trim().replace(/^v1,whsec_/, '').trim();
+  secretB64 = secretB64.replace(/-/g, '+').replace(/_/g, '/');
+  while (secretB64.length % 4 !== 0) secretB64 += '=';
+
+  let keyBytes: Uint8Array;
+  try {
+    keyBytes = Uint8Array.from(atob(secretB64), (c) => c.charCodeAt(0));
+  } catch (err) {
+    console.error(
+      `SEND_SMS_HOOK_SECRET failed to base64-decode after normalization (length ${secretB64.length}): ${err instanceof Error ? err.message : err}`
+    );
+    return false;
+  }
 
   const key = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
 
@@ -102,9 +117,8 @@ async function isKnownActiveNumber(phone: string): Promise<boolean> {
 }
 
 // ── WhatsApp send (Authentication template, copy-code button) ──
-// NOTE: verify the button parameter shape (`type`/`copy_code` field names)
-// against Meta's current WhatsApp Business Platform docs when you create
-// and test-send the template — Meta has revised this payload shape before.
+// Copy-code button parameter confirmed against a live Graph API call:
+// the parameter type/field name is `coupon_code`, not `copy_code`.
 async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolean; error?: string }> {
   const token = Deno.env.get('WHATSAPP_TOKEN');
   const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
@@ -134,7 +148,7 @@ async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolea
             type: 'button',
             sub_type: 'copy_code',
             index: '0',
-            parameters: [{ type: 'copy_code', copy_code: otp }],
+            parameters: [{ type: 'coupon_code', coupon_code: otp }],
           },
         ],
       },
@@ -179,7 +193,7 @@ async function sendSmsFallback(phone: string, otp: string): Promise<{ ok: boolea
   return { ok: true };
 }
 
-Deno.serve(async (req: Request) => {
+async function handleRequest(req: Request): Promise<Response> {
   const rawBody = await req.text();
 
   const secret = Deno.env.get('SEND_SMS_HOOK_SECRET');
@@ -227,5 +241,19 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({}), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  // This is the path that was previously silent in the logs — the hook
+  // correctly returned a 500 (visible in Supabase's Auth logs as "Hook
+  // errored out") but never logged *why*, since returning an error object
+  // isn't the same as calling console.error.
+  console.error(`WhatsApp send failed: ${waResult.error}; SMS fallback: ${smsResult.error}`);
   return hookError(500, `WhatsApp send failed (${waResult.error}); SMS fallback: ${smsResult.error}`);
+}
+
+Deno.serve(async (req: Request) => {
+  try {
+    return await handleRequest(req);
+  } catch (err) {
+    console.error(`Unhandled error in send-whatsapp-otp: ${err instanceof Error ? err.stack || err.message : err}`);
+    return hookError(500, 'Internal error');
+  }
 });

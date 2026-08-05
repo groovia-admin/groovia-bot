@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { logAuthEvent } from '@/lib/auth/log-auth-event'
 import clsx from 'clsx'
 import {
   LayoutDashboard, ShoppingBag, Package, Users, BarChart2,
@@ -77,6 +78,10 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   const roleLabel = isSuperAdmin ? 'Super Admin' : shopUser?.role ?? ''
 
   async function handleSignOut() {
+    // Logged before signOut() runs, not after — signOut() clears the
+    // session cookie /api/auth/log-event needs to identify who's leaving.
+    await logAuthEvent('logout')
+
     await supabase.auth.signOut()
     router.push('/login')
     router.refresh()
