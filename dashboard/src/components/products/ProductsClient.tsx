@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, EyeOff, Eye, Trash2, Lock } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 
 type Category = {
@@ -11,7 +11,6 @@ type Category = {
   description: string | null;
   display_order: number;
   is_active: boolean;
-  master_category_id: string | null;
 };
 
 type Product = {
@@ -384,40 +383,25 @@ export default function ProductsClient({
                 >
                   {category.name}
                 </button>
-                {category.master_category_id ? (
-                  <span
-                    title="Managed by the platform catalog — can't be deleted here"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "2px 8px 2px 2px",
-                      color: "#64748b",
-                    }}
-                  >
-                    <Lock size={12} />
-                  </span>
-                ) : (
-                  <button
-                    type="button"
-                    disabled={deletingCategoryId === category.id}
-                    onClick={() => handleDeleteCategory(category)}
-                    title="Delete category"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "2px 8px 2px 2px",
-                      background: "transparent",
-                      border: "none",
-                      color: "#f87171",
-                      cursor: "pointer",
-                      opacity: deletingCategoryId === category.id ? 0.5 : 1,
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
+                <button
+                  type="button"
+                  disabled={deletingCategoryId === category.id}
+                  onClick={() => handleDeleteCategory(category)}
+                  title="Delete category"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px 8px 2px 2px",
+                    background: "transparent",
+                    border: "none",
+                    color: "#f87171",
+                    cursor: "pointer",
+                    opacity: deletingCategoryId === category.id ? 0.5 : 1,
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
             ))}
           </div>
