@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { normalizeIndianPhone } from '@/lib/phone'
+import { logAuthEvent } from '@/lib/auth/log-auth-event'
 import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield } from 'lucide-react'
 
 type Method = 'password' | 'phone'
@@ -41,6 +42,7 @@ export default function LoginPage() {
       return
     }
 
+    logAuthEvent('login', 'password')
     router.push('/dashboard')
     router.refresh()
   }
@@ -100,6 +102,7 @@ export default function LoginPage() {
       return
     }
 
+    logAuthEvent('login', 'phone')
     router.push('/dashboard')
     router.refresh()
   }

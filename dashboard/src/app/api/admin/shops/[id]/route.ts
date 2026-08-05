@@ -429,6 +429,8 @@ export async function POST(
             ownerPhone,
           phone_confirm:
             true,
+          email_confirm:
+            true,
           user_metadata: {
             full_name:
               ownerName,
