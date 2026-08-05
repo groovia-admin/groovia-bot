@@ -25,3 +25,4 @@
 | #56 | Bot log failed status errors | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:30 UTC | 0d 0h 0m |
 | #57 | Revert "Bridge Master Catalog to shop categories/products, protect fr… | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 16:31 UTC | 0d 0h 0m |
 | #58 | Add catch-up resend for orders stuck pending from before delivery tra… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:43 UTC | 0d 0h 0m |
+| #59 | Fix language-fallback ordering: always try the template's own configu… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:58 UTC | 0d 0h 0m |
