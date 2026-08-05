@@ -78,6 +78,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   const navItems = getNav(isSuperAdmin, shopUser?.role ?? '')
   const displayName = shopUser?.full_name ?? userPhone
   const shopName = shopUser?.shops?.name ?? 'GrooVia Platform'
+  const shopLogoUrl = shopUser?.shops?.logo_url ?? null
   const roleLabel = isSuperAdmin ? 'Super Admin' : shopUser?.role ?? ''
 
   async function handleSignOut() {
@@ -100,8 +101,13 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
       {/* Logo + shop name */}
       <div className="p-5 border-b border-surface-border">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center">
-            <span className="font-display font-bold text-brand text-sm">G</span>
+          <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+            {shopLogoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={shopLogoUrl} alt={shopName} className="w-full h-full object-cover" />
+            ) : (
+              <span className="font-display font-bold text-brand text-sm">G</span>
+            )}
           </div>
           <div className="min-w-0">
             <p className="font-display font-semibold text-white text-sm truncate">{shopName}</p>
