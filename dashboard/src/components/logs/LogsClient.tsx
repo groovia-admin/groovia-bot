@@ -143,10 +143,17 @@ export default function LogsClient({
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [shopFilter, setShopFilter] = useState<string>("all");
+  const [category, setCategory] = useState<"all" | "admin" | "shop">("all");
 
   const logs = useMemo(
-    () => (shopFilter === "all" ? initialLogs : initialLogs.filter((row) => row.shop_id === shopFilter)),
-    [initialLogs, shopFilter],
+    () =>
+      initialLogs.filter((row) => {
+        if (shopFilter !== "all" && row.shop_id !== shopFilter) return false;
+        if (category === "admin" && row.actor_type !== "super_admin") return false;
+        if (category === "shop" && row.actor_type === "super_admin") return false;
+        return true;
+      }),
+    [initialLogs, shopFilter, category],
   );
 
   const columnCount = useMemo(() => (showShopColumn ? 5 : 4), [showShopColumn]);
@@ -165,32 +172,70 @@ export default function LogsClient({
           </p>
         </div>
 
-        {showShopColumn && shops && shops.length > 0 && (
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
-              Filter by shop
-            </label>
-            <select
-              value={shopFilter}
-              onChange={(e) => setShopFilter(e.target.value)}
-              style={{
-                padding: "7px 12px",
-                borderRadius: 8,
-                border: "1px solid #334155",
-                background: "#0f172a",
-                color: "#f1f5f9",
-                fontSize: 13,
-                fontFamily: "inherit",
-                minWidth: 200,
-              }}
-            >
-              <option value="all">All shops</option>
-              {shops.map((shop) => (
-                <option key={shop.id} value={shop.id}>
-                  {shop.name}
-                </option>
-              ))}
-            </select>
+        {showShopColumn && (
+          <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
+                Category
+              </label>
+              <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "#0f172a", border: "1px solid #334155", gap: 2 }}>
+                {(
+                  [
+                    { value: "all", label: "All" },
+                    { value: "admin", label: "Admin logs" },
+                    { value: "shop", label: "Shop logs" },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setCategory(opt.value)}
+                    style={{
+                      padding: "5px 12px",
+                      borderRadius: 6,
+                      fontSize: 12.5,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      border: "none",
+                      background: category === opt.value ? "#1e293b" : "transparent",
+                      color: category === opt.value ? "#f1f5f9" : "#64748b",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {shops && shops.length > 0 && (
+              <div>
+                <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
+                  Filter by shop
+                </label>
+                <select
+                  value={shopFilter}
+                  onChange={(e) => setShopFilter(e.target.value)}
+                  style={{
+                    padding: "7px 12px",
+                    borderRadius: 8,
+                    border: "1px solid #334155",
+                    background: "#0f172a",
+                    color: "#f1f5f9",
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                    minWidth: 200,
+                  }}
+                >
+                  <option value="all">All shops</option>
+                  {shops.map((shop) => (
+                    <option key={shop.id} value={shop.id}>
+                      {shop.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -220,7 +265,13 @@ export default function LogsClient({
               ) : (
                 logs.map((row) => {
                   const [color, background] = ACTOR_BADGE[row.actor_type] ?? ACTOR_BADGE.system;
-                  const actorName = (row.metadata?.actor_name as string | undefined) ?? actorLabel(row.actor_type);
+                  const actorNameFromMetadata = row.metadata?.actor_name as string | undefined;
+                  // Always include the role — two staff members can share a
+                  // first name, and the role alone (without a name) reads
+                  // ambiguously once a shop has more than one of each role.
+                  const actorName = actorNameFromMetadata
+                    ? `${actorNameFromMetadata} · ${actorLabel(row.actor_type)}`
+                    : actorLabel(row.actor_type);
                   const targetName = (row.metadata?.target_name as string | undefined) ?? row.entity_type;
                   const expanded = expandedId === row.id;
                   const hasDetails = Boolean(row.old_values || row.new_values);
