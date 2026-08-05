@@ -1,4 +1,8 @@
 import { randomUUID } from 'node:crypto'
+// See the identical comment in api/shop/logo/route.ts — File type-checks
+// as an ambient DOM global but isn't actually present as a bare global on
+// Railway's Node 20 runtime, only via node:buffer.
+import { File } from 'node:buffer'
 import { NextResponse } from 'next/server'
 import { requireShopRole } from '@/lib/auth/require-shop-role'
 

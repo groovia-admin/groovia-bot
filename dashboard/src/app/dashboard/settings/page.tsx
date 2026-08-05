@@ -72,9 +72,9 @@ export default async function SettingsPage() {
       )}
 
       {isOwner && (
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900 mb-1">Payout &amp; Banking</h2>
-          <p className="text-sm text-slate-600">Payout settings placeholder (owner only).</p>
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Payout &amp; Banking</h2>
+          <p style={cardSubStyle}>Payout settings placeholder (owner only).</p>
         </div>
       )}
     </div>

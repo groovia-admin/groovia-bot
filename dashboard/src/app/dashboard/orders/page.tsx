@@ -1,12 +1,12 @@
 export default function OrdersPage() {
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Orders</h1>
-        <p className="text-sm text-slate-600">Track order lifecycle and fulfillment.</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', margin: 0 }}>Orders</h1>
+        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm text-slate-600">Orders list coming soon.</p>
+      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20, color: '#94a3b8', fontSize: 13 }}>
+        Orders list coming soon.
       </div>
     </div>
   );
