@@ -60,7 +60,17 @@ async function sendWhatsAppMessage(to, text, overrides = {}) {
 
 // ── Approved template message (required for any business-initiated
 // message, e.g. customer notifications not sent in direct reply) ──
-async function sendWhatsAppTemplate(to, templateName, languageCode, components, overrides = {}) {
+//
+// "Detailed" variants return { success, messageId, error } instead of a
+// plain boolean — needed so the delivery tracker can record Meta's
+// message id (to correlate a later status webhook) and inspect the
+// actual error on failure (e.g. code 131047 to trigger a template
+// fallback rather than a futile retry). The plain boolean-returning
+// functions below are unchanged wrappers, kept for every existing
+// caller that only checks truthiness — changing their return type to an
+// object would silently break those checks, since `{success:false}` is
+// still truthy in JS.
+async function sendWhatsAppTemplateDetailed(to, templateName, languageCode, components, overrides = {}) {
   const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
   const token = overrides.token || config.whatsappToken;
 
@@ -91,15 +101,21 @@ async function sendWhatsAppTemplate(to, templateName, languageCode, components, 
 
     if (!res.ok) {
       logSendFailure('❌ WhatsApp template send failed', { to, templateName }, data);
-      return false;
+      return { success: false, messageId: null, error: data?.error || null };
     }
 
-    logger.info({ to, templateName, messageId: data.messages?.[0]?.id }, '✅ WhatsApp template sent');
-    return true;
+    const messageId = data.messages?.[0]?.id || null;
+    logger.info({ to, templateName, messageId }, '✅ WhatsApp template sent');
+    return { success: true, messageId, error: null };
   } catch (err) {
     logger.error({ err, to, templateName }, '❌ WhatsApp template send error');
-    return false;
+    return { success: false, messageId: null, error: { message: err.message } };
   }
+}
+
+async function sendWhatsAppTemplate(to, templateName, languageCode, components, overrides = {}) {
+  const result = await sendWhatsAppTemplateDetailed(to, templateName, languageCode, components, overrides);
+  return result.success;
 }
 
 // ── Native catalog invite (greeting -> "View catalog" native button) ──
@@ -151,7 +167,9 @@ async function sendCatalogMessage(to, bodyText, thumbnailProductId, overrides = 
 }
 
 // ── Button reply prompt (slot / payment / confirm — max 3 buttons) ──
-async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
+// See sendWhatsAppTemplateDetailed's comment above for why there's both
+// a detailed and a plain-boolean variant.
+async function sendButtonMessageDetailed(to, bodyText, buttons, overrides = {}) {
   const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
   const token = overrides.token || config.whatsappToken;
 
@@ -187,15 +205,21 @@ async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
 
     if (!res.ok) {
       logSendFailure('❌ WhatsApp button message send failed', { to }, data);
-      return false;
+      return { success: false, messageId: null, error: data?.error || null };
     }
 
-    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp button message sent');
-    return true;
+    const messageId = data.messages?.[0]?.id || null;
+    logger.info({ to, messageId }, '✅ WhatsApp button message sent');
+    return { success: true, messageId, error: null };
   } catch (err) {
     logger.error({ err, to }, '❌ WhatsApp button message send error');
-    return false;
+    return { success: false, messageId: null, error: { message: err.message } };
   }
+}
+
+async function sendButtonMessage(to, bodyText, buttons, overrides = {}) {
+  const result = await sendButtonMessageDetailed(to, bodyText, buttons, overrides);
+  return result.success;
 }
 
 // ── List message (tap-to-select from up to 10 rows, single-select) ──
@@ -245,7 +269,9 @@ async function sendListMessage(to, bodyText, buttonText, sections, overrides = {
 module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
+  sendWhatsAppTemplateDetailed,
   sendCatalogMessage,
   sendButtonMessage,
+  sendButtonMessageDetailed,
   sendListMessage,
 };

@@ -1,7 +1,18 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { getSupabase } = require('./shopResolver');
-const { sendButtonMessage } = require('./whatsappClient');
+const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed } = require('./whatsappClient');
+const deliveryTracker = require('./deliveryTracker');
+
+// Registered once new_order_alert is created + approved in Meta as a
+// plain Utility text template with 6 numbered body variables (order
+// number, total, customer name, pickup slot, payment method, items) and
+// 3 quick-reply buttons (Accept/Reject/Edit, static labels — the
+// dynamic order id travels in each button's payload override instead).
+// Templates bypass the 24h customer-service window entirely, which is
+// the whole point: this is the fallback for exactly the failure mode
+// the plain interactive alert below can't survive.
+const NEW_ORDER_ALERT_TEMPLATE = { name: 'new_order_alert', language: 'en_US' };
 
 function generateOrderNumber() {
   return `ORD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -204,16 +215,16 @@ async function notifyShopOfNewOrder(shopId, order, session) {
     return;
   }
 
-  const itemLines = session.cart_items
+  const itemsText = session.cart_items
     .map((item) => `${item.name} × ${item.quantity} — ₹${item.subtotal.toFixed(2)}`)
     .join('\n');
 
-  const message =
+  const body =
     `🆕 *New order ${order.order_number}* — ₹${session.cart_total.toFixed(2)}\n\n` +
     `👤 ${session.customer_name || 'Customer'}\n` +
     `⏰ Pickup: ${session.pickup_slot_label}\n` +
     `💵 Payment: ${session.payment_method}\n\n` +
-    `Items:\n${itemLines}`;
+    `Items:\n${itemsText}`;
 
   const buttons = [
     { id: `accept_${order.id}`, title: '✅ Accept' },
@@ -221,9 +232,156 @@ async function notifyShopOfNewOrder(shopId, order, session) {
     { id: `edit_${order.id}`, title: '✏️ Edit' },
   ];
 
+  // Everything the template fallback / retry loop would need to
+  // reconstruct this exact notification later, without another DB round
+  // trip — stored once here rather than re-derived at retry time.
+  const payload = {
+    orderNumber: order.order_number,
+    total: session.cart_total,
+    customerName: session.customer_name || 'Customer',
+    pickupSlot: session.pickup_slot_label,
+    paymentMethod: session.payment_method,
+    itemsText,
+    body,
+    buttons,
+  };
+
   await Promise.all(
-    (staff || []).map((s) => sendButtonMessage(s.phone_number, message, buttons))
+    (staff || []).map((s) => sendTrackedNewOrderAlert(order.id, s.phone_number, payload))
   );
+}
+
+/**
+ * Sends the interactive Accept/Reject/Edit alert and records a
+ * notification_deliveries row for it. The send itself succeeding here
+ * only means Meta's API accepted the request — the 24h-window failure
+ * mode this whole tracking system exists for shows up later, as a
+ * "failed" status webhook against the message id recorded below, not as
+ * a synchronous error here (confirmed against real production logs:
+ * "sent" immediately, "failed" ~1s later via webhook). See
+ * handleStatusUpdate in messageHandler.js for where that's handled.
+ */
+async function sendTrackedNewOrderAlert(orderId, phone, payload) {
+  const deliveryId = await deliveryTracker.recordDelivery({
+    orderId,
+    recipientPhone: phone,
+    purpose: 'new_order_alert',
+    payload,
+  });
+
+  const result = await sendButtonMessageDetailed(phone, payload.body, payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(deliveryId, result.messageId);
+    return;
+  }
+
+  // The API itself rejected the request outright (not the delayed
+  // window-expired case) — e.g. malformed request, rate limited. Real
+  // retry candidate.
+  await deliveryTracker.recordFailure(deliveryId, result.error, 0);
+}
+
+/**
+ * Re-attempts the plain interactive alert for a delivery the retry loop
+ * picked up (genuinely transient failure, not window-expired — those go
+ * straight to the template fallback below instead, see
+ * handleStatusUpdate). Skips sending anything if the order has already
+ * moved past 'pending' — no point alerting about an order someone
+ * already accepted/rejected through a faster path.
+ */
+async function retryNewOrderAlert(delivery) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', delivery.order_id)
+    .maybeSingle();
+
+  if (order && order.status !== 'pending') {
+    await supabase
+      .from('notification_deliveries')
+      .update({ status: 'skipped_order_resolved', updated_at: new Date().toISOString() })
+      .eq('id', delivery.id);
+    return;
+  }
+
+  const result = await sendButtonMessageDetailed(delivery.recipient_phone, delivery.payload.body, delivery.payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(delivery.id, result.messageId);
+    return;
+  }
+
+  await deliveryTracker.recordFailure(delivery.id, result.error, delivery.attempt_count);
+}
+
+/**
+ * The actual fix for the 24h-window failure: an approved template
+ * (bypasses the window entirely) with the same Accept/Reject/Edit
+ * choice, sent as quick-reply buttons with the order id in each
+ * button's payload override rather than its (static) label. Called
+ * immediately from handleStatusUpdate on detecting code 131047 — no
+ * point waiting for the retry loop on a failure mode retrying can't fix.
+ *
+ * Returns false (and leaves the delivery in 'needs_template') if this
+ * also fails — almost certainly because new_order_alert hasn't been
+ * created/approved in Meta yet, not a bug in this code.
+ */
+async function sendNewOrderAlertTemplateFallback(delivery) {
+  const { orderNumber, total, customerName, pickupSlot, paymentMethod, itemsText } = delivery.payload;
+
+  const components = [
+    {
+      type: 'body',
+      parameters: [
+        { type: 'text', text: String(orderNumber) },
+        { type: 'text', text: Number(total).toFixed(2) },
+        { type: 'text', text: String(customerName) },
+        { type: 'text', text: String(pickupSlot) },
+        { type: 'text', text: String(paymentMethod) },
+        { type: 'text', text: String(itemsText) },
+      ],
+    },
+    {
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: '0',
+      parameters: [{ type: 'payload', payload: `accept_${delivery.order_id}` }],
+    },
+    {
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: '1',
+      parameters: [{ type: 'payload', payload: `reject_${delivery.order_id}` }],
+    },
+    {
+      type: 'button',
+      sub_type: 'quick_reply',
+      index: '2',
+      parameters: [{ type: 'payload', payload: `edit_${delivery.order_id}` }],
+    },
+  ];
+
+  const result = await sendWhatsAppTemplateDetailed(
+    delivery.recipient_phone,
+    NEW_ORDER_ALERT_TEMPLATE.name,
+    NEW_ORDER_ALERT_TEMPLATE.language,
+    components
+  );
+
+  if (result.success) {
+    await deliveryTracker.markSent(delivery.id, result.messageId);
+    return true;
+  }
+
+  logger.warn(
+    { deliveryId: delivery.id, error: result.error },
+    'new_order_alert template fallback also failed — likely not approved in Meta yet'
+  );
+  return false;
 }
 
 module.exports = {
@@ -231,4 +389,6 @@ module.exports = {
   cartTotal,
   createOrderFromSession,
   notifyShopOfNewOrder,
+  retryNewOrderAlert,
+  sendNewOrderAlertTemplateFallback,
 };

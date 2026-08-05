@@ -4,6 +4,8 @@ const config = require('./config');
 const logger = require('./utils/logger');
 const webhookRouter = require('./routes/webhook');
 const internalRouter = require('./routes/internal');
+const { getDueRetries } = require('./services/deliveryTracker');
+const { retryNewOrderAlert } = require('./services/orderCreator');
 
 const app = express();
 
@@ -80,6 +82,38 @@ const server = app.listen(config.port, () => {
     `🚀 Groovia webhook listening on port ${config.port} [${config.nodeEnv}]`
   );
 });
+
+// Notification retry loop — picks up genuinely transient send failures
+// (not window-expired ones, which go straight to a template fallback
+// from handleStatusUpdate instead; see deliveryTracker.js) on a backoff
+// schedule so a message doesn't just get silently lost. Only one
+// purpose exists today (new_order_alert); the map is here so adding a
+// second tracked notification type later doesn't mean touching this
+// loop, just registering its retry function.
+const RETRY_HANDLERS = {
+  new_order_alert: retryNewOrderAlert,
+};
+const RETRY_INTERVAL_MS = 60 * 1000;
+
+async function processDueRetries() {
+  const due = await getDueRetries();
+
+  for (const delivery of due) {
+    const handler = RETRY_HANDLERS[delivery.purpose];
+    if (!handler) continue;
+
+    try {
+      await handler(delivery);
+    } catch (err) {
+      logger.error({ err, deliveryId: delivery.id }, 'Notification retry threw');
+    }
+  }
+}
+
+const retryTimer = setInterval(() => {
+  processDueRetries().catch((err) => logger.error({ err }, 'Notification retry loop failed'));
+}, RETRY_INTERVAL_MS);
+retryTimer.unref();
 
 // Graceful shutdown
 const shutdown = (signal) => {
