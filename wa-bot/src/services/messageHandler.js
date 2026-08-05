@@ -701,6 +701,28 @@ async function handleIncomingMessage(message, value) {
 }
 
 function handleStatusUpdate(status) {
+  // Meta's status webhook includes an `errors` array on failed deliveries
+  // (e.g. code 131047 — "more than 24 hours have passed since the
+  // recipient last replied", the exact reason a non-template message to
+  // an inactive-session recipient silently fails after being accepted by
+  // the send API). Logging as info-only with no error detail is exactly
+  // what made this invisible before.
+  if (status.status === 'failed') {
+    const err = status.errors?.[0] || {};
+    logger.error(
+      {
+        id: status.id,
+        recipient: status.recipient_id,
+        code: err.code,
+        title: err.title,
+        message: err.message,
+        details: err.error_data?.details,
+      },
+      '📊 Status: failed'
+    );
+    return;
+  }
+
   logger.info({
     id:        status.id,
     status:    status.status,
