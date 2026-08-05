@@ -8,6 +8,7 @@ import {
   CheckCircle,
   ExternalLink,
   MapPin,
+  MessageSquare,
   MoreVertical,
   Plus,
   Search,
@@ -220,6 +221,17 @@ export default function ShopsClient({
   const [createdOwner, setCreatedOwner] =
     useState<CreatedOwnerCredentials | null>(null);
 
+  const [whatsappShop, setWhatsappShop] = useState<{ id: string; name: string } | null>(null);
+  const [whatsappForm, setWhatsappForm] = useState({
+    phone_number_id: "",
+    business_account_id: "",
+    display_phone_number: "",
+    catalog_id: "",
+  });
+  const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const [whatsappSaving, setWhatsappSaving] = useState(false);
+  const [whatsappError, setWhatsappError] = useState("");
+
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -245,6 +257,68 @@ export default function ShopsClient({
       setToast("");
       toastTimerRef.current = null;
     }, 3500);
+  }
+
+  async function openWhatsappModal(shop: ShopRow) {
+    setWhatsappShop({ id: shop.id, name: shop.name });
+    setWhatsappError("");
+    setWhatsappForm({ phone_number_id: "", business_account_id: "", display_phone_number: "", catalog_id: "" });
+    setWhatsappLoading(true);
+    setOpenMenu(null);
+
+    try {
+      const response = await fetch(`/api/admin/shops/${shop.id}/whatsapp-connection`);
+      const data = await response.json();
+
+      if (response.ok && data.connection) {
+        setWhatsappForm({
+          phone_number_id: data.connection.phone_number_id ?? "",
+          business_account_id: data.connection.business_account_id ?? "",
+          display_phone_number: data.connection.display_phone_number ?? "",
+          catalog_id: data.connection.catalog_id ?? "",
+        });
+      } else if (!response.ok) {
+        setWhatsappError(data.error || "Failed to load WhatsApp connection");
+      }
+    } catch {
+      setWhatsappError("Failed to load WhatsApp connection. Please try again.");
+    } finally {
+      setWhatsappLoading(false);
+    }
+  }
+
+  function closeWhatsappModal() {
+    setWhatsappShop(null);
+    setWhatsappError("");
+  }
+
+  async function handleSaveWhatsapp(e: React.FormEvent) {
+    e.preventDefault();
+    if (!whatsappShop) return;
+
+    setWhatsappSaving(true);
+    setWhatsappError("");
+
+    try {
+      const response = await fetch(`/api/admin/shops/${whatsappShop.id}/whatsapp-connection`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(whatsappForm),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setWhatsappError(data.error || "Failed to save WhatsApp connection");
+        return;
+      }
+
+      showToast(`WhatsApp connection saved for ${whatsappShop.name}`);
+      closeWhatsappModal();
+    } catch {
+      setWhatsappError("Failed to save WhatsApp connection. Please try again.");
+    } finally {
+      setWhatsappSaving(false);
+    }
   }
 
   function handleName(name: string) {
@@ -1153,6 +1227,27 @@ export default function ShopsClient({
                                   )}
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => openWhatsappModal(shop)}
+                                  style={{
+                                    width: "100%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "8px 14px",
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    color: "#cbd5e1",
+                                    fontSize: 13,
+                                    fontFamily: "inherit",
+                                  }}
+                                >
+                                  <MessageSquare size={14} />
+                                  Manage WhatsApp
+                                </button>
+
                                 <div
                                   style={{
                                     borderTop: "1px solid #334155",
@@ -1786,6 +1881,124 @@ export default function ShopsClient({
                     }}
                   >
                     {saving ? "Creating..." : "Create Shop"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {whatsappShop && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }}
+            onClick={closeWhatsappModal}
+          />
+
+          <div
+            style={{
+              position: "relative",
+              background: "#1e293b",
+              border: "1px solid #334155",
+              borderRadius: 16,
+              width: "100%",
+              maxWidth: 440,
+              padding: 24,
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto",
+            }}
+          >
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#f1f5f9", marginTop: 0, marginBottom: 4 }}>
+              WhatsApp Connection — {whatsappShop.name}
+            </h2>
+            <p style={{ fontSize: 12, color: "#94a3b8", marginTop: 0, marginBottom: 20 }}>
+              Find these values in Meta Business Manager → WhatsApp Manager → API Setup for this shop&apos;s number.
+            </p>
+
+            {whatsappLoading ? (
+              <p style={{ fontSize: 13, color: "#64748b" }}>Loading…</p>
+            ) : (
+              <form onSubmit={handleSaveWhatsapp} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {whatsappError && (
+                  <div
+                    style={{
+                      color: "#f87171",
+                      background: "rgba(239,68,68,0.1)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      fontSize: 13,
+                    }}
+                  >
+                    {whatsappError}
+                  </div>
+                )}
+
+                <div>
+                  <label style={S.label}>Phone Number ID *</label>
+                  <input
+                    style={S.input}
+                    value={whatsappForm.phone_number_id}
+                    onChange={(e) => setWhatsappForm((f) => ({ ...f, phone_number_id: e.target.value }))}
+                    placeholder="e.g. 1135902319616581"
+                  />
+                </div>
+
+                <div>
+                  <label style={S.label}>WhatsApp Business Account ID *</label>
+                  <input
+                    style={S.input}
+                    value={whatsappForm.business_account_id}
+                    onChange={(e) => setWhatsappForm((f) => ({ ...f, business_account_id: e.target.value }))}
+                  />
+                </div>
+
+                <div>
+                  <label style={S.label}>Display phone number *</label>
+                  <input
+                    style={S.input}
+                    value={whatsappForm.display_phone_number}
+                    onChange={(e) => setWhatsappForm((f) => ({ ...f, display_phone_number: e.target.value }))}
+                    placeholder="+91 98765 43210"
+                  />
+                </div>
+
+                <div>
+                  <label style={S.label}>Meta Commerce Catalog ID</label>
+                  <input
+                    style={S.input}
+                    value={whatsappForm.catalog_id}
+                    onChange={(e) => setWhatsappForm((f) => ({ ...f, catalog_id: e.target.value }))}
+                    placeholder="Optional — add once the catalog is created"
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                  <button
+                    type="button"
+                    onClick={closeWhatsappModal}
+                    disabled={whatsappSaving}
+                    style={{ ...S.btn("#334155", "#94a3b8"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={whatsappSaving}
+                    style={{ ...S.btn("#3b82f6", "#fff"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
+                  >
+                    {whatsappSaving ? "Saving…" : "Save connection"}
                   </button>
                 </div>
               </form>

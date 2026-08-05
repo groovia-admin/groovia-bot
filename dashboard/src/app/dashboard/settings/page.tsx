@@ -1,6 +1,5 @@
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
-import WhatsappConnectionForm from '@/components/settings/WhatsappConnectionForm'
 import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
 import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
@@ -18,36 +17,24 @@ export default async function SettingsPage() {
   const context = await requireRole(['owner', 'manager'])
   const isOwner = context.kind === 'super_admin' || context.role === 'owner'
 
-  let connection = null
   let settings = null
 
   if (context.kind === 'shop_user') {
     const adminClient = createAdminClient()
 
-    const [connectionResult, settingsResult] = await Promise.all([
-      adminClient
-        .from('whatsapp_connections')
-        .select('phone_number_id, business_account_id, display_phone_number, catalog_id, connection_status')
-        .eq('shop_id', context.shopId)
-        .maybeSingle(),
-      adminClient
-        .from('shop_settings')
-        .select(
-          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message'
-        )
-        .eq('shop_id', context.shopId)
-        .maybeSingle(),
-    ])
+    const { data: settingsData, error: settingsError } = await adminClient
+      .from('shop_settings')
+      .select(
+        'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message'
+      )
+      .eq('shop_id', context.shopId)
+      .maybeSingle()
 
-    if (connectionResult.error) {
-      console.error('Failed to load WhatsApp connection:', connectionResult.error)
-    }
-    if (settingsResult.error) {
-      console.error('Failed to load shop settings:', settingsResult.error)
+    if (settingsError) {
+      console.error('Failed to load shop settings:', settingsError)
     }
 
-    connection = connectionResult.data ?? null
-    settings = settingsResult.data ?? null
+    settings = settingsData ?? null
   }
 
   return (
@@ -81,14 +68,6 @@ export default async function SettingsPage() {
               <PaymentSettingsForm initial={settings} />
             </div>
           )}
-
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>WhatsApp Connection</h2>
-            <p style={cardSubStyle}>
-              Link your shop&apos;s WhatsApp Business number so staff and customers can message it.
-            </p>
-            <WhatsappConnectionForm initialConnection={connection} />
-          </div>
         </>
       )}
 
