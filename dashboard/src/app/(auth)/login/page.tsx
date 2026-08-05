@@ -125,11 +125,23 @@ export default function LoginPage() {
 
   return (
     <div style={s.page}>
-      <div style={{ width: '100%', maxWidth: '380px' }}>
+      <style>{`
+        @keyframes loginCardIn {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes loginLogoIn {
+          from { opacity: 0; transform: scale(0.75); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .login-card-wrap { animation: loginCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+        .login-logo-badge { animation: loginLogoIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      `}</style>
+      <div className="login-card-wrap" style={{ width: '100%', maxWidth: '380px' }}>
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '14px', background: '#3b82f6', marginBottom: '10px' }}>
+          <div className="login-logo-badge" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '14px', background: '#3b82f6', marginBottom: '10px' }}>
             <span style={{ color: '#fff', fontWeight: 800, fontSize: '22px' }}>G</span>
           </div>
           <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9' }}>GrooVia</div>
