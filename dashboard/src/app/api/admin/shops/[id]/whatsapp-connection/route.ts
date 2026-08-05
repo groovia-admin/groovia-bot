@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
-import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { requirePlatformAdmin } from '@/lib/auth/require-platform-admin'
+import { logAuditEvent } from '@/lib/audit/log'
 
 type UpsertConnectionBody = {
   phone_number_id?: unknown
@@ -8,18 +9,26 @@ type UpsertConnectionBody = {
   catalog_id?: unknown
 }
 
+type RouteContext = {
+  params: Promise<{ id: string }>
+}
+
 function getText(value: unknown) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-export async function GET() {
-  const authorization = await requireShopRole(['owner', 'manager'])
+// Managed by the platform (super admin), not the shop owner — WhatsApp
+// Business setup needs Meta App-level credentials a tenant shouldn't need
+// or be trusted with.
+export async function GET(request: Request, { params }: RouteContext) {
+  const authorization = await requirePlatformAdmin()
 
   if ('error' in authorization) {
     return authorization.error
   }
 
-  const { adminClient, shopId } = authorization
+  const { adminClient } = authorization
+  const { id: shopId } = await params
 
   const { data: connection, error } = await adminClient
     .from('whatsapp_connections')
@@ -38,14 +47,15 @@ export async function GET() {
   )
 }
 
-export async function PUT(request: Request) {
-  const authorization = await requireShopRole(['owner', 'manager'])
+export async function PUT(request: Request, { params }: RouteContext) {
+  const authorization = await requirePlatformAdmin()
 
   if ('error' in authorization) {
     return authorization.error
   }
 
-  const { adminClient, shopId } = authorization
+  const { adminClient, userId, actorName } = authorization
+  const { id: shopId } = await params
 
   let body: UpsertConnectionBody
 
@@ -67,28 +77,32 @@ export async function PUT(request: Request) {
     )
   }
 
-  // Both required going forward — previously optional, which is how the
-  // pilot shop ended up with a connection that resolves incoming messages
-  // fine but has no business_account_id/display_phone_number on file,
-  // silently blocking template management and the catalog sync's `link`
-  // field (which needs the display number).
   if (!businessAccountId) {
-    return NextResponse.json(
-      { error: 'WhatsApp Business Account ID is required' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'WhatsApp Business Account ID is required' }, { status: 400 })
   }
 
   if (!displayPhoneNumber) {
-    return NextResponse.json(
-      { error: 'Display phone number is required' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Display phone number is required' }, { status: 400 })
   }
 
-  // Manual find-then-update-or-insert rather than .upsert(onConflict:...),
-  // since we can't confirm a unique constraint exists on shop_id without
-  // direct DB/migration access.
+  const { data: shop, error: shopError } = await adminClient
+    .from('shops')
+    .select('id, name')
+    .eq('id', shopId)
+    .maybeSingle()
+
+  if (shopError) {
+    console.error('Shop lookup failed:', shopError)
+    return NextResponse.json({ error: 'Failed to save WhatsApp connection' }, { status: 500 })
+  }
+
+  if (!shop) {
+    return NextResponse.json({ error: 'Shop not found' }, { status: 404 })
+  }
+
+  // Manual find-then-update-or-insert, matching the pattern used
+  // throughout this codebase — no direct DB access to confirm a unique
+  // constraint exists on shop_id.
   const { data: existing, error: existingError } = await adminClient
     .from('whatsapp_connections')
     .select('id')
@@ -104,9 +118,6 @@ export async function PUT(request: Request) {
     phone_number_id: phoneNumberId,
     business_account_id: businessAccountId || null,
     display_phone_number: displayPhoneNumber || null,
-    // Optional — a shop can connect WhatsApp for messaging before its
-    // Meta Commerce Catalog even exists. Filled in once catalog setup
-    // is done; catalogSync.js fails clearly at sync time if it's absent.
     catalog_id: catalogId || null,
     connection_status: 'connected',
     connected_at: new Date().toISOString(),
@@ -129,6 +140,17 @@ export async function PUT(request: Request) {
     console.error('Failed to save WhatsApp connection:', error)
     return NextResponse.json({ error: 'Failed to save WhatsApp connection' }, { status: 500 })
   }
+
+  await logAuditEvent({
+    shopId,
+    actorUserId: userId,
+    actorType: 'super_admin',
+    action: 'shop.whatsapp_connection_updated',
+    entityType: 'whatsapp_connection',
+    entityId: connection.id,
+    newValues: { display_phone_number: displayPhoneNumber, business_account_id: businessAccountId },
+    metadata: { actor_name: actorName, target_name: shop.name },
+  })
 
   return NextResponse.json(
     { success: true, connection },
