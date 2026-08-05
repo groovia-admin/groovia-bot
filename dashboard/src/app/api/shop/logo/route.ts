@@ -1,4 +1,11 @@
 import { randomUUID } from 'node:crypto'
+// TypeScript's DOM lib declares File as an ambient global, which is why
+// `instanceof File` type-checked and worked in local testing (Node 24 also
+// happens to expose it globally) — but Railway's Node 20 runtime only
+// provides it via node:buffer, not as a bare global, so this silently
+// threw "ReferenceError: File is not defined" in production. Explicit
+// import makes the runtime value match what the types assumed.
+import { File } from 'node:buffer'
 import { NextResponse } from 'next/server'
 import { requireShopRole } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'

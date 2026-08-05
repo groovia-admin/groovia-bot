@@ -11,7 +11,7 @@ export default async function ConversationsPage() {
   const context = await requireRole(['owner'])
 
   if (context.kind !== 'shop_user') {
-    return <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">Not applicable for super admins.</div>
+    return <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20, color: '#94a3b8', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const adminClient = createAdminClient()
