@@ -27,3 +27,4 @@
 | #58 | Add catch-up resend for orders stuck pending from before delivery tra… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:43 UTC | 0d 0h 0m |
 | #59 | Fix language-fallback ordering: always try the template's own configu… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:58 UTC | 0d 0h 0m |
 | #60 | Fix logo/product-image upload File ReferenceError; dark-theme placeho… | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 17:00 UTC | 0d 0h 0m |
+| #61 | Show uploaded shop logo in Sidebar, add login entrance animation, mov… | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 17:22 UTC | 0d 0h 0m |
