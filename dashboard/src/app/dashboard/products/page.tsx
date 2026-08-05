@@ -22,7 +22,7 @@ export default async function ProductsPage() {
     adminClient
       .from('products')
       .select(
-        'id, name, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, categories ( name )'
+        'id, name, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, categories!products_category_id_fkey ( name )'
       )
       .eq('shop_id', context.shopId)
       .order('created_at', { ascending: false }),

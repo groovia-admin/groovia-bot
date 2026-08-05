@@ -19,8 +19,12 @@ type ProductRouteContext = {
   params: Promise<{ id: string }>
 }
 
+// Two FKs exist between products and categories (the plain id FK, and a
+// composite one enforcing product.shop_id === category.shop_id), so
+// PostgREST can't infer which to embed on without this being explicit —
+// omitting it fails the whole query with PGRST201, not just the embed.
 const PRODUCT_SELECT =
-  'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories ( name )'
+  'id, name, description, category_id, unit, price, cost_price, stock_quantity, low_stock_threshold, is_available, image_url, sku, created_at, categories!products_category_id_fkey ( name )'
 
 export async function GET(_request: Request, { params }: ProductRouteContext) {
   const authorization = await requireShopRole(['owner', 'manager', 'staff'])

@@ -38,6 +38,7 @@ const OWNER_NAV = [
   { href: '/dashboard/products', label: 'Products', icon: Package, color: '#a855f7' },
   { href: '/dashboard/inventory', label: 'Inventory', icon: Boxes, color: '#22c55e' },
   { href: '/dashboard/customers', label: 'Customers', icon: Users, color: '#ec4899' },
+  { href: '/dashboard/conversations', label: 'Conversations', icon: MessageSquare, color: '#14b8a6' },
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart2, color: '#06b6d4' },
   { href: '/dashboard/staff', label: 'Staff', icon: ClipboardList, color: '#6366f1' },
   { href: '/dashboard/logs', label: 'Activity Logs', icon: ScrollText, color: '#eab308' },

@@ -38,6 +38,19 @@ function sniffImageType(bytes: Uint8Array): string | null {
 }
 
 export async function POST(request: Request) {
+  try {
+    return await handleUpload(request)
+  } catch (err) {
+    // Every individual step here (auth, storage upload, shops update,
+    // audit log) has been verified working in isolation against the same
+    // database — this catch exists specifically to capture whatever is
+    // different about the real request path if it fails again.
+    console.error('Unhandled error in POST /api/shop/logo:', err instanceof Error ? err.stack || err.message : err)
+    return NextResponse.json({ error: 'Failed to upload logo' }, { status: 500 })
+  }
+}
+
+async function handleUpload(request: Request) {
   // Branding is an owner-level decision, unlike product photos which any
   // active staff member can manage day-to-day.
   const authorization = await requireShopRole(['owner'])
@@ -57,7 +70,8 @@ export async function POST(request: Request) {
 
   try {
     formData = await request.formData()
-  } catch {
+  } catch (err) {
+    console.error('Failed to parse logo upload form data:', err instanceof Error ? err.message : err)
     return NextResponse.json({ error: 'Invalid upload' }, { status: 400 })
   }
 

@@ -66,6 +66,39 @@ export async function PATCH(request: Request, { params }: StaffRouteContext) {
     .eq('shop_id', shopId)
     .maybeSingle()
 
+  // Cap applies to whoever this update would leave as active role='staff' —
+  // covers both "reactivate a deactivated staff member" and "change an
+  // active manager's role to staff" landing on the same state. Only checked
+  // when the update actually newly crosses into that state, so editing an
+  // already-active staff member's other fields isn't blocked by their own
+  // existing row.
+  const finalRole = changes.role ?? previousStaff?.role
+  const finalActive = changes.is_active ?? previousStaff?.is_active
+  const wasActiveStaff = previousStaff?.role === 'staff' && previousStaff?.is_active === true
+  const willBeActiveStaff = finalRole === 'staff' && finalActive === true
+
+  if (willBeActiveStaff && !wasActiveStaff) {
+    const { count: activeStaffCount, error: countError } = await adminClient
+      .from('shop_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId)
+      .eq('role', 'staff')
+      .eq('is_active', true)
+      .neq('id', id)
+
+    if (countError) {
+      console.error('Active staff count check failed:', countError)
+      return NextResponse.json({ error: 'Unable to validate staff limit' }, { status: 500 })
+    }
+
+    if ((activeStaffCount ?? 0) >= 2) {
+      return NextResponse.json(
+        { error: 'Maximum of 2 active staff members reached. Deactivate an existing staff member first.' },
+        { status: 400 }
+      )
+    }
+  }
+
   // Scoped by shop_id (in addition to id) so an owner can never touch
   // another shop's staff row, even by guessing a UUID.
   const { data: staff, error } = await adminClient

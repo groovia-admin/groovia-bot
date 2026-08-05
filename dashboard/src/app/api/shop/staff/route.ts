@@ -74,6 +74,27 @@ export async function POST(request: Request) {
     )
   }
 
+  if (role === 'staff') {
+    const { count: activeStaffCount, error: countError } = await adminClient
+      .from('shop_users')
+      .select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId)
+      .eq('role', 'staff')
+      .eq('is_active', true)
+
+    if (countError) {
+      console.error('Active staff count check failed:', countError)
+      return NextResponse.json({ error: 'Unable to validate staff limit' }, { status: 500 })
+    }
+
+    if ((activeStaffCount ?? 0) >= 2) {
+      return NextResponse.json(
+        { error: 'Maximum of 2 active staff members reached. Deactivate an existing staff member first.' },
+        { status: 400 }
+      )
+    }
+  }
+
   const phoneNumber = normalizeIndianPhone(rawPhone)
 
   if (!phoneNumber) {
