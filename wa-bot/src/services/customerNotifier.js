@@ -99,13 +99,30 @@ async function notifyCustomer(orderId, status, shopId) {
   const customerName = details?.customer_name_snapshot || 'there';
   const shopName = shop?.name || 'the shop';
 
-  const orderForTail = { ...order, currency_code: shop?.currency_code };
+  const orderForParams = { ...order, currency_code: shop?.currency_code };
 
-  const parameters = [customerName, order.order_number, shopName, ...template.tail(orderForTail)].map(
-    (value) => ({ type: 'text', text: String(value) })
-  );
+  // Two different component shapes depending on how the approved
+  // template was actually authored — see templates.js's `mode` comment.
+  // Sending the wrong shape to a template fails outright, it doesn't
+  // silently coerce.
+  let components;
 
-  const components = [{ type: 'body', parameters }];
+  if (template.mode === 'named') {
+    const params = template.params(orderForParams, customerName, shopName);
+    components = [{
+      type: 'body',
+      parameters: Object.entries(params).map(([name, value]) => ({
+        type: 'text',
+        parameter_name: name,
+        text: String(value),
+      })),
+    }];
+  } else {
+    const parameters = [customerName, order.order_number, shopName, ...template.tail(orderForParams)].map(
+      (value) => ({ type: 'text', text: String(value) })
+    );
+    components = [{ type: 'body', parameters }];
+  }
 
   return sendTemplateWithFallback(phone, template, components);
 }

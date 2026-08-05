@@ -4,26 +4,10 @@
 // path can look up the right template the same way: "this order just
 // became <status>".
 //
-// Every template shares the same first three variables — customer name,
-// order number, shop name — with a status-specific tail appended after.
-// `name` must exactly match the approved template's name in Meta, and the
-// approved copy must use exactly 4 variables in this order: customer
-// name, order number, shop name, then the tail value below.
-
-function fmtSlot(order) {
-  if (order.pickup_slot_label) return order.pickup_slot_label;
-
-  if (order.preferred_pickup_time) {
-    return new Date(order.preferred_pickup_time).toLocaleString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  }
-
-  return 'shortly';
-}
+// `name`/`language` must exactly match what's actually registered in
+// WhatsApp Manager, not what this code was originally written assuming —
+// confirmed directly against the templates as approved (see `mode` below
+// for why that matters beyond just the name).
 
 // Placeholder copy — adjust once the actual approved template wording (and
 // any shop-specific pickup instructions) is finalized.
@@ -36,31 +20,64 @@ function fmtMoney(amount, currencyCode) {
   return currencyCode === 'INR' ? `₹${value}` : `${currencyCode ?? ''} ${value}`.trim();
 }
 
+// Two parameter styles, because the templates actually approved in Meta
+// don't all use the same one:
+//   'positional' — {{1}}, {{2}}, ... in order; tail(order) returns the
+//                   values after [customerName, orderNumber, shopName].
+//   'named'      — {{variable_name}}; params(order, customerName, shopName)
+//                   returns the exact key/value map the approved template
+//                   uses. Meta requires a parameter_name on each parameter
+//                   object for these — sending positional params to a
+//                   named-placeholder template fails outright.
 const ORDER_TEMPLATES = {
-  accepted: {
-    name: 'order_confirmed',
-    language: 'en',
-    tail: (order) => [fmtSlot(order)],
-  },
+  // order_confirmed as currently approved in Meta is a structured Order
+  // Details template (header product card + "Review and Pay" button),
+  // still under the Marketing category rather than Utility — not a plain
+  // body-text template this code can populate correctly. No entry here
+  // means notifyCustomer logs a warning and no-ops for 'accepted' rather
+  // than sending something malformed. Recreate as a plain Utility text
+  // template (like the other four) to restore this notification.
   ready: {
     name: 'order_ready',
-    language: 'en',
+    language: 'en_US',
+    mode: 'positional',
     tail: () => [nextStep()],
   },
   completed: {
     name: 'order_completed',
-    language: 'en',
-    tail: (order) => [fmtMoney(order.total_amount, order.currency_code)],
+    language: 'en_US',
+    mode: 'named',
+    params: (order, customerName, shopName) => ({
+      customer_name: customerName,
+      order_number: order.order_number,
+      shop_name: shopName,
+      total: fmtMoney(order.total_amount, order.currency_code),
+    }),
   },
   rejected: {
     name: 'order_rejected',
-    language: 'en',
-    tail: (order) => [order.rejection_reason || 'Not specified'],
+    language: 'en_US',
+    mode: 'named',
+    params: (order, customerName, shopName) => ({
+      customer_name: customerName,
+      order_number: order.order_number,
+      shop_name: shopName,
+      reason: order.rejection_reason || 'Not specified',
+    }),
   },
   cancelled: {
-    name: 'order_cancelled',
-    language: 'en',
-    tail: (order) => [order.cancellation_reason || 'Not specified'],
+    // Registered in Meta as cancellation_confirmation, not order_cancelled
+    // — matches what was actually submitted/approved, not the original
+    // placeholder name this code was written against.
+    name: 'cancellation_confirmation',
+    language: 'en_US',
+    mode: 'named',
+    params: (order, customerName, shopName) => ({
+      customer_name: customerName,
+      order_number: order.order_number,
+      shop_name: shopName,
+      reason: order.cancellation_reason || 'Not specified',
+    }),
   },
 };
 
