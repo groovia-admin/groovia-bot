@@ -14,9 +14,16 @@ const { sendWhatsAppTemplate } = require('./whatsappClient');
 const LANGUAGE_FALLBACKS = ['en', 'en_US'];
 
 async function sendTemplateWithFallback(phone, template, components) {
-  const languages = LANGUAGE_FALLBACKS.includes(template.language)
-    ? LANGUAGE_FALLBACKS
-    : [template.language, ...LANGUAGE_FALLBACKS];
+  // Always try the template's own configured language first — that's
+  // the one actually confirmed against WhatsApp Manager, not a guess.
+  // Previously, if template.language happened to already be a member of
+  // LANGUAGE_FALLBACKS, the whole fallback list was used in its fixed
+  // order instead — meaning a template correctly configured as en_US
+  // still wasted a doomed-to-fail attempt against `en` first (confirmed
+  // in production: order_ready, configured en_US, failed under en
+  // before failing again under en_US — a param-count mismatch, not a
+  // language one, but the wasted en attempt was real and confusing).
+  const languages = [template.language, ...LANGUAGE_FALLBACKS.filter((l) => l !== template.language)];
 
   for (const language of languages) {
     const sent = await sendWhatsAppTemplate(phone, template.name, language, components);
