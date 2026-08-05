@@ -3,6 +3,29 @@ const { getSupabase } = require('./shopResolver');
 const { getTemplate } = require('./templates');
 const { sendWhatsAppTemplate } = require('./whatsappClient');
 
+// Meta's template UI often defaults to "English (US)" (en_US) rather
+// than the neutral "English" (en) templates.js declares — picking the
+// wrong one at creation time fails outright (#132001, "template name
+// does not exist in <language>") rather than falling back. Trying both,
+// in order, means that one locale mismatch doesn't silently block every
+// customer notification. This does NOT help if the template genuinely
+// doesn't exist/isn't approved under either code — that still has to be
+// fixed in WhatsApp Manager.
+const LANGUAGE_FALLBACKS = ['en', 'en_US'];
+
+async function sendTemplateWithFallback(phone, template, components) {
+  const languages = LANGUAGE_FALLBACKS.includes(template.language)
+    ? LANGUAGE_FALLBACKS
+    : [template.language, ...LANGUAGE_FALLBACKS];
+
+  for (const language of languages) {
+    const sent = await sendWhatsAppTemplate(phone, template.name, language, components);
+    if (sent) return true;
+  }
+
+  return false;
+}
+
 /**
  * Sends the WhatsApp template matching `status` (an orders.status value,
  * e.g. 'accepted' | 'ready' | 'completed' | 'rejected' | 'cancelled') to
@@ -84,7 +107,7 @@ async function notifyCustomer(orderId, status, shopId) {
 
   const components = [{ type: 'body', parameters }];
 
-  return sendWhatsAppTemplate(phone, template.name, template.language, components);
+  return sendTemplateWithFallback(phone, template, components);
 }
 
 module.exports = { notifyCustomer };
