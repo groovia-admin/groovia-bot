@@ -12,6 +12,7 @@ const {
   cartTotal,
   createOrderFromSession,
   notifyShopOfNewOrder,
+  sendNewOrderAlertTemplateFallback,
 } = require('./orderCreator');
 const {
   getEditSession,
@@ -21,6 +22,7 @@ const {
   formatItemList,
   removeItems,
 } = require('./orderEditor');
+const deliveryTracker = require('./deliveryTracker');
 
 // Static for now — the demo's "recommended based on time of day" logic is
 // a deliberate scope cut for the core loop.
@@ -600,7 +602,7 @@ async function handleWebhookPayload(payload) {
         }
 
         for (const status of value.statuses || []) {
-          handleStatusUpdate(status);
+          await handleStatusUpdate(status);
         }
       }
     }
@@ -640,6 +642,17 @@ async function handleIncomingMessage(message, value) {
 
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
     await handleStaffButtonReply(from, shopId, shopUser, message.interactive.button_reply.id);
+    return;
+  }
+
+  // A tap on a quick-reply button that came from an approved TEMPLATE
+  // message (the new_order_alert fallback) arrives with a different
+  // shape than a live interactive button — type: 'button' with the
+  // payload directly on message.button.payload, not nested under
+  // interactive.button_reply. Same accept_/reject_/edit_<orderId>
+  // payload format either way, so it routes through the same handler.
+  if (type === 'button' && message.button?.payload) {
+    await handleStaffButtonReply(from, shopId, shopUser, message.button.payload);
     return;
   }
 
@@ -700,7 +713,7 @@ async function handleIncomingMessage(message, value) {
   await handleOrderCommand(from, parsed, shopId, shopUser);
 }
 
-function handleStatusUpdate(status) {
+async function handleStatusUpdate(status) {
   // Meta's status webhook includes an `errors` array on failed deliveries
   // (e.g. code 131047 — "more than 24 hours have passed since the
   // recipient last replied", the exact reason a non-template message to
@@ -720,7 +733,32 @@ function handleStatusUpdate(status) {
       },
       '📊 Status: failed'
     );
+
+    // Only tracked sends (currently just new-order alerts) have a
+    // delivery row to correlate against — most status updates (customer
+    // replies, staff's own direct replies) have none, and that's fine,
+    // nothing further to do for those.
+    const delivery = await deliveryTracker.findByWamid(status.id);
+    if (!delivery) return;
+
+    if (deliveryTracker.isWindowExpired(err.code)) {
+      // Retrying this exact message can never succeed — the only real
+      // fix is a template send, attempted immediately rather than
+      // waiting on the retry loop.
+      await deliveryTracker.recordFailure(delivery.id, err, delivery.attempt_count);
+      if (delivery.purpose === 'new_order_alert') {
+        await sendNewOrderAlertTemplateFallback(delivery);
+      }
+      return;
+    }
+
+    // Genuinely transient — hand to the normal backoff/retry path.
+    await deliveryTracker.recordFailure(delivery.id, err, delivery.attempt_count);
     return;
+  }
+
+  if (status.status === 'delivered' || status.status === 'read') {
+    await deliveryTracker.markDeliveredByWamid(status.id);
   }
 
   logger.info({
