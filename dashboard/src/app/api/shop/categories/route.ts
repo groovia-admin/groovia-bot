@@ -21,7 +21,7 @@ export async function GET() {
 
   const { data: categories, error } = await adminClient
     .from('categories')
-    .select('id, name, description, image_url, display_order, is_active, created_at')
+    .select('id, name, description, image_url, display_order, is_active, master_category_id, created_at')
     .eq('shop_id', shopId)
     .order('display_order', { ascending: true })
 
@@ -74,7 +74,7 @@ export async function POST(request: Request) {
       display_order: existingCount ?? 0,
       is_active: true,
     })
-    .select('id, name, description, image_url, display_order, is_active, created_at')
+    .select('id, name, description, image_url, display_order, is_active, master_category_id, created_at')
     .single()
 
   if (error) {

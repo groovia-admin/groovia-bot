@@ -131,7 +131,12 @@ export default function MasterCatalogClient() {
     const isEnabled = isCategoryEnabled(catId)
 
     if (isEnabled) {
-      // Disable — remove row
+      // Disable — remove the enablement row, and soft-disable (not delete)
+      // the shop's own synced category. Soft-disable matches the existing
+      // manual is_active toggle semantics elsewhere in the app: the
+      // category drops out of "active categories" (so it can't be picked
+      // for new products) but the shop's own products under it, and their
+      // stock/pricing data, are untouched.
       const { error } = await supabase
         .from('shop_master_categories')
         .delete()
@@ -140,9 +145,24 @@ export default function MasterCatalogClient() {
 
       if (error) { showToast(`Error: ${error.message}`); return }
       setEnablements(prev => prev.filter(e => e.master_category_id !== catId))
+
+      const { error: disableError } = await supabase
+        .from('categories')
+        .update({ is_active: false })
+        .eq('shop_id', selectedShop)
+        .eq('master_category_id', catId)
+
+      if (disableError) {
+        console.error('Failed to disable synced category:', disableError)
+      }
+
       showToast('Category disabled for shop')
     } else {
-      // Enable — insert row
+      // Enable — insert the enablement row (unchanged), then sync a real
+      // categories row (what the Products page actually reads) and real
+      // products rows for everything in it, tagged with master_category_id
+      // / master_product_id so they're identifiable as platform-managed
+      // and protected from deletion by the shop owner.
       const { error } = await supabase
         .from('shop_master_categories')
         .insert({ shop_id: selectedShop, master_category_id: catId })
@@ -150,9 +170,12 @@ export default function MasterCatalogClient() {
       if (error) { showToast(`Error: ${error.message}`); return }
       setEnablements(prev => [...prev, { shop_id: selectedShop, master_category_id: catId }])
 
-      // Auto-create shop_master_products rows for all products in this category
       const cat = categories.find(c => c.id === catId)
-      if (cat?.master_products?.length) {
+      if (!cat) { showToast('Category enabled, but could not sync products — category not found locally'); return }
+
+      // shop_master_products stays as-is (existing enablement/stock
+      // tracking); this is additive, not a replacement for it.
+      if (cat.master_products?.length) {
         const rows = cat.master_products.map(p => ({
           shop_id: selectedShop,
           master_product_id: p.id,
@@ -160,9 +183,86 @@ export default function MasterCatalogClient() {
           is_available: true,
           is_enabled: true,
         }))
-        // upsert in case some already exist
         await supabase.from('shop_master_products').upsert(rows, { onConflict: 'shop_id,master_product_id', ignoreDuplicates: true })
       }
+
+      // Find-or-create the shop's own category row for this master category.
+      let { data: shopCategory, error: catLookupError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('shop_id', selectedShop)
+        .eq('master_category_id', catId)
+        .maybeSingle()
+
+      if (catLookupError) { showToast(`Error: ${catLookupError.message}`); return }
+
+      if (shopCategory) {
+        // Was previously disabled — reactivate rather than duplicate.
+        const { error: reactivateError } = await supabase
+          .from('categories')
+          .update({ is_active: true })
+          .eq('id', shopCategory.id)
+        if (reactivateError) { showToast(`Error: ${reactivateError.message}`); return }
+      } else {
+        const { count: existingCount } = await supabase
+          .from('categories')
+          .select('*', { count: 'exact', head: true })
+          .eq('shop_id', selectedShop)
+
+        const { data: createdCategory, error: createCatError } = await supabase
+          .from('categories')
+          .insert({
+            shop_id: selectedShop,
+            master_category_id: catId,
+            name: cat.name,
+            display_order: existingCount ?? 0,
+            is_active: true,
+          })
+          .select('id')
+          .single()
+
+        if (createCatError || !createdCategory) {
+          showToast(`Error: ${createCatError?.message || 'Failed to sync category'}`)
+          return
+        }
+        shopCategory = createdCategory
+      }
+
+      // Find-or-create real product rows for each master product — never
+      // overwrite an existing one, so a shop's own price/stock edits from
+      // a prior enable survive a disable/re-enable cycle.
+      if (cat.master_products?.length && shopCategory) {
+        const shopCategoryId = shopCategory.id
+
+        const { data: existingProducts } = await supabase
+          .from('products')
+          .select('master_product_id')
+          .eq('shop_id', selectedShop)
+          .in('master_product_id', cat.master_products.map((p) => p.id))
+
+        const existingIds = new Set((existingProducts ?? []).map((p) => p.master_product_id))
+        const newProducts = cat.master_products.filter((p) => !existingIds.has(p.id))
+
+        if (newProducts.length > 0) {
+          const { error: productsInsertError } = await supabase.from('products').insert(
+            newProducts.map((p) => ({
+              shop_id: selectedShop,
+              category_id: shopCategoryId,
+              master_product_id: p.id,
+              name: p.name,
+              unit: p.unit,
+              price: p.base_price ?? 0,
+              stock_quantity: 0,
+              is_available: true,
+              last_updated_source: 'master_catalog',
+            }))
+          )
+          if (productsInsertError) {
+            console.error('Failed to sync master products into shop catalog:', productsInsertError)
+          }
+        }
+      }
+
       showToast('Category enabled — all products added to shop catalog')
     }
   }
