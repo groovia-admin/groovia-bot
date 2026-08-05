@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, EyeOff, Eye } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type Category = {
   id: string;
@@ -18,6 +19,7 @@ type Product = {
   category_id: string;
   unit: string;
   price: number;
+  cost_price: number | null;
   stock_quantity: number;
   low_stock_threshold: number;
   is_available: boolean;
@@ -110,6 +112,7 @@ export default function ProductsClient({
   initialCategories: Category[];
   initialProducts: Product[];
 }) {
+  const toast = useToast();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [error, setError] = useState("");
@@ -117,6 +120,7 @@ export default function ProductsClient({
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [categoryName_, setCategoryName_] = useState("");
   const [savingCategory, setSavingCategory] = useState(false);
+  const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [productForm, setProductForm] = useState({
@@ -124,6 +128,7 @@ export default function ProductsClient({
     category_id: "",
     unit: "",
     price: "",
+    cost_price: "",
     stock_quantity: "",
   });
   const [savingProduct, setSavingProduct] = useState(false);
@@ -154,6 +159,7 @@ export default function ProductsClient({
       setCategories((prev) => [...prev, data.category]);
       setCategoryName_("");
       setShowAddCategory(false);
+      toast(`Category "${data.category.name}" added`);
     } catch {
       setError("Failed to add category. Please try again.");
     } finally {
@@ -183,12 +189,60 @@ export default function ProductsClient({
     }
   }
 
+  async function handleDeleteCategory(category: Category) {
+    if (
+      !window.confirm(
+        `Delete "${category.name}"? Products in this category will be untagged, not deleted.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingCategoryId(category.id);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/shop/categories/${category.id}`, { method: "DELETE" });
+
+      if (!response.ok) {
+        const data = await response.json();
+        setError(data.error || "Failed to remove category");
+        toast(data.error || "Failed to remove category", "error");
+        return;
+      }
+
+      setCategories((prev) => prev.filter((c) => c.id !== category.id));
+      setProducts((prev) => prev.map((p) => (p.category_id === category.id ? { ...p, category_id: "" } : p)));
+      toast(`Category "${category.name}" removed`);
+    } catch {
+      setError("Failed to remove category. Please try again.");
+      toast("Failed to remove category", "error");
+    } finally {
+      setDeletingCategoryId(null);
+    }
+  }
+
+  function validateProductForm(): string | null {
+    const missing: string[] = [];
+    if (!productForm.name.trim()) missing.push("Name");
+    if (!productForm.category_id) missing.push("Category");
+    if (!productForm.unit.trim()) missing.push("Unit");
+    if (!productForm.price) missing.push("Price");
+
+    if (missing.length > 0) {
+      return `${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} required`;
+    }
+
+    return null;
+  }
+
   async function handleAddProduct(e: React.FormEvent) {
     e.preventDefault();
     setError("");
 
-    if (!productForm.name.trim() || !productForm.category_id || !productForm.unit.trim() || !productForm.price) {
-      setError("Name, category, unit, and price are required");
+    const validationError = validateProductForm();
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -203,6 +257,7 @@ export default function ProductsClient({
           category_id: productForm.category_id,
           unit: productForm.unit,
           price: Number(productForm.price),
+          cost_price: productForm.cost_price ? Number(productForm.cost_price) : null,
           stock_quantity: Number(productForm.stock_quantity || 0),
         }),
       });
@@ -210,14 +265,17 @@ export default function ProductsClient({
 
       if (!response.ok) {
         setError(data.error || "Failed to add product");
+        toast(data.error || "Failed to add product", "error");
         return;
       }
 
       setProducts((prev) => [data.product, ...prev]);
-      setProductForm({ name: "", category_id: "", unit: "", price: "", stock_quantity: "" });
+      setProductForm({ name: "", category_id: "", unit: "", price: "", cost_price: "", stock_quantity: "" });
       setShowAddProduct(false);
+      toast(`"${data.product.name}" added`);
     } catch {
       setError("Failed to add product. Please try again.");
+      toast("Failed to add product", "error");
     } finally {
       setSavingProduct(false);
     }
@@ -241,6 +299,7 @@ export default function ProductsClient({
       }
 
       setProducts((prev) => prev.map((p) => (p.id === product.id ? data.product : p)));
+      toast(`${data.product.name} marked ${data.product.is_available ? "available" : "unavailable"}`);
     } catch {
       setError("Failed to update product. Please try again.");
     } finally {
@@ -285,16 +344,18 @@ export default function ProductsClient({
         </div>
 
         {showAddCategory && (
-          <form onSubmit={handleAddCategory} style={{ display: "flex", gap: 10, marginBottom: 14 }}>
-            <input
-              style={S.input}
-              value={categoryName_}
-              onChange={(e) => setCategoryName_(e.target.value)}
-              placeholder="Category name (e.g. Dairy, Snacks)"
-            />
-            <button type="submit" disabled={savingCategory} style={{ ...S.btn("#3b82f6", "#fff"), opacity: savingCategory ? 0.5 : 1, whiteSpace: "nowrap" }}>
-              {savingCategory ? "Adding…" : "Add"}
-            </button>
+          <form onSubmit={handleAddCategory} style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14 }}>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input
+                style={S.input}
+                value={categoryName_}
+                onChange={(e) => setCategoryName_(e.target.value)}
+                placeholder="Category name (e.g. Dairy, Snacks)"
+              />
+              <button type="submit" disabled={savingCategory || !categoryName_.trim()} style={{ ...S.btn("#3b82f6", "#fff"), opacity: savingCategory || !categoryName_.trim() ? 0.5 : 1, whiteSpace: "nowrap" }}>
+                {savingCategory ? "Adding…" : "Add"}
+              </button>
+            </div>
           </form>
         )}
 
@@ -303,15 +364,45 @@ export default function ProductsClient({
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {categories.map((category) => (
-              <button
+              <div
                 key={category.id}
-                type="button"
-                onClick={() => toggleCategoryActive(category)}
-                style={S.badge(category.is_active ? "#22c55e" : "#64748b", category.is_active ? "rgba(34,197,94,0.1)" : "rgba(100,116,139,0.1)")}
-                title={category.is_active ? "Click to deactivate" : "Click to activate"}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 2,
+                  borderRadius: 999,
+                  background: category.is_active ? "rgba(34,197,94,0.1)" : "rgba(100,116,139,0.1)",
+                  border: `1px solid ${category.is_active ? "#22c55e" : "#64748b"}33`,
+                }}
               >
-                {category.name}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggleCategoryActive(category)}
+                  style={{ ...S.badge(category.is_active ? "#22c55e" : "#64748b", "transparent"), border: "none" }}
+                  title={category.is_active ? "Click to deactivate" : "Click to activate"}
+                >
+                  {category.name}
+                </button>
+                <button
+                  type="button"
+                  disabled={deletingCategoryId === category.id}
+                  onClick={() => handleDeleteCategory(category)}
+                  title="Delete category"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px 8px 2px 2px",
+                    background: "transparent",
+                    border: "none",
+                    color: "#f87171",
+                    cursor: "pointer",
+                    opacity: deletingCategoryId === category.id ? 0.5 : 1,
+                  }}
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             ))}
           </div>
         )}
@@ -334,9 +425,9 @@ export default function ProductsClient({
 
       {showAddProduct && (
         <form onSubmit={handleAddProduct} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14 }}>
             <div>
-              <label style={S.label}>Name</label>
+              <label style={S.label}>Name *</label>
               <input
                 style={S.input}
                 value={productForm.name}
@@ -345,7 +436,7 @@ export default function ProductsClient({
               />
             </div>
             <div>
-              <label style={S.label}>Category</label>
+              <label style={S.label}>Category *</label>
               <select
                 style={S.input}
                 value={productForm.category_id}
@@ -360,7 +451,7 @@ export default function ProductsClient({
               </select>
             </div>
             <div>
-              <label style={S.label}>Unit</label>
+              <label style={S.label}>Unit *</label>
               <input
                 style={S.input}
                 value={productForm.unit}
@@ -368,8 +459,10 @@ export default function ProductsClient({
                 placeholder="500ml, 1kg, pc"
               />
             </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
             <div>
-              <label style={S.label}>Price (₹)</label>
+              <label style={S.label}>Selling price (₹) *</label>
               <input
                 style={S.input}
                 type="number"
@@ -377,6 +470,18 @@ export default function ProductsClient({
                 step="0.01"
                 value={productForm.price}
                 onChange={(e) => setProductForm((f) => ({ ...f, price: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label style={S.label}>Purchase price (₹)</label>
+              <input
+                style={S.input}
+                type="number"
+                min="0"
+                step="0.01"
+                value={productForm.cost_price}
+                onChange={(e) => setProductForm((f) => ({ ...f, cost_price: e.target.value }))}
+                placeholder="What you paid"
               />
             </div>
             <div>
@@ -390,6 +495,7 @@ export default function ProductsClient({
               />
             </div>
           </div>
+          <p style={{ fontSize: 11, color: "#64748b", margin: 0 }}>* Required</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="submit" disabled={savingProduct} style={{ ...S.btn("#3b82f6", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
               {savingProduct ? "Adding…" : "Add product"}
@@ -410,6 +516,8 @@ export default function ProductsClient({
                 <th style={S.th}>Category</th>
                 <th style={S.th}>Unit</th>
                 <th style={S.th}>Price</th>
+                <th style={S.th}>Cost</th>
+                <th style={S.th}>Margin</th>
                 <th style={S.th}>Stock</th>
                 <th style={S.th}>Status</th>
                 <th style={{ ...S.th, textAlign: "right" }}>Actions</th>
@@ -418,7 +526,7 @@ export default function ProductsClient({
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={7}>
+                  <td style={S.td} colSpan={9}>
                     No products yet.
                   </td>
                 </tr>
@@ -432,6 +540,16 @@ export default function ProductsClient({
                       <td style={S.td}>{categoryName(product)}</td>
                       <td style={S.td}>{product.unit}</td>
                       <td style={S.td}>₹{Number(product.price).toFixed(2)}</td>
+                      <td style={S.td}>{product.cost_price != null ? `₹${Number(product.cost_price).toFixed(2)}` : "—"}</td>
+                      <td style={S.td}>
+                        {product.cost_price != null && Number(product.price) > 0 ? (
+                          <span style={{ color: "#4ade80" }}>
+                            {Math.round(((Number(product.price) - Number(product.cost_price)) / Number(product.price)) * 100)}%
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
                       <td style={S.td}>
                         <span style={lowStock ? { color: "#f59e0b", fontWeight: 600 } : undefined}>
                           {product.stock_quantity}

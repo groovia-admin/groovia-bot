@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { inputStyle, labelStyle, saveButtonStyle, noticeStyle, errorStyle, successStyle, ToggleRow } from "./settingsStyles";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type BusinessHours = { open: string; close: string } | null;
 
@@ -22,6 +23,7 @@ const DEFAULTS: BotBehaviorSettings = {
 };
 
 export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<BotBehaviorSettings> | null }) {
+  const toast = useToast();
   const merged = { ...DEFAULTS, ...(initial ?? {}) };
 
   const [orderAcceptanceEnabled, setOrderAcceptanceEnabled] = useState(merged.order_acceptance_enabled);
@@ -59,12 +61,15 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
 
       if (!response.ok) {
         setError(data.error || "Failed to save bot behavior settings");
+        toast(data.error || "Failed to save bot behavior settings", "error");
         return;
       }
 
       setSaved(true);
+      toast("Bot behavior settings saved");
     } catch {
       setError("Failed to save bot behavior settings. Please try again.");
+      toast("Failed to save bot behavior settings", "error");
     } finally {
       setSaving(false);
     }

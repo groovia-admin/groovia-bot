@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { inputStyle, labelStyle, saveButtonStyle, noticeStyle, errorStyle, successStyle } from "./settingsStyles";
+import { useToast } from "@/components/ui/ToastProvider";
 
 export type PaymentSettings = {
   upi_id: string | null;
@@ -16,6 +17,7 @@ const METHOD_OPTIONS: { value: string; label: string }[] = [
 ];
 
 export default function PaymentSettingsForm({ initial }: { initial: Partial<PaymentSettings> | null }) {
+  const toast = useToast();
   const [upiId, setUpiId] = useState(initial?.upi_id ?? "");
   const [methods, setMethods] = useState<string[]>(initial?.accepted_payment_methods ?? ["cash"]);
 
@@ -47,12 +49,15 @@ export default function PaymentSettingsForm({ initial }: { initial: Partial<Paym
 
       if (!response.ok) {
         setError(data.error || "Failed to save payment settings");
+        toast(data.error || "Failed to save payment settings", "error");
         return;
       }
 
       setSaved(true);
+      toast("Payment settings saved");
     } catch {
       setError("Failed to save payment settings. Please try again.");
+      toast("Failed to save payment settings", "error");
     } finally {
       setSaving(false);
     }
