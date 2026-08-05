@@ -18,3 +18,4 @@
 | #49 | Bot login logs and owner email fix | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 09:37 UTC | 0d 0h 0m |
 | #51 | Dashboard UX fixes: cost price, category deletion, toasts, logo upload | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 09:49 UTC | 0d 0h 0m |
 | #50 | Bot whatsapp connection super admin only | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 09:49 UTC | 0d 0h 0m |
+| #52 | Fall back to en_US if a customer template send fails under en | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 15:56 UTC | 0d 0h 0m |
