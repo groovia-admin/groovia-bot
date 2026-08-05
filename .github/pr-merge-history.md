@@ -22,3 +22,4 @@
 | #53 | Bot fix template parameter modes | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 15:57 UTC | 0d 0h 0m |
 | #54 | Bot staff cap and conversation tracking | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:11 UTC | 0d 0h 0m |
 | #55 | Bridge Master Catalog to shop categories/products, protect from deletion | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 16:13 UTC | 0d 0h 0m |
+| #56 | Bot log failed status errors | wa-bot | @groovia-admin | @groovia-admin | 2026-08-05 16:30 UTC | 0d 0h 0m |
