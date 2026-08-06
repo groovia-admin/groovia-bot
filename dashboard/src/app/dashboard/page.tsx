@@ -35,13 +35,13 @@ export default async function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-white">Platform Overview</h1>
-          <p className="text-slate-400 text-sm mt-0.5">GrooVia Super Admin</p>
+          <h1 className="font-display text-2xl font-bold text-slate-900">Platform Overview</h1>
+          <p className="text-slate-500 text-sm mt-0.5">GrooVia Super Admin</p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-slate-300" />
+          <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-slate-800" />
           <StatCard icon={Store}         label="Active"       value={activeShops ?? 0} color="text-emerald-400" />
           <StatCard icon={AlertTriangle} label="On Trial"     value={trialShops  ?? 0} color="text-amber-400" />
           <StatCard icon={Store}         label="Paid"         value={paidShops   ?? 0} color="text-brand" />
@@ -50,7 +50,7 @@ export default async function DashboardPage() {
         {/* Recent shops */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-white">Recently Added Shops</h2>
+            <h2 className="font-semibold text-slate-900">Recently Added Shops</h2>
             <a href="/dashboard/shops" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
               View all →
             </a>
@@ -69,12 +69,12 @@ export default async function DashboardPage() {
                   <div className="flex items-center gap-3">
                     <div
                       className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
-                      style={{ background: 'rgba(42,140,140,0.15)', color: 'var(--brand)' }}
+                      style={{ background: 'var(--brand-light)', color: 'var(--brand-dark)' }}
                     >
                       {shop.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-200">{shop.name}</p>
+                      <p className="text-sm font-medium text-slate-800">{shop.name}</p>
                       <p className="text-xs text-slate-500">{shop.city ?? '—'} · /{shop.slug}</p>
                     </div>
                   </div>
@@ -106,6 +106,7 @@ export default async function DashboardPage() {
     { count: pendingOrders },
     { count: totalCustomers },
     { data: recentOrders },
+    { data: stockLevels },
   ] = await Promise.all([
     supabase.from('orders').select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId).gte('created_at', today),
@@ -118,7 +119,15 @@ export default async function DashboardPage() {
       .eq('shop_id', shopId)
       .order('created_at', { ascending: false })
       .limit(5),
+    // Fetched as rows rather than a count() because "low stock" is a
+    // per-row comparison (stock_quantity <= low_stock_threshold) that
+    // Postgres can't express as a simple .eq()/.lte() filter — matches
+    // the same definition the Inventory and Products pages already use.
+    supabase.from('products').select('stock_quantity, low_stock_threshold')
+      .eq('shop_id', shopId).eq('is_available', true),
   ])
+
+  const lowStockCount = (stockLevels ?? []).filter((p) => p.stock_quantity <= p.low_stock_threshold).length
 
   const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
     pending:   { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
@@ -133,23 +142,45 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="font-display text-2xl font-bold text-white">
+        <h1 className="font-display text-2xl font-bold text-slate-900">
           Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
         </h1>
-        <p className="text-slate-400 text-sm mt-0.5">
+        <p className="text-slate-500 text-sm mt-0.5">
           {context.shopName ?? 'Your store'} — here's today at a glance
         </p>
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+      {lowStockCount > 0 && (
+        <a
+          href="/dashboard/inventory"
+          className="flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:opacity-90"
+          style={{ background: '#FDECEA', border: '1px solid #F5C6C2' }}
+        >
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#C0392B' }} />
+          <p className="text-sm flex-1" style={{ color: '#C0392B' }}>
+            <span className="font-semibold">{lowStockCount} product{lowStockCount === 1 ? '' : 's'}</span> running low on stock.
+          </p>
+          <span className="text-xs font-medium flex-shrink-0" style={{ color: '#C0392B' }}>Review inventory →</span>
+        </a>
+      )}
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={ShoppingBag} label="Today's Orders" value={todayOrders   ?? 0} color="text-brand" />
-        <StatCard icon={Clock}       label="Pending"        value={pendingOrders ?? 0} color="text-amber-400" urgent={!!pendingOrders && pendingOrders > 0} />
-        <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-slate-300" />
+        <StatCard icon={Clock}       label="Pending"        value={pendingOrders ?? 0} color="text-amber-600" urgent={!!pendingOrders && pendingOrders > 0} />
+        <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-slate-800" />
+        <StatCard
+          icon={AlertTriangle}
+          label="Low Stock"
+          value={lowStockCount}
+          color="text-red-600"
+          urgent={lowStockCount > 0}
+          href="/dashboard/inventory"
+        />
       </div>
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-white">Recent Orders</h2>
+          <h2 className="font-semibold text-slate-900">Recent Orders</h2>
           <a href="/dashboard/orders" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
             View all →
           </a>
@@ -175,7 +206,7 @@ export default async function DashboardPage() {
                       {order.status}
                     </span>
                     <div>
-                      <p className="text-sm font-medium text-slate-200">#{order.order_number}</p>
+                      <p className="text-sm font-medium text-slate-800">#{order.order_number}</p>
                       <p className="text-xs text-slate-500">
                         {order.pickup_slot_label ?? new Date(order.created_at).toLocaleTimeString('en-IN', {
                           hour: '2-digit', minute: '2-digit'
@@ -184,7 +215,7 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                   {showRevenue && (
-                    <p className="text-sm font-medium text-slate-200">
+                    <p className="text-sm font-medium text-slate-800">
                       ₹{Number(order.total_amount).toFixed(2)}
                     </p>
                   )}
@@ -200,26 +231,40 @@ export default async function DashboardPage() {
 
 // ── Sub-components ─────────────────────────────────────────────
 
-function StatCard({ icon: Icon, label, value, color, urgent }: {
+function StatCard({ icon: Icon, label, value, color, urgent, href }: {
   icon: React.ElementType
   label: string
   value: number
   color: string
   urgent?: boolean
+  href?: string
 }) {
-  return (
-    <div
-      className="card"
-      style={urgent && value > 0 ? { borderColor: 'rgba(245,158,11,0.4)' } : undefined}
-    >
+  const content = (
+    <>
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs text-slate-500">{label}</p>
         <Icon className={`w-4 h-4 ${color}`} />
       </div>
       <p className={`text-2xl font-bold font-display ${color}`}>{value}</p>
       {urgent && value > 0 && (
-        <p className="text-xs text-amber-400 mt-1">Needs attention</p>
+        <p className="text-xs text-amber-600 mt-1">Needs attention</p>
       )}
+    </>
+  )
+
+  const style = urgent && value > 0 ? { borderColor: 'rgba(217,119,6,0.35)' } : undefined
+
+  if (href) {
+    return (
+      <a href={href} className="card block transition-shadow hover:shadow-md" style={style}>
+        {content}
+      </a>
+    )
+  }
+
+  return (
+    <div className="card" style={style}>
+      {content}
     </div>
   )
 }

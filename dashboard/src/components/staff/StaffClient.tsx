@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
+import { S } from "@/lib/ui/dashboardStyles";
 
 type StaffRole = "owner" | "manager" | "staff";
 
@@ -21,82 +22,10 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   staff: "Staff",
 };
 
-const S = {
-  card: {
-    background: "#1e293b",
-    border: "1px solid #334155",
-    borderRadius: 12,
-    padding: 20,
-  } as React.CSSProperties,
-  input: {
-    width: "100%",
-    padding: "9px 14px",
-    borderRadius: 8,
-    border: "1px solid #334155",
-    background: "#0f172a",
-    color: "#f1f5f9",
-    fontSize: 13,
-    outline: "none",
-    fontFamily: "inherit",
-    boxSizing: "border-box",
-  } as React.CSSProperties,
-  label: {
-    display: "block",
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 6,
-    fontWeight: 600,
-  } as React.CSSProperties,
-  th: {
-    textAlign: "left",
-    padding: "10px 16px",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.7px",
-    color: "#64748b",
-    fontWeight: 600,
-    borderBottom: "1px solid #334155",
-  } as React.CSSProperties,
-  td: {
-    padding: "12px 16px",
-    fontSize: 13,
-    color: "#94a3b8",
-    borderBottom: "1px solid rgba(30,41,59,0.8)",
-  } as React.CSSProperties,
-  badge: (color: string, background: string) =>
-    ({
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 4,
-      padding: "2px 10px",
-      borderRadius: 999,
-      fontSize: 11,
-      fontWeight: 600,
-      color,
-      background,
-      border: `1px solid ${color}33`,
-    }) as React.CSSProperties,
-  btn: (background: string, color: string) =>
-    ({
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "8px 14px",
-      borderRadius: 8,
-      border: "none",
-      background,
-      color,
-      fontSize: 13,
-      fontWeight: 600,
-      cursor: "pointer",
-      fontFamily: "inherit",
-    }) as React.CSSProperties,
-};
-
 const ROLE_BADGE: Record<StaffRole, [string, string]> = {
-  owner: ["#3b82f6", "rgba(59,130,246,0.12)"],
-  manager: ["#a78bfa", "rgba(167,139,250,0.12)"],
-  staff: ["#94a3b8", "rgba(148,163,184,0.12)"],
+  owner: ["#128C7E", "#DCF8C6"],
+  manager: ["#8B5CF6", "rgba(139,92,246,0.1)"],
+  staff: ["#667781", "#F0F2F5"],
 };
 
 export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[] }) {
@@ -182,12 +111,12 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Staff</h1>
-          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Staff</h1>
+          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
             Manage who can access this shop and what they can do.
           </p>
         </div>
-        <button type="button" style={S.btn("#3b82f6", "#fff")} onClick={() => setShowAdd((v) => !v)}>
+        <button type="button" style={S.btn("#25D366", "#fff")} onClick={() => setShowAdd((v) => !v)}>
           <Plus size={15} />
           Add staff
         </button>
@@ -196,9 +125,9 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       {error && (
         <div
           style={{
-            color: "#f87171",
-            background: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.2)",
+            color: "#C0392B",
+            background: "#FDECEA",
+            border: "1px solid #F5C6C2",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -229,10 +158,10 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                     alignItems: "center",
                     padding: "0 12px",
                     borderRadius: "8px 0 0 8px",
-                    border: "1px solid #334155",
+                    border: "1px solid #E9EDEF",
                     borderRight: "none",
-                    background: "#0f172a",
-                    color: "#64748b",
+                    background: "#F0F2F5",
+                    color: "#667781",
                     fontSize: 13,
                   }}
                 >
@@ -260,10 +189,10 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="submit" disabled={!canSubmit || saving} style={{ ...S.btn("#3b82f6", "#fff"), opacity: !canSubmit || saving ? 0.5 : 1 }}>
+            <button type="submit" disabled={!canSubmit || saving} style={{ ...S.btn("#25D366", "#fff"), opacity: !canSubmit || saving ? 0.5 : 1 }}>
               {saving ? "Adding…" : "Add staff member"}
             </button>
-            <button type="button" style={S.btn("#334155", "#cbd5e1")} onClick={() => setShowAdd(false)}>
+            <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAdd(false)}>
               Cancel
             </button>
           </div>
@@ -295,7 +224,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                   const busy = busyId === row.id;
                   return (
                     <tr key={row.id}>
-                      <td style={{ ...S.td, color: "#f1f5f9", fontWeight: 500 }}>{row.full_name}</td>
+                      <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>{row.full_name}</td>
                       <td style={S.td}>{row.phone_number ?? "—"}</td>
                       <td style={S.td}>
                         {row.role === "owner" ? (
@@ -323,8 +252,8 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                       <td style={S.td}>
                         <span
                           style={S.badge(
-                            row.is_active ? "#22c55e" : "#94a3b8",
-                            row.is_active ? "rgba(34,197,94,0.12)" : "rgba(148,163,184,0.12)",
+                            row.is_active ? "#128C7E" : "#667781",
+                            row.is_active ? "#DCF8C6" : "#F0F2F5",
                           )}
                         >
                           {row.is_active ? "Active" : "Inactive"}

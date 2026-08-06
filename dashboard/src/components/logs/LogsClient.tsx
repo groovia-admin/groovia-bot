@@ -3,6 +3,7 @@
 import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ChevronDown, ChevronRight, ScrollText } from "lucide-react";
+import { S } from "@/lib/ui/dashboardStyles";
 
 type ActorType = "super_admin" | "owner" | "manager" | "staff" | "system" | "whatsapp" | "ai";
 
@@ -39,53 +40,13 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const ACTOR_BADGE: Record<ActorType, [string, string]> = {
-  super_admin: ["#3b82f6", "rgba(59,130,246,0.12)"],
-  owner: ["#a78bfa", "rgba(167,139,250,0.12)"],
-  manager: ["#38bdf8", "rgba(56,189,248,0.12)"],
-  staff: ["#94a3b8", "rgba(148,163,184,0.12)"],
-  system: ["#facc15", "rgba(250,204,21,0.12)"],
-  whatsapp: ["#22c55e", "rgba(34,197,94,0.12)"],
-  ai: ["#f472b6", "rgba(244,114,182,0.12)"],
-};
-
-const S = {
-  card: {
-    background: "#1e293b",
-    border: "1px solid #334155",
-    borderRadius: 12,
-    padding: 0,
-    overflow: "hidden",
-  } as React.CSSProperties,
-  th: {
-    textAlign: "left",
-    padding: "10px 16px",
-    fontSize: 11,
-    textTransform: "uppercase",
-    letterSpacing: "0.7px",
-    color: "#64748b",
-    fontWeight: 600,
-    borderBottom: "1px solid #334155",
-  } as React.CSSProperties,
-  td: {
-    padding: "12px 16px",
-    fontSize: 13,
-    color: "#94a3b8",
-    borderBottom: "1px solid rgba(30,41,59,0.8)",
-    verticalAlign: "top",
-  } as React.CSSProperties,
-  badge: (color: string, background: string) =>
-    ({
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 4,
-      padding: "2px 10px",
-      borderRadius: 999,
-      fontSize: 11,
-      fontWeight: 600,
-      color,
-      background,
-      border: `1px solid ${color}33`,
-    }) as React.CSSProperties,
+  super_admin: ["#128C7E", "#DCF8C6"],
+  owner: ["#8B5CF6", "rgba(139,92,246,0.1)"],
+  manager: ["#0EA5E9", "rgba(14,165,233,0.1)"],
+  staff: ["#667781", "#F0F2F5"],
+  system: ["#B7791F", "rgba(183,121,31,0.1)"],
+  whatsapp: ["#25D366", "#DCF8C6"],
+  ai: ["#DB2777", "rgba(219,39,119,0.1)"],
 };
 
 function actorLabel(actorType: ActorType) {
@@ -114,15 +75,15 @@ function DiffRow({ oldValues, newValues }: { oldValues: Record<string, unknown> 
         const before = oldValues?.[key];
         const after = newValues?.[key];
         return (
-          <div key={key} style={{ color: "#64748b" }}>
-            <span style={{ color: "#94a3b8" }}>{key}</span>:{" "}
+          <div key={key} style={{ color: "#667781" }}>
+            <span style={{ color: "#111B21" }}>{key}</span>:{" "}
             {oldValues && key in oldValues ? (
               <>
-                <span style={{ color: "#f87171" }}>{formatValue(before)}</span>
+                <span style={{ color: "#C0392B" }}>{formatValue(before)}</span>
                 {" → "}
               </>
             ) : null}
-            <span style={{ color: "#4ade80" }}>{formatValue(after)}</span>
+            <span style={{ color: "#128C7E" }}>{formatValue(after)}</span>
           </div>
         );
       })}
@@ -162,10 +123,10 @@ export default function LogsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>
             {showShopColumn ? "Audit Logs" : "Activity Logs"}
           </h1>
-          <p style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
             {showShopColumn
               ? "Platform-wide record of shop and staff changes."
               : "Record of staff and account changes for this shop."}
@@ -175,10 +136,10 @@ export default function LogsClient({
         {showShopColumn && (
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>
                 Category
               </label>
-              <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "#0f172a", border: "1px solid #334155", gap: 2 }}>
+              <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "#F0F2F5", border: "1px solid #E9EDEF", gap: 2 }}>
                 {(
                   [
                     { value: "all", label: "All" },
@@ -198,8 +159,9 @@ export default function LogsClient({
                       cursor: "pointer",
                       fontFamily: "inherit",
                       border: "none",
-                      background: category === opt.value ? "#1e293b" : "transparent",
-                      color: category === opt.value ? "#f1f5f9" : "#64748b",
+                      background: category === opt.value ? "#FFFFFF" : "transparent",
+                      color: category === opt.value ? "#128C7E" : "#667781",
+                      boxShadow: category === opt.value ? "0 1px 3px rgba(17,27,33,0.08)" : "none",
                     }}
                   >
                     {opt.label}
@@ -210,7 +172,7 @@ export default function LogsClient({
 
             {shops && shops.length > 0 && (
               <div>
-                <label style={{ display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>
                   Filter by shop
                 </label>
                 <select
@@ -219,9 +181,9 @@ export default function LogsClient({
                   style={{
                     padding: "7px 12px",
                     borderRadius: 8,
-                    border: "1px solid #334155",
-                    background: "#0f172a",
-                    color: "#f1f5f9",
+                    border: "1px solid #E9EDEF",
+                    background: "#FFFFFF",
+                    color: "#111B21",
                     fontSize: 13,
                     fontFamily: "inherit",
                     minWidth: 200,
@@ -256,7 +218,7 @@ export default function LogsClient({
               {logs.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={columnCount}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#64748b" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
                       <ScrollText size={14} />
                       No activity recorded yet.
                     </div>
@@ -282,16 +244,16 @@ export default function LogsClient({
                         onClick={() => hasDetails && setExpandedId(expanded ? null : row.id)}
                         style={{ cursor: hasDetails ? "pointer" : "default" }}
                       >
-                        <td style={{ ...S.td, whiteSpace: "nowrap", color: "#64748b" }}>
+                        <td style={{ ...S.td, whiteSpace: "nowrap", color: "#667781" }}>
                           {format(new Date(row.created_at), "MMM d, HH:mm")}
                         </td>
                         <td style={S.td}>
                           <span style={S.badge(color, background)}>{actorName}</span>
                         </td>
-                        <td style={{ ...S.td, color: "#f1f5f9" }}>
+                        <td style={{ ...S.td, color: "#111B21" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {hasDetails &&
-                              (expanded ? <ChevronDown size={13} color="#64748b" /> : <ChevronRight size={13} color="#64748b" />)}
+                              (expanded ? <ChevronDown size={13} color="#667781" /> : <ChevronRight size={13} color="#667781" />)}
                             {ACTION_LABEL[row.action] ?? row.action}
                           </div>
                         </td>
@@ -300,7 +262,7 @@ export default function LogsClient({
                       </tr>
                       {expanded && hasDetails && (
                         <tr>
-                          <td colSpan={columnCount} style={{ ...S.td, background: "#161f30" }}>
+                          <td colSpan={columnCount} style={{ ...S.td, background: "#F7F8FA" }}>
                             <DiffRow oldValues={row.old_values} newValues={row.new_values} />
                           </td>
                         </tr>

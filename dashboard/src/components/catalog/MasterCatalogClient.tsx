@@ -301,8 +301,8 @@ export default function MasterCatalogClient() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-white">Master Catalog</h1>
-          <p className="text-slate-400 text-sm mt-0.5">
+          <h1 className="font-display text-2xl font-bold text-slate-900">Master Catalog</h1>
+          <p className="text-slate-500 text-sm mt-0.5">
             {categories.length} categories · {categories.reduce((n, c) => n + (c.master_products?.length ?? 0), 0)} products
           </p>
         </div>
@@ -314,7 +314,7 @@ export default function MasterCatalogClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#0f172a' }}>
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#F0F2F5' }}>
         {([
           { id: 'catalog',  label: 'Master Catalog', icon: Package },
           { id: 'enable',   label: 'Enable for Shops', icon: Store },
@@ -326,9 +326,9 @@ export default function MasterCatalogClient() {
             className={clsx(
               'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
               activeTab === tab.id
-                ? 'text-white' : 'text-slate-500 hover:text-slate-300'
+                ? 'text-[#128C7E]' : 'text-slate-500 hover:text-slate-700'
             )}
-            style={activeTab === tab.id ? { background: '#1e293b', border: '1px solid #334155' } : {}}
+            style={activeTab === tab.id ? { background: '#FFFFFF', border: '1px solid #E9EDEF', boxShadow: '0 1px 3px rgba(17,27,33,0.08)' } : {}}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -359,11 +359,11 @@ export default function MasterCatalogClient() {
               >
                 <div className="flex items-center gap-3">
                   {expandedCat === cat.id
-                    ? <ChevronDown className="w-4 h-4 text-slate-400" />
-                    : <ChevronRight className="w-4 h-4 text-slate-400" />}
-                  <span className="font-semibold text-white">{cat.name}</span>
+                    ? <ChevronDown className="w-4 h-4 text-slate-500" />
+                    : <ChevronRight className="w-4 h-4 text-slate-500" />}
+                  <span className="font-semibold text-slate-900">{cat.name}</span>
                   <span className="text-xs text-slate-500 px-2 py-0.5 rounded-full"
-                    style={{ background: '#334155' }}>
+                    style={{ background: '#F0F2F5' }}>
                     {cat.master_products?.length ?? 0} items
                   </span>
                 </div>
@@ -377,11 +377,11 @@ export default function MasterCatalogClient() {
 
               {/* Products list */}
               {expandedCat === cat.id && (
-                <div style={{ borderTop: '1px solid #334155' }}>
+                <div style={{ borderTop: '1px solid #E9EDEF' }}>
                   {!cat.master_products?.length ? (
                     <div className="p-6 text-center text-slate-500 text-sm">
                       No products yet.{' '}
-                      <button onClick={() => setShowAddProduct(cat.id)} className="text-blue-400 hover:underline">
+                      <button onClick={() => setShowAddProduct(cat.id)} className="text-[#128C7E] hover:underline">
                         Add the first one
                       </button>
                     </div>
@@ -401,15 +401,15 @@ export default function MasterCatalogClient() {
                           .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
                           .map(product => (
                             <tr key={product.id}>
-                              <td className="text-slate-100 font-medium">{product.name}</td>
+                              <td className="text-slate-900 font-medium">{product.name}</td>
                               <td>{product.brand ?? <span className="text-slate-600">—</span>}</td>
                               <td>{product.unit}</td>
                               <td>{product.base_price ? `₹${product.base_price}` : <span className="text-slate-600">—</span>}</td>
                               <td>
                                 <span className={clsx('status-badge border text-xs',
                                   product.is_active
-                                    ? 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20'
-                                    : 'text-slate-400 bg-slate-400/10 border-slate-400/20'
+                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                                    : 'text-slate-500 bg-slate-400/10 border-slate-400/20'
                                 )}>
                                   {product.is_active ? 'Active' : 'Inactive'}
                                 </span>
@@ -431,7 +431,7 @@ export default function MasterCatalogClient() {
         <div className="space-y-5">
           {/* Shop selector */}
           <div className="card">
-            <label className="block text-xs font-medium text-slate-400 mb-2">Select a shop to manage its catalog</label>
+            <label className="block text-xs font-medium text-slate-500 mb-2">Select a shop to manage its catalog</label>
             <select
               value={selectedShop}
               onChange={e => { setSelectedShop(e.target.value); if (e.target.value) loadEnablements(e.target.value) }}
@@ -450,7 +450,7 @@ export default function MasterCatalogClient() {
           {selectedShop && (
             <>
               <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-slate-500">
                   Toggle categories to enable/disable all products in that category for this shop.
                 </p>
                 <span className="text-xs text-slate-500">
@@ -471,13 +471,13 @@ export default function MasterCatalogClient() {
                       <div className="flex items-center gap-3">
                         <div className={clsx('w-2 h-2 rounded-full', enabled ? 'bg-emerald-400' : 'bg-slate-600')} />
                         <div>
-                          <p className="font-medium text-white text-sm">{cat.name}</p>
+                          <p className="font-medium text-slate-900 text-sm">{cat.name}</p>
                           <p className="text-xs text-slate-500">{cat.master_products?.length ?? 0} products</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         {enabled && (
-                          <span className="text-xs text-emerald-400">
+                          <span className="text-xs text-emerald-700">
                             {cat.master_products?.length ?? 0} items added to shop
                           </span>
                         )}
@@ -486,7 +486,7 @@ export default function MasterCatalogClient() {
                           className={clsx('flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
                             enabled
                               ? 'text-red-400 hover:bg-red-400/10'
-                              : 'text-emerald-400 hover:bg-emerald-400/10'
+                              : 'text-emerald-700 hover:bg-emerald-50'
                           )}
                         >
                           {enabled
@@ -515,14 +515,14 @@ export default function MasterCatalogClient() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="font-semibold text-white">{req.name}</p>
+                    <p className="font-semibold text-slate-900">{req.name}</p>
                     {req.brand && <span className="text-xs text-slate-500">{req.brand}</span>}
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#334155', color: '#94a3b8' }}>
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F0F2F5', color: '#667781' }}>
                       {req.unit}
                     </span>
                   </div>
                   <p className="text-xs text-slate-500">
-                    From: <span className="text-slate-300">{req.shops?.name}</span>
+                    From: <span className="text-slate-700">{req.shops?.name}</span>
                     {req.suggested_price && <> · Suggested ₹{req.suggested_price}</>}
                     {req.reason && <> · "{req.reason}"</>}
                   </p>
@@ -560,32 +560,32 @@ export default function MasterCatalogClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowAddProduct(null)} />
           <div className="relative rounded-2xl w-full max-w-md shadow-2xl"
-            style={{ background: '#1e293b', border: '1px solid #334155' }}>
+            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
             <div className="p-6">
-              <h2 className="font-display font-bold text-white text-lg mb-1">Add Master Product</h2>
-              <p className="text-slate-400 text-sm mb-5">
-                Adding to: <span className="text-white">{categories.find(c => c.id === showAddProduct)?.name}</span>
+              <h2 className="font-display font-bold text-slate-900 text-lg mb-1">Add Master Product</h2>
+              <p className="text-slate-500 text-sm mb-5">
+                Adding to: <span className="text-slate-900">{categories.find(c => c.id === showAddProduct)?.name}</span>
               </p>
               <form onSubmit={handleAddProduct} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Product name *</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Product name *</label>
                   <input value={productForm.name} onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="Amul Butter" required className="input" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Brand</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Brand</label>
                     <input value={productForm.brand} onChange={e => setProductForm(f => ({ ...f, brand: e.target.value }))}
                       placeholder="Amul" className="input" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-400 mb-1.5">Unit *</label>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Unit *</label>
                     <input value={productForm.unit} onChange={e => setProductForm(f => ({ ...f, unit: e.target.value }))}
                       placeholder="100g / 1L / piece" required className="input" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Base price (₹)</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Base price (₹)</label>
                   <input type="number" value={productForm.base_price}
                     onChange={e => setProductForm(f => ({ ...f, base_price: e.target.value }))}
                     placeholder="52" className="input" />
@@ -608,12 +608,12 @@ export default function MasterCatalogClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} />
           <div className="relative rounded-2xl w-full max-w-sm shadow-2xl"
-            style={{ background: '#1e293b', border: '1px solid #334155' }}>
+            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
             <div className="p-6">
-              <h2 className="font-display font-bold text-white text-lg mb-5">Add Category</h2>
+              <h2 className="font-display font-bold text-slate-900 text-lg mb-5">Add Category</h2>
               <form onSubmit={handleAddCategory} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Category name *</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Category name *</label>
                   <input
                     value={categoryForm.name}
                     onChange={e => {
@@ -624,7 +624,7 @@ export default function MasterCatalogClient() {
                     placeholder="Dairy & Eggs" required className="input" />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-400 mb-1.5">Slug *</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Slug *</label>
                   <input value={categoryForm.slug}
                     onChange={e => setCategoryForm(f => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
                     placeholder="dairy" required className="input" />
@@ -643,9 +643,9 @@ export default function MasterCatalogClient() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-slate-200 flex items-center gap-2"
-          style={{ background: '#1e293b', border: '1px solid #334155' }}>
-          <Check className="w-4 h-4 text-emerald-400" />
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-slate-800 flex items-center gap-2"
+          style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <Check className="w-4 h-4 text-emerald-700" />
           {toast}
         </div>
       )}

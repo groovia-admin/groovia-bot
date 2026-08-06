@@ -2,15 +2,18 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS custom properties ── */
+/* ── CSS custom properties — WhatsApp-derived light theme ── */
 :root {
-  --surface:        #0f172a;
-  --surface-card:   #1e293b;
-  --surface-hover:  #334155;
-  --surface-border: #334155;
-  --brand:          #2A8C8C;
-  --brand-light:    #3aadad;
-  --brand-dark:     #1e6969;
+  --surface:        #F0F2F5;
+  --surface-card:   #FFFFFF;
+  --surface-hover:  #F5F6F6;
+  --surface-border: #E9EDEF;
+  --brand:          #25D366;
+  --brand-light:    #DCF8C6;
+  --brand-dark:     #128C7E;
+  --ink:            #111B21;
+  --ink-muted:      #667781;
+  --ink-faint:      #8696A0;
 }
 
 @layer base {
@@ -18,7 +21,7 @@
 
   body {
     background-color: var(--surface);
-    color: #f1f5f9;
+    color: var(--ink);
     font-family: 'Inter', sans-serif;
   }
 
@@ -26,7 +29,7 @@
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: var(--surface-card); }
   ::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  ::-webkit-scrollbar-thumb:hover { background: #CFD4D8; }
 }
 
 @layer components {
@@ -39,36 +42,37 @@
   .data-table { @apply w-full text-sm; }
   .data-table th {
     @apply text-left text-xs font-medium uppercase tracking-wider px-4 py-3;
-    color: #94a3b8;
+    color: var(--ink-muted);
     border-bottom: 1px solid var(--surface-border);
   }
   .data-table td {
     @apply px-4 py-3;
-    color: #cbd5e1;
-    border-bottom: 1px solid rgba(51,65,85,0.5);
+    color: var(--ink);
+    border-bottom: 1px solid var(--surface-border);
   }
   .data-table tr:last-child td { border-bottom: none; }
-  .data-table tr:hover td { background-color: rgba(51,65,85,0.3); }
+  .data-table tr:hover td { background-color: var(--surface-hover); }
 
   /* ── Card ── */
   .card {
     @apply rounded-xl p-5;
     background-color: var(--surface-card);
     border: 1px solid var(--surface-border);
+    box-shadow: 0 1px 2px rgba(17,27,33,0.04);
   }
 
   /* ── Input ── */
   .input {
     @apply w-full px-3 py-2 rounded-lg text-sm transition-colors;
-    background-color: var(--surface);
+    background-color: var(--surface-card);
     border: 1px solid var(--surface-border);
-    color: #f1f5f9;
+    color: var(--ink);
     outline: none;
   }
-  .input::placeholder { color: #64748b; }
+  .input::placeholder { color: var(--ink-faint); }
   .input:focus {
-    border-color: var(--brand);
-    box-shadow: 0 0 0 2px rgba(42,140,140,0.25);
+    border-color: var(--brand-dark);
+    box-shadow: 0 0 0 2px rgba(18,140,126,0.15);
   }
 
   /* ── Buttons ── */
@@ -82,30 +86,31 @@
     @apply btn text-white;
     background-color: var(--brand);
   }
-  .btn-primary:hover:not(:disabled) { background-color: var(--brand-light); }
+  .btn-primary:hover:not(:disabled) { background-color: var(--brand-dark); }
 
   .btn-secondary {
     @apply btn;
     background-color: var(--surface-hover);
-    color: #e2e8f0;
+    color: var(--ink);
+    border: 1px solid var(--surface-border);
   }
   .btn-secondary:hover:not(:disabled) { background-color: var(--surface-border); }
 
   .btn-danger {
     @apply btn;
-    background-color: rgba(239,68,68,0.1);
-    color: #f87171;
-    border: 1px solid rgba(239,68,68,0.2);
+    background-color: rgba(234,67,53,0.08);
+    color: #EA4335;
+    border: 1px solid rgba(234,67,53,0.2);
   }
-  .btn-danger:hover:not(:disabled) { background-color: rgba(239,68,68,0.2); }
+  .btn-danger:hover:not(:disabled) { background-color: rgba(234,67,53,0.16); }
 
   .btn-ghost {
     @apply btn;
     background-color: transparent;
-    color: #94a3b8;
+    color: var(--ink-muted);
   }
   .btn-ghost:hover:not(:disabled) {
     background-color: var(--surface-hover);
-    color: #e2e8f0;
+    color: var(--ink);
   }
 }

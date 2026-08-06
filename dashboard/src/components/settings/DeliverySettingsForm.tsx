@@ -116,7 +116,7 @@ export default function DeliverySettingsForm({ initial }: { initial: Partial<Del
       </div>
 
       {allowDelivery && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 14, borderLeft: "2px solid #334155" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingLeft: 14, borderLeft: "2px solid #E9EDEF" }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label style={labelStyle}>Delivery fee (₹)</label>
@@ -151,7 +151,7 @@ export default function DeliverySettingsForm({ initial }: { initial: Partial<Del
       <ToggleRow label="Charge tax" on={taxEnabled} onToggle={() => setTaxEnabled((v) => !v)} />
 
       {taxEnabled && (
-        <div style={{ paddingLeft: 14, borderLeft: "2px solid #334155" }}>
+        <div style={{ paddingLeft: 14, borderLeft: "2px solid #E9EDEF" }}>
           <label style={labelStyle}>Tax percentage (%)</label>
           <input style={inputStyle} type="number" min={0} max={100} step={0.01} value={taxPercentage} onChange={(e) => setTaxPercentage(e.target.value)} />
         </div>

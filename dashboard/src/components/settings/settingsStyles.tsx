@@ -2,9 +2,9 @@ export const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 14px",
   borderRadius: 8,
-  border: "1px solid #334155",
-  background: "#0f172a",
-  color: "#f1f5f9",
+  border: "1px solid #E9EDEF",
+  background: "#FFFFFF",
+  color: "#111B21",
   fontSize: 13,
   outline: "none",
   fontFamily: "inherit",
@@ -14,7 +14,7 @@ export const inputStyle: React.CSSProperties = {
 export const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
-  color: "#94a3b8",
+  color: "#667781",
   marginBottom: 6,
   fontWeight: 600,
 };
@@ -27,7 +27,7 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
   padding: "9px 16px",
   borderRadius: 8,
   border: "none",
-  background: "#3b82f6",
+  background: "#25D366",
   color: "#fff",
   fontSize: 13,
   fontWeight: 600,
@@ -39,27 +39,27 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
 
 export const noticeStyle: React.CSSProperties = {
   fontSize: 11.5,
-  color: "#64748b",
-  background: "#0f172a",
-  border: "1px solid #334155",
+  color: "#667781",
+  background: "#F0F2F5",
+  border: "1px solid #E9EDEF",
   borderRadius: 8,
   padding: "8px 12px",
   lineHeight: 1.5,
 };
 
 export const errorStyle: React.CSSProperties = {
-  color: "#f87171",
-  background: "rgba(239,68,68,0.1)",
-  border: "1px solid rgba(239,68,68,0.2)",
+  color: "#C0392B",
+  background: "#FDECEA",
+  border: "1px solid #F5C6C2",
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 13,
 };
 
 export const successStyle: React.CSSProperties = {
-  color: "#4ade80",
-  background: "rgba(34,197,94,0.1)",
-  border: "1px solid rgba(34,197,94,0.2)",
+  color: "#128C7E",
+  background: "#DCF8C6",
+  border: "1px solid #B9EFA4",
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 13,
@@ -73,7 +73,7 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
         width: 40,
         height: 22,
         borderRadius: 11,
-        background: on ? "#22c55e" : "#334155",
+        background: on ? "#25D366" : "#E9EDEF",
         position: "relative",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -91,6 +91,7 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
           top: 3,
           left: on ? 21 : 3,
           transition: "left 0.15s",
+          boxShadow: "0 1px 2px rgba(17,27,33,0.2)",
         }}
       />
     </div>
@@ -110,7 +111,7 @@ export function ToggleRow({
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ fontSize: 13, color: "#e2e8f0" }}>{label}</span>
+      <span style={{ fontSize: 13, color: "#111B21" }}>{label}</span>
       <Toggle on={on} onToggle={onToggle} disabled={disabled} />
     </div>
   );

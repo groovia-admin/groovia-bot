@@ -110,8 +110,8 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
             )}
           </div>
           <div className="min-w-0">
-            <p className="font-display font-semibold text-white text-sm truncate">{shopName}</p>
-            <p className="text-xs text-slate-500 capitalize">{roleLabel}</p>
+            <p className="font-display font-semibold text-ink text-sm truncate">{shopName}</p>
+            <p className="text-xs text-ink-muted capitalize">{roleLabel}</p>
           </div>
         </div>
       </div>
@@ -128,8 +128,8 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
               className={clsx(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group',
                 active
-                  ? 'bg-brand/15 text-brand'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-surface-hover'
+                  ? 'bg-brand/15 text-brand-dark font-semibold'
+                  : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
               )}
             >
               <Icon
@@ -150,19 +150,19 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
       {/* User footer */}
       <div className="p-3 border-t border-surface-border">
         <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-surface-hover flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-medium text-slate-300">
+          <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-semibold text-brand-dark">
               {displayName.charAt(0).toUpperCase()}
             </span>
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-slate-200 truncate">{displayName}</p>
-            <p className="text-xs text-slate-500 truncate">{userPhone}</p>
+            <p className="text-sm font-medium text-ink truncate">{displayName}</p>
+            <p className="text-xs text-ink-muted truncate">{userPhone}</p>
           </div>
           <button
             onClick={handleSignOut}
             title="Sign out"
-            className="p-1.5 rounded-lg hover:bg-surface-hover text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0"
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
           >
             <LogOut className="w-3.5 h-3.5" />
           </button>
