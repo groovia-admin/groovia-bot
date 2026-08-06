@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { normalizeIndianPhone } from '@/lib/phone'
 import { logAuthEvent } from '@/lib/auth/log-auth-event'
-import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield, ShoppingCart } from 'lucide-react'
 
 type Method = 'password' | 'phone'
 type PhoneStep = 'input' | 'otp'
@@ -115,12 +115,40 @@ export default function LoginPage() {
   }
 
   const s = {
-    page:  { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: '#0f172a' },
-    card:  { background: '#1e293b', border: '1px solid #334155', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px' },
-    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #334155', background: '#0f172a', color: '#f1f5f9', fontSize: '14px', outline: 'none', fontFamily: 'inherit' } as React.CSSProperties,
-    btn:   { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '8px', border: 'none', background: '#3b82f6', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' } as React.CSSProperties,
-    label: { display: 'block', fontSize: '12px', color: '#94a3b8', marginBottom: '6px', fontWeight: 600 } as React.CSSProperties,
-    error: { background: '#ef444420', border: '1px solid #ef444430', color: '#f87171', padding: '10px 14px', borderRadius: '8px', fontSize: '12px' },
+    page:  { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: '#F0F2F5' },
+    card:  { background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px', boxShadow: '0 2px 12px rgba(17,27,33,0.06)' },
+    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E9EDEF', background: '#F7F8FA', color: '#111B21', fontSize: '14px', outline: 'none', fontFamily: 'inherit' } as React.CSSProperties,
+    btn:   { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative', overflow: 'hidden' } as React.CSSProperties,
+    label: { display: 'block', fontSize: '12px', color: '#667781', marginBottom: '6px', fontWeight: 600 } as React.CSSProperties,
+    error: { background: '#FDECEA', border: '1px solid #F5C6C2', color: '#C0392B', padding: '10px 14px', borderRadius: '8px', fontSize: '12px' },
+  }
+
+  // Cart-runs-through-the-button loading state — icon-only (no text) micro
+  // interaction requested in place of a plain "Signing in..." label, using
+  // the button's own width via % positioning so it scales to any button.
+  function SubmitButtonContent({ loading, label }: { loading: boolean; label: string }) {
+    if (loading) {
+      return (
+        <span
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '-15%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            animation: 'cartRun 1.1s ease-in-out infinite',
+          }}
+        >
+          <ShoppingCart size={18} />
+        </span>
+      )
+    }
+    return (
+      <>
+        {label}
+        <ArrowRight size={16} />
+      </>
+    )
   }
 
   return (
@@ -134,6 +162,12 @@ export default function LoginPage() {
           from { opacity: 0; transform: scale(0.75); }
           to { opacity: 1; transform: scale(1); }
         }
+        @keyframes cartRun {
+          0%   { left: -15%; opacity: 0; }
+          12%  { opacity: 1; }
+          88%  { opacity: 1; }
+          100% { left: 110%; opacity: 0; }
+        }
         .login-card-wrap { animation: loginCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
         .login-logo-badge { animation: loginLogoIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
       `}</style>
@@ -141,17 +175,17 @@ export default function LoginPage() {
 
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div className="login-logo-badge" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '14px', background: '#3b82f6', marginBottom: '10px' }}>
+          <div className="login-logo-badge" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '14px', background: '#25D366', marginBottom: '10px' }}>
             <span style={{ color: '#fff', fontWeight: 800, fontSize: '22px' }}>G</span>
           </div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#f1f5f9' }}>GrooVia</div>
-          <div style={{ fontSize: '13px', color: '#94a3b8', marginTop: '2px' }}>Admin Dashboard</div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: '#111B21' }}>GrooVia</div>
+          <div style={{ fontSize: '13px', color: '#667781', marginTop: '2px' }}>Admin Dashboard</div>
         </div>
 
         <div style={s.card}>
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#f1f5f9', marginBottom: '4px' }}>Sign in</div>
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: '#111B21', marginBottom: '4px' }}>Sign in</div>
+            <div style={{ fontSize: '12px', color: '#667781' }}>
               {method === 'password'
                 ? 'Platform admin? Enter your email and password'
                 : "Shop owner, manager or staff — we'll text you a one-time code"}
@@ -159,16 +193,17 @@ export default function LoginPage() {
           </div>
 
           {/* Method toggle */}
-          <div style={{ display: 'flex', borderRadius: '8px', padding: '4px', background: '#0f172a', marginBottom: '20px', gap: '4px' }}>
+          <div style={{ display: 'flex', borderRadius: '8px', padding: '4px', background: '#F0F2F5', marginBottom: '20px', gap: '4px' }}>
             <button
               type="button"
               onClick={() => switchMethod('password')}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 padding: '8px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit', border: method === 'password' ? '1px solid #334155' : '1px solid transparent',
-                background: method === 'password' ? '#1e293b' : 'transparent',
-                color: method === 'password' ? '#f1f5f9' : '#64748b',
+                fontFamily: 'inherit', border: method === 'password' ? '1px solid #E9EDEF' : '1px solid transparent',
+                background: method === 'password' ? '#FFFFFF' : 'transparent',
+                color: method === 'password' ? '#128C7E' : '#8696A0',
+                boxShadow: method === 'password' ? '0 1px 3px rgba(17,27,33,0.08)' : 'none',
               }}
             >
               <Mail size={13} /> Email
@@ -179,9 +214,10 @@ export default function LoginPage() {
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 padding: '8px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit', border: method === 'phone' ? '1px solid #334155' : '1px solid transparent',
-                background: method === 'phone' ? '#1e293b' : 'transparent',
-                color: method === 'phone' ? '#f1f5f9' : '#64748b',
+                fontFamily: 'inherit', border: method === 'phone' ? '1px solid #E9EDEF' : '1px solid transparent',
+                background: method === 'phone' ? '#FFFFFF' : 'transparent',
+                color: method === 'phone' ? '#128C7E' : '#8696A0',
+                boxShadow: method === 'phone' ? '0 1px 3px rgba(17,27,33,0.08)' : 'none',
               }}
             >
               <Phone size={13} /> Phone
@@ -193,7 +229,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Email address</label>
                 <div style={{ position: 'relative' }}>
-                  <Mail size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                  <Mail size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8696A0' }} />
                   <input
                     type="email"
                     value={email}
@@ -209,7 +245,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Password</label>
                 <div style={{ position: 'relative' }}>
-                  <Lock size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+                  <Lock size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8696A0' }} />
                   <input
                     type={showPw ? 'text' : 'password'}
                     value={password}
@@ -221,7 +257,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPw(!showPw)}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 0 }}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#8696A0', cursor: 'pointer', padding: 0 }}
                   >
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -235,8 +271,7 @@ export default function LoginPage() {
                 disabled={loading || !email || !password}
                 style={{ ...s.btn, opacity: loading || !email || !password ? 0.5 : 1 }}
               >
-                {loading ? 'Signing in...' : 'Sign in'}
-                {!loading && <ArrowRight size={16} />}
+                <SubmitButtonContent loading={loading} label="Sign in" />
               </button>
             </form>
           ) : phoneStep === 'input' ? (
@@ -244,7 +279,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Phone number</label>
                 <div style={{ display: 'flex' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderRadius: '8px 0 0 8px', border: '1px solid #334155', borderRight: 'none', background: '#0f172a', color: '#64748b', fontSize: '14px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderRadius: '8px 0 0 8px', border: '1px solid #E9EDEF', borderRight: 'none', background: '#F0F2F5', color: '#667781', fontSize: '14px' }}>
                     +91
                   </span>
                   <input
@@ -267,14 +302,13 @@ export default function LoginPage() {
                 disabled={loading || phone.length < 10}
                 style={{ ...s.btn, opacity: loading || phone.length < 10 ? 0.5 : 1 }}
               >
-                {loading ? 'Sending...' : 'Send OTP'}
-                {!loading && <ArrowRight size={16} />}
+                <SubmitButtonContent loading={loading} label="Send OTP" />
               </button>
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#94a3b8' }}>
-                <Shield size={14} color="#22c55e" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667781' }}>
+                <Shield size={14} color="#25D366" />
                 Code sent to +91 {phone}
               </div>
 
@@ -299,13 +333,13 @@ export default function LoginPage() {
                 disabled={loading || otp.length < 6}
                 style={{ ...s.btn, opacity: loading || otp.length < 6 ? 0.5 : 1 }}
               >
-                {loading ? 'Verifying...' : 'Verify & sign in'}
+                <SubmitButtonContent loading={loading} label="Verify & sign in" />
               </button>
 
               <button
                 type="button"
                 onClick={() => { setPhoneStep('input'); setOtp(''); setError('') }}
-                style={{ background: 'none', border: 'none', color: '#64748b', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ background: 'none', border: 'none', color: '#667781', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 ← Change number
               </button>
@@ -313,9 +347,9 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: '11px', color: '#475569', marginTop: '20px' }}>
+        <p style={{ textAlign: 'center', fontSize: '11px', color: '#8696A0', marginTop: '20px' }}>
           Access by invitation only ·{' '}
-          <a href="mailto:admin@groovia.co.in" style={{ color: '#3b82f6' }}>admin@groovia.co.in</a>
+          <a href="mailto:admin@groovia.co.in" style={{ color: '#128C7E' }}>admin@groovia.co.in</a>
         </p>
       </div>
     </div>

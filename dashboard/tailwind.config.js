@@ -8,16 +8,23 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // WhatsApp-derived light theme: chat-list gray-white background,
+        // white cards, WhatsApp's own border/text grays.
         surface: {
-          DEFAULT: '#0f172a',
-          card:    '#1e293b',
-          hover:   '#334155',
-          border:  '#334155',
+          DEFAULT: '#F0F2F5',
+          card:    '#FFFFFF',
+          hover:   '#F5F6F6',
+          border:  '#E9EDEF',
         },
         brand: {
-          DEFAULT: '#2A8C8C',
-          light:   '#3aadad',
-          dark:    '#1e6969',
+          DEFAULT: '#25D366',
+          light:   '#DCF8C6',
+          dark:    '#128C7E',
+        },
+        ink: {
+          DEFAULT: '#111B21',
+          muted:   '#667781',
+          faint:   '#8696A0',
         },
         status: {
           pending:   '#f59e0b',

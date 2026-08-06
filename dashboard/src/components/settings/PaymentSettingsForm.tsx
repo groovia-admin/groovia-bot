@@ -82,7 +82,7 @@ export default function PaymentSettingsForm({ initial }: { initial: Partial<Paym
         <label style={labelStyle}>Accepted payment methods</label>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 4 }}>
           {METHOD_OPTIONS.map((m) => (
-            <label key={m.value} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#e2e8f0", cursor: "pointer" }}>
+            <label key={m.value} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#111B21", cursor: "pointer" }}>
               <input type="checkbox" checked={methods.includes(m.value)} onChange={() => toggleMethod(m.value)} />
               {m.label}
             </label>

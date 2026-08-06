@@ -7,9 +7,9 @@ import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 
 export const dynamic = 'force-dynamic'
 
-const cardStyle: React.CSSProperties = { background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20 }
-const cardTitleStyle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: '#f1f5f9', margin: '0 0 4px' }
-const cardSubStyle: React.CSSProperties = { fontSize: 12, color: '#64748b', margin: '0 0 16px' }
+const cardStyle: React.CSSProperties = { background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, boxShadow: '0 1px 2px rgba(17,27,33,0.04)' }
+const cardTitleStyle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: '#111B21', margin: '0 0 4px' }
+const cardSubStyle: React.CSSProperties = { fontSize: 12, color: '#667781', margin: '0 0 16px' }
 
 export default async function SettingsPage() {
   // Manager can reach this page (bot/store settings), but the payout &
