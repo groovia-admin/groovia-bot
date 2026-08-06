@@ -9,12 +9,6 @@
 // confirmed directly against the templates as approved (see `mode` below
 // for why that matters beyond just the name).
 
-// Placeholder copy — adjust once the actual approved template wording (and
-// any shop-specific pickup instructions) is finalized.
-function nextStep() {
-  return 'Please collect it at your earliest convenience.';
-}
-
 function fmtMoney(amount, currencyCode) {
   const value = Number(amount ?? 0).toFixed(2);
   return currencyCode === 'INR' ? `₹${value}` : `${currencyCode ?? ''} ${value}`.trim();
@@ -37,11 +31,25 @@ const ORDER_TEMPLATES = {
   // means notifyCustomer logs a warning and no-ops for 'accepted' rather
   // than sending something malformed. Recreate as a plain Utility text
   // template (like the other four) to restore this notification.
+  //
+  // order_ready's approved body has only 3 variables total — customer
+  // name, order number, pickup location — with no room for a separate
+  // "next step" value (confirmed against the actual approved text:
+  // "...ready for pickup at {{3}}. Please shocase your order number for
+  // smooth pickup. See you soon!" — that instruction is static body
+  // text, not a variable). Sending the previous 4th value (nextStep())
+  // caused every real send to fail with (#132000) "number of params
+  // does not match". tail() returning [] yields exactly the 3 base
+  // values [customerName, orderNumber, shopName] the template expects,
+  // using shopName for the pickup-location slot — the same value every
+  // other template already uses for "which shop", and the only
+  // shop-identifying string already available here (no shops.address
+  // column exists in this schema).
   ready: {
     name: 'order_ready',
     language: 'en_US',
     mode: 'positional',
-    tail: () => [nextStep()],
+    tail: () => [],
   },
   completed: {
     name: 'order_completed',
