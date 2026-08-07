@@ -915,6 +915,35 @@ async function handleWebhookPayload(payload) {
   }
 }
 
+// One-time onboarding message for a staff member's first-ever contact
+// with the bot — plain text, not a template, since them messaging first
+// is exactly what opens the 24h customer-service window; there's no
+// need for (or way to justify) a business-initiated template here.
+// whatsapp_welcomed_at gates this to once per shop_user, checked by the
+// caller before any command parsing runs.
+function buildStaffWelcomeMessage() {
+  const dashboardLine = config.dashboardUrl || '(ask your admin for the dashboard link)';
+
+  return (
+    `Welcome to Groovia! 🛒\n\n` +
+    `New orders will appear here with one-tap buttons\n` +
+    `to Accept, Reject, or Edit.\n\n` +
+    `For full order management:\n${dashboardLine}\n\n` +
+    `Tip: Pin this chat so you never miss an order.`
+  );
+}
+
+async function sendStaffWelcomeMessage(from, shopId, staffUserId) {
+  const text = buildStaffWelcomeMessage();
+  await sendWhatsAppMessage(from, text);
+  logMessage(shopId, from, 'outbound', 'system', 'text', text);
+
+  const supabase = getSupabase();
+  if (supabase) {
+    await supabase.from('shop_users').update({ whatsapp_welcomed_at: new Date().toISOString() }).eq('id', staffUserId);
+  }
+}
+
 // Staff command handling — unchanged behavior, just receives shopId
 // from the global staff match now instead of deriving it from
 // phone_number_id (see handleIncomingMessage for why).
@@ -924,6 +953,16 @@ async function handleStaffMessage(message, value, staffMatch) {
   const shopId  = staffMatch.shopId;
   const contact = value.contacts?.[0];
   const name    = contact?.profile?.name || 'there';
+
+  // First-ever contact from this staff member — welcome them instead of
+  // processing whatever they happened to send as a command. Deliberately
+  // returns rather than also falling through to command parsing below:
+  // a clean first message, not "welcome" stacked on top of "I didn't
+  // understand that".
+  if (!staffMatch.whatsappWelcomedAt) {
+    await sendStaffWelcomeMessage(from, shopId, staffMatch.id);
+    return;
+  }
 
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
     await handleStaffButtonReply(from, shopId, staffMatch, message.interactive.button_reply.id);

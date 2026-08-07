@@ -6,18 +6,19 @@ const { notifyCustomer } = require('./customerNotifier');
 // Registered separately from templates.js's ORDER_TEMPLATES registry —
 // that one is keyed by orders.status for customer-facing notifications;
 // this is staff-facing, same category as orderCreator.js's own
-// NEW_ORDER_ALERT_TEMPLATE. NOT yet submitted/approved in Meta — the
-// exact body text and variable count below are a draft, same situation
-// every other template in this codebase started in before being
-// corrected against its actual approved text. Submit early: template
-// review takes real lead time, and nothing here works until it's live.
-//
-// Draft body: "⏰ *Reminder*: Order {{1}} has been waiting {{2}} for
-// your response. Please Accept or Reject soon." — 2 positional
-// variables (order number, a human "X minutes"/"X hours" duration),
-// plus the same Accept/Reject quick-reply buttons as new_order_alert
-// (Edit is deliberately left off a reminder — it's still reachable from
-// the original alert message already in the staff's chat).
+// NEW_ORDER_ALERT_TEMPLATE. Submitted to Meta as:
+//   Category: Utility, Name: order_reminder, Language: en_US
+//   Body: "⏰ Reminder: Order {{1}} has been waiting {{2}} for your
+//          response. Please Accept or Reject soon."
+//   {{1}} = order number (e.g. "ORD-4F2A9C1B"), {{2}} = human-readable
+//   wait time (e.g. "15 minutes")
+//   Buttons: 2 quick-reply — "✅ Accept" / "❌ Reject" (no Edit, unlike
+//   new_order_alert's 3 — still reachable from the original alert
+//   message already in the staff's chat, keeps this a quick nudge).
+// Not yet approved as of this commit — nothing here sends successfully
+// until it is (same situation new_order_alert was in before its own
+// approval). Correct this comment + the components below if the
+// actually-approved text ends up differing at all.
 const ORDER_REMINDER_TEMPLATE = { name: 'order_reminder', language: 'en_US' };
 
 // Remind at most this many times before giving up and leaving the order
