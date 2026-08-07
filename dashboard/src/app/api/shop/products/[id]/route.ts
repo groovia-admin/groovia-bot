@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
 
 type UpdateProductBody = {
   name?: unknown
@@ -63,6 +63,13 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
 
   if ('error' in authorization) {
     return authorization.error
+  }
+
+  if (!hasStaffPermission(authorization, 'manage_products')) {
+    return NextResponse.json(
+      { error: "You don't have permission to manage products. Ask the shop owner to grant it." },
+      { status: 403 }
+    )
   }
 
   const { adminClient, shopId } = authorization
@@ -178,6 +185,21 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
 
   changes.last_updated_source = 'dashboard'
 
+  // Stock-quantity edits here are manual corrections/restocks, not sales —
+  // capture the before value so the movement log can show what actually
+  // changed, distinct from the automatic 'sale' movements order acceptance
+  // writes.
+  let previousStockQuantity: number | null = null
+  if (Object.prototype.hasOwnProperty.call(changes, 'stock_quantity')) {
+    const { data: existing } = await adminClient
+      .from('products')
+      .select('stock_quantity')
+      .eq('id', id)
+      .eq('shop_id', shopId)
+      .maybeSingle()
+    previousStockQuantity = existing?.stock_quantity ?? null
+  }
+
   const { data: product, error } = await adminClient
     .from('products')
     .update(changes)
@@ -193,6 +215,21 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
 
   if (!product) {
     return NextResponse.json({ error: 'Product not found' }, { status: 404 })
+  }
+
+  if (previousStockQuantity !== null && typeof changes.stock_quantity === 'number') {
+    const delta = changes.stock_quantity - previousStockQuantity
+    if (delta !== 0) {
+      await adminClient.from('inventory_movements').insert({
+        shop_id: shopId,
+        product_id: id,
+        quantity_delta: delta,
+        movement_type: 'manual_adjustment',
+        reference_id: null,
+        notes: `Stock edited via dashboard: ${previousStockQuantity} → ${changes.stock_quantity}`,
+        created_by: authorization.userId,
+      })
+    }
   }
 
   return NextResponse.json(

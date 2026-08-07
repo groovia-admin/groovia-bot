@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
 
 type CreateProductBody = {
   name?: unknown
@@ -51,6 +51,13 @@ export async function POST(request: Request) {
 
   if ('error' in authorization) {
     return authorization.error
+  }
+
+  if (!hasStaffPermission(authorization, 'manage_products')) {
+    return NextResponse.json(
+      { error: "You don't have permission to manage products. Ask the shop owner to grant it." },
+      { status: 403 }
+    )
   }
 
   const { adminClient, shopId } = authorization

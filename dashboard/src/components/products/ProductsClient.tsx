@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
-import StatusLegend from "@/components/ui/StatusLegend";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 type Category = {
   id: string;
@@ -38,9 +38,11 @@ function categoryName(product: Product): string {
 export default function ProductsClient({
   initialCategories,
   initialProducts,
+  canManage,
 }: {
   initialCategories: Category[];
   initialProducts: Product[];
+  canManage: boolean;
 }) {
   const toast = useToast();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
@@ -241,20 +243,21 @@ export default function ProductsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Products</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Products</h1>
+            <InfoTooltip
+              items={[
+                { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
+                { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
+                { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
+              ]}
+            />
+          </div>
           <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
             Manage your catalog and inventory.
           </p>
         </div>
       </div>
-
-      <StatusLegend
-        items={[
-          { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
-          { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
-          { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
-        ]}
-      />
 
       {error && (
         <div
@@ -275,10 +278,12 @@ export default function ProductsClient({
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
           <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111B21", margin: 0 }}>Categories</h2>
-          <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAddCategory((v) => !v)}>
-            <Plus size={14} />
-            Add category
-          </button>
+          {canManage && (
+            <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAddCategory((v) => !v)}>
+              <Plus size={14} />
+              Add category
+            </button>
+          )}
         </div>
 
         {showAddCategory && (
@@ -313,33 +318,41 @@ export default function ProductsClient({
                   border: `1px solid ${category.is_active ? "#128C7E" : "#667781"}33`,
                 }}
               >
-                <button
-                  type="button"
-                  onClick={() => toggleCategoryActive(category)}
-                  style={{ ...S.badge(category.is_active ? "#128C7E" : "#667781", "transparent"), border: "none" }}
-                  title={category.is_active ? "Click to deactivate" : "Click to activate"}
-                >
-                  {category.name}
-                </button>
-                <button
-                  type="button"
-                  disabled={deletingCategoryId === category.id}
-                  onClick={() => handleDeleteCategory(category)}
-                  title="Delete category"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "2px 8px 2px 2px",
-                    background: "transparent",
-                    border: "none",
-                    color: "#C0392B",
-                    cursor: "pointer",
-                    opacity: deletingCategoryId === category.id ? 0.5 : 1,
-                  }}
-                >
-                  <Trash2 size={12} />
-                </button>
+                {canManage ? (
+                  <button
+                    type="button"
+                    onClick={() => toggleCategoryActive(category)}
+                    style={{ ...S.badge(category.is_active ? "#128C7E" : "#667781", "transparent"), border: "none" }}
+                    title={category.is_active ? "Click to deactivate" : "Click to activate"}
+                  >
+                    {category.name}
+                  </button>
+                ) : (
+                  <span style={{ ...S.badge(category.is_active ? "#128C7E" : "#667781", "transparent"), border: "none" }}>
+                    {category.name}
+                  </span>
+                )}
+                {canManage && (
+                  <button
+                    type="button"
+                    disabled={deletingCategoryId === category.id}
+                    onClick={() => handleDeleteCategory(category)}
+                    title="Delete category"
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "2px 8px 2px 2px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#C0392B",
+                      cursor: "pointer",
+                      opacity: deletingCategoryId === category.id ? 0.5 : 1,
+                    }}
+                  >
+                    <Trash2 size={12} />
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -349,19 +362,21 @@ export default function ProductsClient({
       {/* Products */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111B21", margin: 0 }}>All products</h2>
-        <button
-          type="button"
-          style={{ ...S.btn("#25D366", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
-          disabled={activeCategories.length === 0}
-          onClick={() => setShowAddProduct((v) => !v)}
-          title={activeCategories.length === 0 ? "Add a category first" : undefined}
-        >
-          <Plus size={15} />
-          Add product
-        </button>
+        {canManage && (
+          <button
+            type="button"
+            style={{ ...S.btn("#25D366", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
+            disabled={activeCategories.length === 0}
+            onClick={() => setShowAddProduct((v) => !v)}
+            title={activeCategories.length === 0 ? "Add a category first" : undefined}
+          >
+            <Plus size={15} />
+            Add product
+          </button>
+        )}
       </div>
 
-      {showAddProduct && (
+      {canManage && showAddProduct && (
         <form onSubmit={handleAddProduct} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 14 }}>
           <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14 }}>
             <div>
@@ -507,11 +522,12 @@ export default function ProductsClient({
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                           <Link
                             href={`/dashboard/products/${product.id}`}
-                            title="Edit product"
+                            title={canManage ? "Edit product" : "View product"}
                             style={{ ...S.btn("#F5F6F6", "#111B21"), padding: "6px 10px", textDecoration: "none" }}
                           >
                             <Pencil size={13} />
                           </Link>
+                          {canManage && (
                           <button
                             type="button"
                             disabled={busy}
@@ -528,6 +544,7 @@ export default function ProductsClient({
                           >
                             {product.is_available ? <EyeOff size={13} /> : <Eye size={13} />}
                           </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { format } from "date-fns";
-import { Search, ShoppingBag } from "lucide-react";
+import { Search, ShoppingBag, Check, X } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
-import StatusLegend from "@/components/ui/StatusLegend";
+import InfoTooltip from "@/components/ui/InfoTooltip";
+import { useToast } from "@/components/ui/ToastProvider";
 
 type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
 
@@ -44,19 +45,30 @@ const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export default function OrdersClient({ initialOrders, showRevenue }: { initialOrders: OrderRow[]; showRevenue: boolean }) {
+export default function OrdersClient({
+  initialOrders,
+  showRevenue,
+  canManage,
+}: {
+  initialOrders: OrderRow[];
+  showRevenue: boolean;
+  canManage: boolean;
+}) {
+  const toast = useToast();
+  const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   const counts = useMemo(() => {
     const map: Partial<Record<OrderStatus, number>> = {};
-    for (const o of initialOrders) map[o.status] = (map[o.status] ?? 0) + 1;
+    for (const o of orders) map[o.status] = (map[o.status] ?? 0) + 1;
     return map;
-  }, [initialOrders]);
+  }, [orders]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return initialOrders.filter((o) => {
+    return orders.filter((o) => {
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
       if (!q) return true;
       return (
@@ -65,25 +77,50 @@ export default function OrdersClient({ initialOrders, showRevenue }: { initialOr
         (o.customer_phone ?? "").toLowerCase().includes(q)
       );
     });
-  }, [initialOrders, search, statusFilter]);
+  }, [orders, search, statusFilter]);
+
+  async function quickAccept(id: string) {
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/shop/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "accepted" }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast(data.error || "Failed to accept order", "error");
+        return;
+      }
+
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "accepted" } : o)));
+      toast("Order accepted");
+    } catch {
+      toast("Failed to accept order. Please try again.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
+          <InfoTooltip
+            items={[
+              { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
+              { color: "#1D4ED8", label: "Accepted", hint: "shop confirmed, not yet started" },
+              { color: "#6D28D9", label: "Preparing", hint: "being packed" },
+              { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
+              { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
+              { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
+            ]}
+          />
+        </div>
         <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
       </div>
-
-      <StatusLegend
-        items={[
-          { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
-          { color: "#1D4ED8", label: "Accepted", hint: "shop confirmed, not yet started" },
-          { color: "#6D28D9", label: "Preparing", hint: "being packed" },
-          { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
-          { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
-          { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
-        ]}
-      />
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ position: "relative", maxWidth: 340 }}>
@@ -134,21 +171,23 @@ export default function OrdersClient({ initialOrders, showRevenue }: { initialOr
                 <th style={S.th}>Status</th>
                 <th style={S.th}>Placed</th>
                 {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Total</th>}
+                <th style={{ ...S.th, textAlign: "right" }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={showRevenue ? 5 : 4}>
+                  <td style={S.td} colSpan={showRevenue ? 6 : 5}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
                       <ShoppingBag size={14} />
-                      {initialOrders.length === 0 ? "No orders yet." : "No orders match your search."}
+                      {orders.length === 0 ? "No orders yet." : "No orders match your search."}
                     </div>
                   </td>
                 </tr>
               ) : (
                 filtered.map((o) => {
                   const [color, background] = STATUS_STYLE[o.status];
+                  const busy = busyId === o.id;
                   return (
                     <tr key={o.id}>
                       <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
@@ -170,6 +209,32 @@ export default function OrdersClient({ initialOrders, showRevenue }: { initialOr
                           ₹{Number(o.total_amount).toFixed(2)}
                         </td>
                       )}
+                      <td style={{ ...S.td, textAlign: "right" }}>
+                        {o.status === "pending" && canManage ? (
+                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              title="Accept order"
+                              onClick={() => quickAccept(o.id)}
+                              style={{ ...S.btn("#25D366", "#fff"), padding: "6px 10px", opacity: busy ? 0.5 : 1 }}
+                            >
+                              <Check size={13} />
+                            </button>
+                            <Link
+                              href={`/dashboard/orders/${o.id}`}
+                              title="Reject order"
+                              style={{ ...S.btn("rgba(239,68,68,0.12)", "#C0392B"), padding: "6px 10px", textDecoration: "none" }}
+                            >
+                              <X size={13} />
+                            </Link>
+                          </div>
+                        ) : (
+                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#667781", fontSize: 12, textDecoration: "none" }}>
+                            View
+                          </Link>
+                        )}
+                      </td>
                     </tr>
                   );
                 })

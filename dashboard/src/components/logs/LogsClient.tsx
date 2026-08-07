@@ -27,6 +27,8 @@ const ACTION_LABEL: Record<string, string> = {
   "staff.activated": "Staff member reactivated",
   "staff.deactivated": "Staff member deactivated",
   "staff.updated": "Staff member updated",
+  "staff.permissions_updated": "Staff permissions updated",
+  "order.status_changed": "Order status changed",
   "shop.created": "Shop created",
   "shop.activated": "Shop activated",
   "shop.deactivated": "Shop deactivated",

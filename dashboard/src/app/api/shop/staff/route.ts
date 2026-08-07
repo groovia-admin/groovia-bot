@@ -154,7 +154,7 @@ export async function POST(request: Request) {
       phone_number: phoneNumber,
       is_active: true,
     })
-    .select('id, full_name, phone_number, role, is_active, created_at')
+    .select('id, full_name, phone_number, role, is_active, permissions, created_at')
     .single()
 
   if (insertError) {
