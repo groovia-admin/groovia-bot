@@ -168,15 +168,62 @@ export default function LoginPage() {
           88%  { opacity: 1; }
           100% { left: 110%; opacity: 0; }
         }
+        @keyframes cartOrbit {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes cartOrbitCounter {
+          from { transform: translateX(-50%) rotate(0deg); }
+          to   { transform: translateX(-50%) rotate(-360deg); }
+        }
         .login-card-wrap { animation: loginCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
-        .login-logo-badge { animation: loginLogoIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .login-logo-wrap { animation: loginLogoIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .login-cart-orbit { position: absolute; inset: 0; animation: cartOrbit 5s linear infinite; }
+        .login-cart-orbit-icon { animation: cartOrbitCounter 5s linear infinite; }
       `}</style>
       <div className="login-card-wrap" style={{ width: '100%', maxWidth: '380px' }}>
 
-        {/* Logo */}
+        {/* Logo — a circular WhatsApp-green "G" mark with a small cart icon
+            orbiting the ring, echoing the cart-through-button micro
+            interaction used on the submit buttons below. */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
-          <div className="login-logo-badge" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '48px', height: '48px', borderRadius: '14px', background: '#25D366', marginBottom: '10px' }}>
-            <span style={{ color: '#fff', fontWeight: 800, fontSize: '22px' }}>G</span>
+          <div className="login-logo-wrap" style={{ position: 'relative', width: '72px', height: '72px', margin: '0 auto 10px' }}>
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px dashed rgba(37,211,102,0.35)' }} />
+            <div
+              style={{
+                position: 'absolute',
+                inset: '9px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                background: '#25D366',
+                boxShadow: '0 2px 8px rgba(37,211,102,0.35)',
+              }}
+            >
+              <span style={{ color: '#fff', fontWeight: 800, fontSize: '22px' }}>G</span>
+            </div>
+            <div className="login-cart-orbit">
+              <div
+                className="login-cart-orbit-icon"
+                style={{
+                  position: 'absolute',
+                  top: '-3px',
+                  left: '50%',
+                  width: '22px',
+                  height: '22px',
+                  borderRadius: '50%',
+                  background: '#fff',
+                  border: '1px solid #E9EDEF',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 1px 4px rgba(17,27,33,0.15)',
+                }}
+              >
+                <ShoppingCart size={12} color="#128C7E" />
+              </div>
+            </div>
           </div>
           <div style={{ fontSize: '22px', fontWeight: 800, color: '#111B21' }}>GrooVia</div>
           <div style={{ fontSize: '13px', color: '#667781', marginTop: '2px' }}>Admin Dashboard</div>

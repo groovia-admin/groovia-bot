@@ -1,0 +1,146 @@
+import { NextResponse } from 'next/server'
+import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { logAuditEvent } from '@/lib/audit/log'
+import type { OrderStatus } from '@/types/database'
+
+type OrderRouteContext = {
+  params: Promise<{ id: string }>
+}
+
+type UpdateOrderBody = {
+  status?: unknown
+  reason?: unknown
+}
+
+// Which transitions are allowed from a given status, and which timestamp
+// column each target status stamps. Mirrors the lifecycle the WhatsApp
+// staff-command flow (ACCEPT/REJECT/etc.) already drives — the dashboard is
+// just a second front door onto the same state machine, not a new one.
+const ALLOWED_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+  pending: ['accepted', 'rejected'],
+  accepted: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+  completed: [],
+  rejected: [],
+  cancelled: [],
+}
+
+const TIMESTAMP_COLUMN: Partial<Record<OrderStatus, string>> = {
+  accepted: 'accepted_at',
+  preparing: 'preparing_at',
+  ready: 'ready_at',
+  completed: 'completed_at',
+  rejected: 'rejected_at',
+  cancelled: 'cancelled_at',
+}
+
+const REASON_REQUIRED: OrderStatus[] = ['rejected', 'cancelled']
+
+export async function PATCH(request: Request, { params }: OrderRouteContext) {
+  const authorization = await requireShopRole(['owner', 'manager', 'staff'])
+
+  if ('error' in authorization) {
+    return authorization.error
+  }
+
+  const { adminClient, shopId } = authorization
+  const { id } = await params
+
+  let body: UpdateOrderBody
+
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
+  }
+
+  const nextStatus = body.status
+  if (typeof nextStatus !== 'string' || !(nextStatus in ALLOWED_TRANSITIONS)) {
+    return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
+  }
+
+  const reason = typeof body.reason === 'string' ? body.reason.trim() : ''
+
+  if (REASON_REQUIRED.includes(nextStatus as OrderStatus) && !reason) {
+    return NextResponse.json(
+      { error: `A reason is required to mark an order as ${nextStatus}` },
+      { status: 400 }
+    )
+  }
+
+  const { data: order, error: orderError } = await adminClient
+    .from('orders')
+    .select('id, status, order_number')
+    .eq('id', id)
+    .eq('shop_id', shopId)
+    .maybeSingle()
+
+  if (orderError) {
+    console.error('Order lookup failed:', orderError)
+    return NextResponse.json({ error: 'Failed to load order' }, { status: 500 })
+  }
+
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  const allowedNext = ALLOWED_TRANSITIONS[order.status as OrderStatus] ?? []
+  if (!allowedNext.includes(nextStatus as OrderStatus)) {
+    return NextResponse.json(
+      { error: `Cannot move an order from ${order.status} to ${nextStatus}` },
+      { status: 409 }
+    )
+  }
+
+  const changes: Record<string, unknown> = { status: nextStatus }
+  const timestampColumn = TIMESTAMP_COLUMN[nextStatus as OrderStatus]
+  if (timestampColumn) changes[timestampColumn] = new Date().toISOString()
+  if (nextStatus === 'rejected') changes.rejection_reason = reason
+  if (nextStatus === 'cancelled') changes.cancellation_reason = reason
+
+  const { data: updatedOrder, error: updateError } = await adminClient
+    .from('orders')
+    .update(changes)
+    .eq('id', id)
+    .eq('shop_id', shopId)
+    .select('id, status, order_number')
+    .single()
+
+  if (updateError) {
+    console.error('Failed to update order status:', updateError)
+    return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
+  }
+
+  await logAuditEvent({
+    shopId,
+    actorUserId: authorization.userId,
+    actorType: authorization.role,
+    action: 'order.status_changed',
+    entityType: 'order',
+    entityId: order.id,
+    oldValues: { status: order.status },
+    newValues: { status: nextStatus, reason: reason || undefined },
+    metadata: { actor_name: authorization.actorName, target_name: `Order #${order.order_number}` },
+  })
+
+  // Best-effort: tell wa-bot to notify the customer over WhatsApp, matching
+  // what the ACCEPT/REJECT staff-command flow already does. Not configured
+  // in every environment yet, so a missing config/network failure here must
+  // never fail the status update itself — the dashboard's own state is the
+  // source of truth regardless of whether the WhatsApp ping went out.
+  const waBotUrl = process.env.WA_BOT_INTERNAL_URL
+  const internalSecret = process.env.INTERNAL_API_SECRET
+  if (waBotUrl && internalSecret) {
+    fetch(`${waBotUrl.replace(/\/$/, '')}/internal/orders/${order.id}/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
+      body: JSON.stringify({ status: nextStatus, shopId }),
+    }).catch((err) => console.error('Failed to notify wa-bot of order status change:', err))
+  }
+
+  return NextResponse.json(
+    { order: updatedOrder },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+  )
+}

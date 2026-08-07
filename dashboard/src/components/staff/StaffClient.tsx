@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
-import StatusLegend from "@/components/ui/StatusLegend";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 type StaffRole = "owner" | "manager" | "staff";
 
@@ -112,7 +112,15 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Staff</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Staff</h1>
+            <InfoTooltip
+              items={[
+                { color: "#128C7E", label: "Active", hint: "can sign in and use the dashboard" },
+                { color: "#667781", label: "Inactive", hint: "access revoked, click Reactivate to restore" },
+              ]}
+            />
+          </div>
           <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
             Manage who can access this shop and what they can do.
           </p>
@@ -122,13 +130,6 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
           Add staff
         </button>
       </div>
-
-      <StatusLegend
-        items={[
-          { color: "#128C7E", label: "Active", hint: "can sign in and use the dashboard" },
-          { color: "#667781", label: "Inactive", hint: "access revoked, click Reactivate to restore" },
-        ]}
-      />
 
       {error && (
         <div

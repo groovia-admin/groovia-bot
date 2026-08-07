@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
-import StatusLegend from "@/components/ui/StatusLegend";
+import InfoTooltip from "@/components/ui/InfoTooltip";
 
 type Category = {
   id: string;
@@ -241,20 +241,21 @@ export default function ProductsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Products</h1>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Products</h1>
+            <InfoTooltip
+              items={[
+                { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
+                { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
+                { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
+              ]}
+            />
+          </div>
           <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
             Manage your catalog and inventory.
           </p>
         </div>
       </div>
-
-      <StatusLegend
-        items={[
-          { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
-          { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
-          { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
-        ]}
-      />
 
       {error && (
         <div

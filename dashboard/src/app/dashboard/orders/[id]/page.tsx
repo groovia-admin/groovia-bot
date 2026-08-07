@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
+import OrderActions from '@/components/orders/OrderActions'
 
 export const dynamic = 'force-dynamic'
 
@@ -82,6 +83,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {order.rejection_reason || order.cancellation_reason}
         </div>
       )}
+
+      <OrderActions orderId={order.id} status={order.status} />
 
       {!isTerminalFail && (
         <div style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 0 }}>

@@ -74,6 +74,8 @@ export default function MasterCatalogClient() {
   // Add product/category modal
   const [showAddProduct, setShowAddProduct] = useState<string | null>(null) // category id
   const [showAddCategory, setShowAddCategory] = useState(false)
+  const [showApproveGlobal, setShowApproveGlobal] = useState<ProductRequest | null>(null)
+  const [approveCategoryId, setApproveCategoryId] = useState('')
   const [productForm, setProductForm]       = useState({ name: '', brand: '', unit: '', base_price: '' })
   const [categoryForm, setCategoryForm]     = useState({ name: '', slug: '' })
   const [saving, setSaving]                 = useState(false)
@@ -227,16 +229,14 @@ export default function MasterCatalogClient() {
   }
 
   // ── Approve/reject product request ─────────────────────────────────────────
-  async function handleRequest(req: ProductRequest, decision: 'approved_global' | 'approved_local' | 'rejected') {
+  async function handleRequest(req: ProductRequest, decision: 'approved_global' | 'approved_local' | 'rejected', categoryId?: string) {
     if (decision === 'approved_global') {
-      // Add to master products — ask which category
-      const catId = prompt('Enter master category ID to add this product to:')
-      if (!catId) return
+      if (!categoryId) { setShowApproveGlobal(req); return }
 
       const { data: newProduct, error: productError } = await supabase
         .from('master_products')
         .insert({
-          master_category_id: catId,
+          master_category_id: categoryId,
           name:           req.name,
           brand:          req.brand,
           unit:           req.unit,
@@ -252,6 +252,13 @@ export default function MasterCatalogClient() {
         master_product_id: newProduct.id,
         reviewed_at:       new Date().toISOString(),
       }).eq('id', req.id)
+
+      setCategories(prev => prev.map(c =>
+        c.id === categoryId
+          ? { ...c, master_products: [...(c.master_products ?? []), newProduct as MasterProduct] }
+          : c
+      ))
+      setShowApproveGlobal(null)
 
     } else if (decision === 'approved_local') {
       // Add directly to shop's products table
@@ -596,6 +603,40 @@ export default function MasterCatalogClient() {
                   <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
                     {saving ? 'Adding...' : 'Add Product'}
                   </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Approve Request → Master Catalog Modal ───────────────────────────── */}
+      {showApproveGlobal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowApproveGlobal(null); setApproveCategoryId('') }} />
+          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl"
+            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+            <div className="p-6">
+              <h2 className="font-display font-bold text-slate-900 text-lg mb-1">Add to Master Catalog</h2>
+              <p className="text-slate-500 text-sm mb-5">
+                Adding <span className="text-slate-900">{showApproveGlobal.name}</span> — pick which category it belongs to.
+              </p>
+              <form
+                onSubmit={e => { e.preventDefault(); if (approveCategoryId) handleRequest(showApproveGlobal, 'approved_global', approveCategoryId) }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Master category *</label>
+                  <select value={approveCategoryId} onChange={e => setApproveCategoryId(e.target.value)} required className="input">
+                    <option value="">Choose a category...</option>
+                    {categories.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowApproveGlobal(null); setApproveCategoryId('') }} className="btn-secondary flex-1 justify-center">Cancel</button>
+                  <button type="submit" disabled={!approveCategoryId} className="btn-primary flex-1 justify-center">Add Product</button>
                 </div>
               </form>
             </div>
