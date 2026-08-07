@@ -114,6 +114,8 @@ export interface Order {
   cancelled_at: string | null
   rejection_reason: string | null
   cancellation_reason: string | null
+  reminder_count: number
+  last_reminder_at: string | null
   created_at: string
   updated_at: string
 }
@@ -221,6 +223,8 @@ export interface ShopSettings {
   business_hours: Record<string, unknown>
   welcome_message: string | null
   away_message: string | null
+  reminder_enabled: boolean
+  auto_reject_after_minutes: number | null
   created_at: string
   updated_at: string
 }
