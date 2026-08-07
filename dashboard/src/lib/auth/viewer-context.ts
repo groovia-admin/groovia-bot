@@ -15,6 +15,7 @@ export type ViewerContext =
       fullName: string
       shopName: string | null
       shopLogoUrl: string | null
+      shopTimezone: string
       permissions: Partial<Record<StaffPermission, boolean>>
     }
 
@@ -52,7 +53,7 @@ export const getViewerContext = cache(async (): Promise<ViewerContext> => {
 
   const { data, error } = await adminClient
     .from('shop_users')
-    .select('shop_id, role, full_name, permissions, shops ( name, logo_url )')
+    .select('shop_id, role, full_name, permissions, shops ( name, logo_url, timezone )')
     .eq('auth_user_id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -71,6 +72,7 @@ export const getViewerContext = cache(async (): Promise<ViewerContext> => {
     fullName: data.full_name,
     shopName: shop?.name ?? null,
     shopLogoUrl: shop?.logo_url ?? null,
+    shopTimezone: shop?.timezone || 'Asia/Kolkata',
     permissions: (data.permissions as Partial<Record<StaffPermission, boolean>>) ?? {},
   }
 })

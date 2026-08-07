@@ -1,8 +1,8 @@
-import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
 import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
+import { startOfTodayUtc } from '@/lib/timezone'
 
 export const dynamic = 'force-dynamic'
 
@@ -96,10 +96,18 @@ export default async function DashboardPage() {
   }
 
   // ── Merchant Overview ──────────────────────────────────────
-  const supabase = await createClient()
+  // Admin client, not the session client: every other page in the dashboard
+  // reads through the service role, and there's no RLS policy specifically
+  // exercised/verified for this page's session-scoped reads — using the
+  // same client as everywhere else removes that as a source of doubt.
+  const adminClient = createAdminClient()
   const shopId = context.shopId
   const showRevenue = context.role !== 'staff'
-  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  // "Today" in the shop's own timezone, not UTC — a naive UTC-midnight
+  // boundary undercounts (or overcounts) by up to ~12 hours depending on
+  // the shop's offset; confirmed live for an Asia/Kolkata (UTC+5:30) shop
+  // where the UTC boundary was showing orders from the previous IST day.
+  const todayStart = startOfTodayUtc(context.shopTimezone)
 
   const [
     { count: todayOrders },
@@ -108,13 +116,13 @@ export default async function DashboardPage() {
     { data: recentOrders },
     { data: stockLevels },
   ] = await Promise.all([
-    supabase.from('orders').select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId).gte('created_at', today),
-    supabase.from('orders').select('*', { count: 'exact', head: true })
+    adminClient.from('orders').select('*', { count: 'exact', head: true })
+      .eq('shop_id', shopId).gte('created_at', todayStart),
+    adminClient.from('orders').select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId).eq('status', 'pending'),
-    supabase.from('customers').select('*', { count: 'exact', head: true })
+    adminClient.from('customers').select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId),
-    supabase.from('orders')
+    adminClient.from('orders')
       .select('id, order_number, status, total_amount, created_at, pickup_slot_label')
       .eq('shop_id', shopId)
       .order('created_at', { ascending: false })
@@ -123,7 +131,7 @@ export default async function DashboardPage() {
     // per-row comparison (stock_quantity <= low_stock_threshold) that
     // Postgres can't express as a simple .eq()/.lte() filter — matches
     // the same definition the Inventory and Products pages already use.
-    supabase.from('products').select('stock_quantity, low_stock_threshold')
+    adminClient.from('products').select('stock_quantity, low_stock_threshold')
       .eq('shop_id', shopId).eq('is_available', true),
   ])
 
