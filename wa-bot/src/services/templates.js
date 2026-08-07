@@ -14,6 +14,21 @@ function fmtMoney(amount, currencyCode) {
   return currencyCode === 'INR' ? `₹${value}` : `${currencyCode ?? ''} ${value}`.trim();
 }
 
+function fmtSlot(order) {
+  if (order.pickup_slot_label) return order.pickup_slot_label;
+
+  if (order.preferred_pickup_time) {
+    return new Date(order.preferred_pickup_time).toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  return 'shortly';
+}
+
 // Two parameter styles, because the templates actually approved in Meta
 // don't all use the same one:
 //   'positional' — {{1}}, {{2}}, ... in order; tail(order) returns the
@@ -24,14 +39,24 @@ function fmtMoney(amount, currencyCode) {
 //                   object for these — sending positional params to a
 //                   named-placeholder template fails outright.
 const ORDER_TEMPLATES = {
-  // order_confirmed as currently approved in Meta is a structured Order
-  // Details template (header product card + "Review and Pay" button),
-  // still under the Marketing category rather than Utility — not a plain
-  // body-text template this code can populate correctly. No entry here
-  // means notifyCustomer logs a warning and no-ops for 'accepted' rather
-  // than sending something malformed. Recreate as a plain Utility text
-  // template (like the other four) to restore this notification.
-  //
+  // Replaces the old order_confirmed (a structured Order Details
+  // template under the wrong category that was never usable — see the
+  // v2 build brief). order_confirm is a plain Utility text template,
+  // confirmed against its actual approved body:
+  //   "Hi {{1}}, Your *{{2}}* order has been successfully placed at
+  //    *{{3}}*. The selected time slot is *{{4}}*. We'll notify you
+  //    the moment it's ready.😇"
+  // 4 numbered variables, same base convention as everywhere else
+  // (customerName, orderNumber, shopName) plus the pickup slot as tail.
+  // Wired to 'accepted' per the v2 build brief's own Phase 7 flow
+  // (ACCEPT -> order_confirm + receipt) — the receipt half isn't built
+  // yet (a later phase), this is just the text notification.
+  accepted: {
+    name: 'order_confirm',
+    language: 'en_US',
+    mode: 'positional',
+    tail: (order) => [fmtSlot(order)],
+  },
   // order_ready's approved body has only 3 variables total — customer
   // name, order number, pickup location — with no room for a separate
   // "next step" value (confirmed against the actual approved text:
