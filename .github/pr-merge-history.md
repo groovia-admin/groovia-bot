@@ -29,3 +29,4 @@
 | #60 | Fix logo/product-image upload File ReferenceError; dark-theme placeho… | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 17:00 UTC | 0d 0h 0m |
 | #61 | Show uploaded shop logo in Sidebar, add login entrance animation, mov… | dashboard | @groovia-admin | @groovia-admin | 2026-08-05 17:22 UTC | 0d 0h 0m |
 | #62 | Full WhatsApp-inspired light+green reskin; login cart animation; low-… | dashboard | @groovia-admin | @groovia-admin | 2026-08-06 15:29 UTC | 0d 0h 0m |
+| #64 | Fix owner-reported dashboard QA issues: dark theme pages, conversatio… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 06:13 UTC | 0d 0h 0m |
