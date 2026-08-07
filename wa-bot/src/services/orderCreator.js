@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { getSupabase } = require('./shopResolver');
+const { getSupabase, normalizeWhatsappFrom } = require('./shopResolver');
 const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed } = require('./whatsappClient');
 const deliveryTracker = require('./deliveryTracker');
 
@@ -13,6 +13,17 @@ const deliveryTracker = require('./deliveryTracker');
 // the whole point: this is the fallback for exactly the failure mode
 // the plain interactive alert below can't survive.
 const NEW_ORDER_ALERT_TEMPLATE = { name: 'new_order_alert', language: 'en_US' };
+
+// Staff aren't alerted the instant an order is placed — the customer
+// gets a 5-minute self-cancel window first (see handleCustomerMessage's
+// cancel_order_ handling in messageHandler.js), specifically to avoid
+// the accept-then-immediately-need-to-un-accept cycle when a customer
+// cancels right after ordering. processDueNewOrderAlerts (below) is
+// what actually fires the alert once this has elapsed; this constant
+// must stay in sync with the cancel window's own limit, since the
+// design only works if staff never see an order before the customer
+// can no longer cancel it.
+const NEW_ORDER_ALERT_DELAY_MS = 5 * 60 * 1000;
 
 function generateOrderNumber() {
   return `ORD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
@@ -187,21 +198,17 @@ async function createOrderFromSession(shopId, phone, session) {
 }
 
 /**
- * Texts every active shop_users member (owner/manager/staff alike, same
- * "any active staff member can act" model already used for order status
- * commands) that a new order came in. No shop-side push for new orders
- * existed before this — staff previously had no way to know an order
- * arrived except checking some other way.
+ * Builds the Accept/Reject/Edit alert body + buttons for one order.
+ * Sent as tappable buttons rather than plain text asking staff to type
+ * "ACCEPT ORD-XXXX" — typing an exact order number on a phone keyboard
+ * is slow and error-prone. The button id carries the order's own id,
+ * so there's nothing to type or get wrong; whoever taps first wins
+ * (handleOrderCommand's status check rejects a second tap).
  *
- * Sent as a tappable Accept/Reject button message rather than plain text
- * asking staff to type "ACCEPT ORD-XXXX" — typing an exact order number
- * on a phone keyboard is slow and error-prone. The button id carries the
- * order's own id, so there's nothing to type or get wrong; whoever taps
- * first wins (handleOrderCommand's status check rejects a second tap).
+ * Shared by notifyStaffForOrder (both the delayed live path and the
+ * resend catch-up, both DB-reconstructed — no in-memory session exists
+ * by the time either runs) — one body/button shape either way.
  */
-// Shared by the live path (fresh session, just-created order) and
-// resendPendingOrderAlerts (historical orders reconstructed from the DB,
-// no session left in memory) — same body/button shape either way.
 function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, paymentMethod, itemsText }) {
   const body =
     `🆕 *New order ${order.order_number}* — ₹${Number(total).toFixed(2)}\n\n` +
@@ -231,31 +238,43 @@ function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, pay
   };
 }
 
-async function notifyShopOfNewOrder(shopId, order, session) {
+/**
+ * Sends the new-order alert to every active staff member for one order
+ * row — the DB is always the source of truth for this (order_items /
+ * order_customer_details), never an in-memory session, since by the
+ * time this fires (whether from the 5-minute delay below or the manual
+ * resend catch-up) any WhatsApp conversation session for the customer
+ * has long since been deleted.
+ */
+async function notifyStaffForOrder(order) {
   const supabase = getSupabase();
   if (!supabase) return;
 
   const { data: staff, error } = await supabase
     .from('shop_users')
     .select('phone_number')
-    .eq('shop_id', shopId)
+    .eq('shop_id', order.shop_id)
     .eq('is_active', true)
     .not('phone_number', 'is', null);
 
   if (error) {
-    logger.error({ error, shopId }, 'Failed to load shop staff for new-order notify');
+    logger.error({ error, shopId: order.shop_id }, 'Failed to load shop staff for new-order notify');
     return;
   }
 
-  const itemsText = session.cart_items
-    .map((item) => `${item.name} × ${item.quantity} — ₹${item.subtotal.toFixed(2)}`)
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+
+  const itemsText = (order.order_items || [])
+    .map((item) => `${item.product_name_snapshot} × ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`)
     .join('\n');
 
   const payload = buildNewOrderAlertPayload(order, {
-    customerName: session.customer_name,
-    total: session.cart_total,
-    pickupSlot: session.pickup_slot_label,
-    paymentMethod: session.payment_method,
+    customerName: details?.customer_name_snapshot,
+    total: order.total_amount,
+    pickupSlot: order.pickup_slot_label,
+    paymentMethod: order.payment_method,
     itemsText,
   });
 
@@ -264,18 +283,68 @@ async function notifyShopOfNewOrder(shopId, order, session) {
   );
 }
 
+const NEW_ORDER_SELECT =
+  `id, order_number, shop_id, status, total_amount, pickup_slot_label, payment_method,
+   order_items ( product_name_snapshot, quantity, subtotal ),
+   order_customer_details ( customer_name_snapshot )`;
+
 /**
- * One-time (or repeatable) catch-up for orders that went 'pending'
- * before the delivery-tracking system existed, or whose alert simply
- * never got a tracked row for some other reason — those never had a
- * chance to hit the retry/template-fallback path since there was
- * nothing to correlate a failed status webhook against. Re-sends the
- * alert (through the same tracked path, so failures from here forward
- * ARE covered) to every currently-pending order for a shop.
+ * The actual delay mechanism for the 5-minute customer self-cancel
+ * window (see NEW_ORDER_ALERT_DELAY_MS above) — called from a periodic
+ * scan (index.js), NOT a per-order setTimeout. An in-memory timer would
+ * silently vanish on a Railway restart/redeploy mid-window, leaving
+ * that order's staff alert never sent at all; a DB-backed "has this
+ * been sent yet" check survives that fine, just picks up on the next
+ * poll.
+ *
+ * Only touches orders still 'pending' past the delay whose alert hasn't
+ * gone out yet (shop_alert_sent_at IS NULL) — an order the customer
+ * cancelled within the window is already 'cancelled' by the time this
+ * runs and is correctly skipped by the query itself.
+ */
+async function processDueNewOrderAlerts() {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const cutoff = new Date(Date.now() - NEW_ORDER_ALERT_DELAY_MS).toISOString();
+
+  const { data: orders, error } = await supabase
+    .from('orders')
+    .select(NEW_ORDER_SELECT)
+    .eq('status', 'pending')
+    .is('shop_alert_sent_at', null)
+    .lte('created_at', cutoff);
+
+  if (error) {
+    logger.error({ error }, 'Failed to load orders due for their delayed new-order alert');
+    return;
+  }
+
+  for (const order of orders || []) {
+    await notifyStaffForOrder(order);
+
+    const { error: markError } = await supabase
+      .from('orders')
+      .update({ shop_alert_sent_at: new Date().toISOString() })
+      .eq('id', order.id)
+      .is('shop_alert_sent_at', null); // avoid a double-send if two poll ticks ever overlap
+
+    if (markError) {
+      logger.error({ error: markError, orderId: order.id }, 'Failed to mark shop_alert_sent_at');
+    }
+  }
+}
+
+/**
+ * One-time (or repeatable) catch-up for orders whose alert simply never
+ * got sent for some other reason (e.g. a bug, or orders that predate
+ * this delayed-alert system). Re-sends the alert (through the same
+ * tracked path, so failures from here forward ARE covered) to every
+ * currently-pending order for a shop, regardless of shop_alert_sent_at.
  *
  * Safe to call more than once: only orders still in 'pending' are
- * touched, so anything already accepted/rejected in the meantime is
- * skipped automatically by the query itself.
+ * touched, so anything already accepted/rejected/cancelled in the
+ * meantime is skipped automatically by the query itself.
  */
 async function resendPendingOrderAlerts(shopId) {
   const supabase = getSupabase();
@@ -283,11 +352,7 @@ async function resendPendingOrderAlerts(shopId) {
 
   const { data: orders, error } = await supabase
     .from('orders')
-    .select(
-      `id, order_number, total_amount, pickup_slot_label, payment_method,
-       order_items ( product_name_snapshot, quantity, subtotal ),
-       order_customer_details ( customer_name_snapshot )`
-    )
+    .select(NEW_ORDER_SELECT)
     .eq('shop_id', shopId)
     .eq('status', 'pending');
 
@@ -300,38 +365,8 @@ async function resendPendingOrderAlerts(shopId) {
     return { success: true, ordersResent: 0 };
   }
 
-  const { data: staff, error: staffError } = await supabase
-    .from('shop_users')
-    .select('phone_number')
-    .eq('shop_id', shopId)
-    .eq('is_active', true)
-    .not('phone_number', 'is', null);
-
-  if (staffError) {
-    logger.error({ error: staffError, shopId }, 'Failed to load staff for pending-order resend');
-    return { success: false, error: 'Failed to load staff' };
-  }
-
   for (const order of orders) {
-    const details = Array.isArray(order.order_customer_details)
-      ? order.order_customer_details[0]
-      : order.order_customer_details;
-
-    const itemsText = (order.order_items || [])
-      .map((item) => `${item.product_name_snapshot} × ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`)
-      .join('\n');
-
-    const payload = buildNewOrderAlertPayload(order, {
-      customerName: details?.customer_name_snapshot,
-      total: order.total_amount,
-      pickupSlot: order.pickup_slot_label,
-      paymentMethod: order.payment_method,
-      itemsText,
-    });
-
-    await Promise.all(
-      (staff || []).map((s) => sendTrackedNewOrderAlert(order.id, s.phone_number, payload))
-    );
+    await notifyStaffForOrder(order);
   }
 
   return { success: true, ordersResent: orders.length };
@@ -470,11 +505,100 @@ async function sendNewOrderAlertTemplateFallback(delivery) {
   return false;
 }
 
+// How long a customer can cancel their own order without staff
+// involvement — must match NEW_ORDER_ALERT_DELAY_MS above; the whole
+// point of delaying the staff alert is that it lands right as this
+// window closes, so staff never see an order the customer was still
+// free to cancel.
+const CUSTOMER_CANCEL_WINDOW_MS = NEW_ORDER_ALERT_DELAY_MS;
+
+/**
+ * Customer-initiated cancel, called from the "❌ Cancel order" button
+ * sent alongside the placement confirmation. Every failure mode is
+ * distinguished so the caller can reply with something specific rather
+ * than a generic error:
+ *   - not_found: no such order (shouldn't happen from a real button tap)
+ *   - wrong_customer: the order belongs to a different phone — never
+ *     confirms or denies existence to the mismatched phone, just treat
+ *     as not_found from the caller's perspective
+ *   - already_processed: status isn't 'pending' anymore (staff already
+ *     acted some other way, e.g. via the dashboard directly)
+ *   - window_expired: still 'pending', but past the 5-minute mark
+ *   - ok: cancelled successfully
+ *
+ * The status update itself is guarded by .eq('status', 'pending') as
+ * part of the same query — not a separate read-then-write — so a
+ * cancel racing the delayed alert job (which only reads 'pending'
+ * orders) can't land after the order was already accepted through some
+ * other path in between this function's own read and write.
+ */
+async function cancelOrderByCustomer(orderId, phone) {
+  const supabase = getSupabase();
+  if (!supabase) return { result: 'db_unavailable' };
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('id, order_number, shop_id, status, created_at, order_customer_details ( customer_phone_snapshot )')
+    .eq('id', orderId)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, orderId }, 'Failed to load order for customer cancel');
+    return { result: 'db_unavailable' };
+  }
+
+  if (!order) return { result: 'not_found' };
+
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+
+  const normalizedPhone = normalizeWhatsappFrom(phone);
+  if (!details?.customer_phone_snapshot || details.customer_phone_snapshot !== normalizedPhone) {
+    return { result: 'not_found' };
+  }
+
+  if (order.status !== 'pending') {
+    return { result: 'already_processed', order };
+  }
+
+  const ageMs = Date.now() - new Date(order.created_at).getTime();
+  if (ageMs > CUSTOMER_CANCEL_WINDOW_MS) {
+    return { result: 'window_expired', order };
+  }
+
+  const { data: updated, error: updateError } = await supabase
+    .from('orders')
+    .update({
+      status: 'cancelled',
+      cancellation_reason: 'Cancelled by customer',
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', order.id)
+    .eq('status', 'pending')
+    .select('id, order_number, shop_id')
+    .maybeSingle();
+
+  if (updateError) {
+    logger.error({ error: updateError, orderId }, 'Failed to cancel order');
+    return { result: 'db_unavailable' };
+  }
+
+  // The atomic .eq('status', 'pending') matched nothing — someone else
+  // (e.g. the delayed alert firing right as staff acted through the
+  // dashboard) changed it between the read above and this write.
+  if (!updated) return { result: 'already_processed', order };
+
+  return { result: 'ok', order: updated };
+}
+
 module.exports = {
   buildCartFromOrderMessage,
   cartTotal,
   createOrderFromSession,
-  notifyShopOfNewOrder,
+  notifyStaffForOrder,
+  processDueNewOrderAlerts,
+  cancelOrderByCustomer,
   retryNewOrderAlert,
   sendNewOrderAlertTemplateFallback,
   resendPendingOrderAlerts,
