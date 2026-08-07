@@ -29,4 +29,11 @@ module.exports = {
   phoneNumberId: process.env.PHONE_NUMBER_ID,
   graphApiVersion: process.env.GRAPH_API_VERSION || 'v25.0',
   internalApiSecret: process.env.INTERNAL_API_SECRET,
+  // Deliberately NOT in requiredEnv — the ordering webview (Phase 5)
+  // doesn't exist yet, so this has nothing to point at until then.
+  // Same reasoning as META_CATALOG_ID: a hard boot requirement here
+  // would crash-loop the whole bot for a feature nobody's finished
+  // building yet. Session-link generation checks for this being unset
+  // and fails clearly instead.
+  webviewBaseUrl: process.env.WEBVIEW_BASE_URL || null,
 };

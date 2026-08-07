@@ -103,9 +103,101 @@ async function resolveShopUserByPhone(shopId, from) {
   return { id: data.id, role: data.role, fullName: data.full_name };
 }
 
+/**
+ * Same check as resolveShopUserByPhone, but NOT scoped to a shop known
+ * in advance — needed now that one shared WhatsApp number serves
+ * multiple shops, so there's no longer a single phone_number_id ->
+ * shop_id mapping to derive a shopId from before checking staff
+ * status. Must run before any customer-path/session logic: staff
+ * identity always takes priority, regardless of whether that same
+ * phone happens to have an unrelated active ordering session open at
+ * some other shop.
+ *
+ * Assumes a phone is staff for at most one shop — if the same number
+ * is ever added as staff at two shops, this returns whichever the
+ * query happens to return first, not a defined choice between them.
+ */
+async function resolveShopUserGlobal(from) {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const normalized = normalizeWhatsappFrom(from);
+  if (!normalized) return null;
+
+  const { data, error } = await supabase
+    .from('shop_users')
+    .select('id, shop_id, role, full_name')
+    .eq('phone_number', normalized)
+    .eq('is_active', true)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, from: normalized }, 'Global shop_users lookup failed');
+    return null;
+  }
+
+  if (!data) return null;
+
+  return { id: data.id, shopId: data.shop_id, role: data.role, fullName: data.full_name };
+}
+
+/**
+ * Resolves a shop from the slug carried in a "SHOP-{slug}" QR message.
+ * Only matches active shops — a disabled/suspended shop's QR should
+ * fail the same way a nonexistent slug does, not leak that the shop
+ * exists but is inactive.
+ */
+async function findShopBySlug(slug) {
+  const supabase = getSupabase();
+  if (!supabase || !slug) return null;
+
+  const { data, error } = await supabase
+    .from('shops')
+    .select('id, name, slug')
+    .eq('slug', slug)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, slug }, 'Shop slug lookup failed');
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Nearby active shops by straight-line distance, using the PostGIS
+ * geography column (see the accompanying SQL) rather than plain
+ * lat/long math — lets Postgres use the GIST index instead of scanning
+ * every shop and computing Haversine distance in application code.
+ */
+async function findNearbyShops(latitude, longitude, { radiusKm = 10, limit = 5 } = {}) {
+  const supabase = getSupabase();
+  if (!supabase || latitude == null || longitude == null) return [];
+
+  const { data, error } = await supabase.rpc('nearby_shops', {
+    in_latitude: latitude,
+    in_longitude: longitude,
+    in_radius_km: radiusKm,
+    in_limit: limit,
+  });
+
+  if (error) {
+    logger.error({ error, latitude, longitude }, 'Nearby shops lookup failed');
+    return [];
+  }
+
+  return data || [];
+}
+
 module.exports = {
   getSupabase,
   normalizeWhatsappFrom,
   resolveShopByPhoneNumberId,
   resolveShopUserByPhone,
+  resolveShopUserGlobal,
+  findShopBySlug,
+  findNearbyShops,
 };

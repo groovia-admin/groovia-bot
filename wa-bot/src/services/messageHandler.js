@@ -1,13 +1,20 @@
 const logger = require('../utils/logger');
+const config = require('../config');
 const {
   getSupabase,
   resolveShopByPhoneNumberId,
-  resolveShopUserByPhone,
+  resolveShopUserGlobal,
+  findShopBySlug,
+  findNearbyShops,
 } = require('./shopResolver');
 const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 const { logMessage } = require('./conversationLogger');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
+// Aliased — sessionStore.js's createSession (above) is the existing
+// native-catalog cart flow's session; this is the unrelated Phase 1 v2
+// session spine (order_sessions), for the new webview entry points.
+const { createSession: createOrderSession } = require('./sessionService');
 const {
   buildCartFromOrderMessage,
   cartTotal,
@@ -543,6 +550,108 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
   }
 }
 
+// ── v2 architecture: webview entry points (Phase 2) ──────────────
+// Ordering is moving to a customer webview (Phase 5), session-keyed
+// rather than resolved from which WhatsApp number received the
+// message — needed since one shared number now serves multiple shops.
+// These three are the only ways a customer starts that new flow; none
+// of them touch handleCustomerMessage below, which stays exactly as it
+// was until the webview replaces it.
+
+/**
+ * Both new-session entry points below funnel through here: creates a
+ * v2 order_sessions row and replies with the webview link. Fails
+ * clearly (not a broken link) if WEBVIEW_BASE_URL isn't configured yet
+ * — expected until Phase 5 actually ships the page.
+ */
+async function startCustomerOrderingSession(from, shop, name) {
+  if (!config.webviewBaseUrl) {
+    logger.warn({ shopId: shop.id }, 'WEBVIEW_BASE_URL not configured — cannot start an ordering session yet');
+    await sendWhatsAppMessage(from, `Namaste ${name}! 👋 Online ordering for *${shop.name}* is launching soon — please check back shortly.`);
+    return;
+  }
+
+  const created = await createOrderSession(shop.id, from);
+
+  if (!created) {
+    await sendWhatsAppMessage(from, '⚠️ Something went wrong starting your order. Please try again.');
+    return;
+  }
+
+  const link = `${config.webviewBaseUrl}/shop/${shop.slug}?s=${created.token}`;
+  const text = `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\nOrder here (link expires in 30 min):\n${link}`;
+
+  await sendWhatsAppMessage(from, text);
+  logMessage(shop.id, from, 'outbound', 'system', 'text', text);
+}
+
+// Entry A: QR code pre-fills "SHOP-{slug}" as the message text.
+async function handleShopSlugEntry(from, slug, name) {
+  const shop = await findShopBySlug(slug);
+
+  if (!shop) {
+    // No shop_id to log against for an unresolvable slug — nothing to
+    // attach this message to in the per-shop conversation log.
+    await sendWhatsAppMessage(from, `⚠️ That shop link doesn't look right. Please rescan the QR code or ask the shop for a fresh one.`);
+    return;
+  }
+
+  logMessage(shop.id, from, 'inbound', 'customer', 'text', `SHOP-${slug}`);
+  await startCustomerOrderingSession(from, shop, name);
+}
+
+// Entry B: customer shares their location cold. Not logged to the
+// per-shop conversation log — a location share doesn't belong to any
+// one shop yet, and logMessage requires a shopId to attach to.
+async function handleLocationShare(from, location, name) {
+  const nearby = await findNearbyShops(location.latitude, location.longitude);
+
+  if (nearby.length === 0) {
+    await sendWhatsAppMessage(from, `😕 No Groovia shops found near you yet. Try scanning a shop's QR code instead.`);
+    return;
+  }
+
+  // List messages cap at 10 rows total (same limit already handled for
+  // the staff order-edit list) — cap at 9 nearby results.
+  const rows = nearby.slice(0, 9).map((shop) => ({
+    id: `nearby_shop_${shop.id}`,
+    title: shop.name.slice(0, 24),
+    description: `${Number(shop.distance_km).toFixed(1)} km away`.slice(0, 72),
+  }));
+
+  await sendListMessage(
+    from,
+    `📍 Found ${nearby.length} shop(s) near you. Tap one to start ordering:`,
+    'Select shop',
+    [{ title: 'Nearby shops', rows }]
+  );
+}
+
+// Entry B, continued: customer picked a shop from the nearby-shops list.
+async function handleNearbyShopPick(from, shopId, name) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const { data: shop, error } = await supabase
+    .from('shops')
+    .select('id, name, slug')
+    .eq('id', shopId)
+    .eq('is_active', true)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, shopId }, 'Failed to load shop for nearby-shop pick');
+  }
+
+  if (!shop) {
+    await sendWhatsAppMessage(from, `⚠️ That shop isn't available right now. Please share your location again.`);
+    return;
+  }
+
+  logMessage(shop.id, from, 'inbound', 'customer', 'interactive', `Picked: ${shop.name}`);
+  await startCustomerOrderingSession(from, shop, name);
+}
+
 async function handleCustomerMessage(from, message, shopId, name) {
   logInboundCustomerMessage(shopId, from, message);
 
@@ -651,37 +760,18 @@ async function handleWebhookPayload(payload) {
   }
 }
 
-async function handleIncomingMessage(message, value) {
+// Staff command handling — unchanged behavior, just receives shopId
+// from the global staff match now instead of deriving it from
+// phone_number_id (see handleIncomingMessage for why).
+async function handleStaffMessage(message, value, staffMatch) {
   const from    = message.from;
   const type    = message.type;
+  const shopId  = staffMatch.shopId;
   const contact = value.contacts?.[0];
   const name    = contact?.profile?.name || 'there';
 
-  logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
-
-  // Resolve which shop this message belongs to (via the WABA number that
-  // received it) before doing anything else.
-  const phoneNumberId = value.metadata?.phone_number_id;
-  const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
-
-  if (!shopId) {
-    logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
-    await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
-    return;
-  }
-
-  const shopUser = await resolveShopUserByPhone(shopId, from);
-
-  // Not a recognized staff member of this shop -> treat as a customer,
-  // not a rejection. Staff (owner/manager/staff, any role) keep the
-  // command flow below; everyone else gets the ordering conversation.
-  if (!shopUser) {
-    await handleCustomerMessage(from, message, shopId, name);
-    return;
-  }
-
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
-    await handleStaffButtonReply(from, shopId, shopUser, message.interactive.button_reply.id);
+    await handleStaffButtonReply(from, shopId, staffMatch, message.interactive.button_reply.id);
     return;
   }
 
@@ -692,7 +782,7 @@ async function handleIncomingMessage(message, value) {
   // interactive.button_reply. Same accept_/reject_/edit_<orderId>
   // payload format either way, so it routes through the same handler.
   if (type === 'button' && message.button?.payload) {
-    await handleStaffButtonReply(from, shopId, shopUser, message.button.payload);
+    await handleStaffButtonReply(from, shopId, staffMatch, message.button.payload);
     return;
   }
 
@@ -722,7 +812,7 @@ async function handleIncomingMessage(message, value) {
   const text   = message.text?.body?.trim() || '';
   const parsed = parseCommand(text);
 
-  logger.info({ text, parsed, shopId, role: shopUser.role }, 'Text message received');
+  logger.info({ text, parsed, shopId, role: staffMatch.role }, 'Text message received');
 
   if (!parsed) {
     await sendWhatsAppMessage(from,
@@ -750,7 +840,75 @@ async function handleIncomingMessage(message, value) {
     return;
   }
 
-  await handleOrderCommand(from, parsed, shopId, shopUser);
+  await handleOrderCommand(from, parsed, shopId, staffMatch);
+}
+
+async function handleIncomingMessage(message, value) {
+  const from    = message.from;
+  const type    = message.type;
+  const contact = value.contacts?.[0];
+  const name    = contact?.profile?.name || 'there';
+
+  logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
+
+  // Staff identity is resolved globally now, not derived from which
+  // WhatsApp number received the message — one shared number now
+  // serves multiple shops (v2 architecture), so phone_number_id no
+  // longer maps to a single shop the way it used to. Staff-ness always
+  // takes priority over everything below, even if this same phone
+  // happens to have an unrelated ordering session open at some other
+  // shop — a shop_user must never be routed into a customer flow.
+  const staffMatch = await resolveShopUserGlobal(from);
+
+  if (staffMatch) {
+    await handleStaffMessage(message, value, staffMatch);
+    return;
+  }
+
+  // ── New v2 entry points (additive) — ordering is moving to a
+  // customer webview, session-keyed rather than resolved from which
+  // number received the message. Neither of these touches the existing
+  // native-catalog flow in the fallback below, which stays exactly as
+  // it works today until the webview (Phase 5) replaces it.
+  if (type === 'text') {
+    const slugMatch = /^SHOP-([a-z0-9-]+)$/i.exec(message.text?.body?.trim() || '');
+    if (slugMatch) {
+      await handleShopSlugEntry(from, slugMatch[1], name);
+      return;
+    }
+  }
+
+  if (type === 'location' && message.location) {
+    await handleLocationShare(from, message.location, name);
+    return;
+  }
+
+  if (type === 'interactive' && message.interactive?.type === 'list_reply') {
+    const nearbyMatch = /^nearby_shop_(.+)$/.exec(message.interactive.list_reply.id || '');
+    if (nearbyMatch) {
+      await handleNearbyShopPick(from, nearbyMatch[1], name);
+      return;
+    }
+  }
+
+  // ── Preserved fallback: today's behavior, unchanged. Resolves the
+  // shop from which WhatsApp number received the message, exactly as
+  // before Phase 2 — kept deliberately so current pilot customers (who
+  // haven't scanned a QR or shared location yet) keep seeing the
+  // native-catalog flow uninterrupted. Once shops genuinely share one
+  // number and this becomes ambiguous, this should be replaced with an
+  // explicit "share your location or scan a shop QR" prompt instead —
+  // not yet, since only 1-2 shops exist on the shared number today.
+  const phoneNumberId = value.metadata?.phone_number_id;
+  const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
+
+  if (!shopId) {
+    logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
+    await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
+    return;
+  }
+
+  await handleCustomerMessage(from, message, shopId, name);
 }
 
 async function handleStatusUpdate(status) {
