@@ -36,3 +36,4 @@
 | #68 | Order-flow improvements: real hourly slots, self-cancel window, delay… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 13:51 UTC | 0d 0h 0m |
 | #69 | Bot dashboard orders actions tooltips catalog fix | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 15:36 UTC | 0d 0h 0m |
 | #70 | Phase 3 (v2 architecture): delivery linkage on orders + address type … | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 15:48 UTC | 0d 0h 0m |
+| #71 | Phase 4 (v2 architecture): public catalog API for the ordering webview | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 16:03 UTC | 0d 0h 0m |
