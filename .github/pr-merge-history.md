@@ -32,3 +32,4 @@
 | #64 | Fix owner-reported dashboard QA issues: dark theme pages, conversatio… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 06:13 UTC | 0d 0h 0m |
 | #65 | Phase 1 (v2 architecture): session spine — order_sessions + sessionSe… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 06:15 UTC | 0d 0h 0m |
 | #66 | Phase 2 (v2 architecture): shop routing — SHOP-{slug}, location share… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 09:11 UTC | 0d 0h 0m |
+| #67 | Wire order_confirm to the accepted transition (restores customer noti… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 09:31 UTC | 0d 0h 0m |
