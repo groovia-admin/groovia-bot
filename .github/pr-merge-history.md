@@ -31,3 +31,4 @@
 | #62 | Full WhatsApp-inspired light+green reskin; login cart animation; low-… | dashboard | @groovia-admin | @groovia-admin | 2026-08-06 15:29 UTC | 0d 0h 0m |
 | #64 | Fix owner-reported dashboard QA issues: dark theme pages, conversatio… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 06:13 UTC | 0d 0h 0m |
 | #65 | Phase 1 (v2 architecture): session spine — order_sessions + sessionSe… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 06:15 UTC | 0d 0h 0m |
+| #66 | Phase 2 (v2 architecture): shop routing — SHOP-{slug}, location share… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 09:11 UTC | 0d 0h 0m |
