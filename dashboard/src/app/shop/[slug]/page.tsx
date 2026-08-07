@@ -1,33 +1,29 @@
 import { notFound } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { StorefrontApp } from '@/components/storefront/StorefrontApp'
 
 type PublicShopPageProps = {
-  params: Promise<{
-    slug: string
-  }>
+  params: Promise<{ slug: string }>
+  searchParams: Promise<{ s?: string }>
 }
 
-export default async function PublicShopPage({
-  params,
-}: PublicShopPageProps) {
+const SHOP_COLUMNS = 'id, slug, name, description, logo_url, city, state, address_line_1, currency_code'
+const SETTINGS_COLUMNS =
+  'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, business_hours, order_acceptance_enabled'
+
+// Server-rendered shell (fast first paint, no client round-trip for the
+// shop header) wrapping the interactive StorefrontApp client component,
+// which owns catalog browsing + cart state and talks to the
+// /api/public/* routes (Phase 4) for everything past this initial load.
+export default async function PublicShopPage({ params, searchParams }: PublicShopPageProps) {
   const { slug } = await params
+  const { s: token } = await searchParams
 
   const adminClient = createAdminClient()
 
   const { data: shop, error } = await adminClient
     .from('shops')
-    .select(`
-      id,
-      slug,
-      name,
-      description,
-      logo_url,
-      address_line_1,
-      city,
-      state,
-      country,
-      is_active
-    `)
+    .select(SHOP_COLUMNS)
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle()
@@ -40,57 +36,15 @@ export default async function PublicShopPage({
     notFound()
   }
 
-  return (
-    <main className="min-h-screen bg-slate-50">
-      <section className="mx-auto max-w-4xl px-6 py-12">
-        <div className="rounded-2xl bg-white p-8 shadow-sm">
-          {shop.logo_url ? (
-            <img
-              src={shop.logo_url}
-              alt={`${shop.name} logo`}
-              className="mb-6 h-20 w-20 rounded-xl object-cover"
-            />
-          ) : (
-            <div className="mb-6 flex h-20 w-20 items-center justify-center rounded-xl bg-blue-600 text-3xl font-bold text-white">
-              {shop.name.charAt(0).toUpperCase()}
-            </div>
-          )}
+  const { data: settings, error: settingsError } = await adminClient
+    .from('shop_settings')
+    .select(SETTINGS_COLUMNS)
+    .eq('shop_id', shop.id)
+    .maybeSingle()
 
-          <h1 className="text-3xl font-bold text-slate-900">
-            {shop.name}
-          </h1>
+  if (settingsError) {
+    console.error('Failed to load public shop settings:', settingsError)
+  }
 
-          {(shop.city || shop.state) && (
-            <p className="mt-2 text-slate-500">
-              {[shop.city, shop.state]
-                .filter(Boolean)
-                .join(', ')}
-            </p>
-          )}
-
-          {shop.address_line_1 && (
-            <p className="mt-1 text-slate-500">
-              {shop.address_line_1}
-            </p>
-          )}
-
-          {shop.description && (
-            <p className="mt-6 text-slate-600">
-              {shop.description}
-            </p>
-          )}
-
-          <div className="mt-10 rounded-xl border border-dashed border-slate-300 p-8 text-center">
-            <h2 className="text-xl font-semibold text-slate-800">
-              Online store coming soon
-            </h2>
-
-            <p className="mt-2 text-slate-500">
-              Products and ordering will be available here.
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
-  )
+  return <StorefrontApp shop={shop} settings={settings ?? null} token={token ?? null} />
 }

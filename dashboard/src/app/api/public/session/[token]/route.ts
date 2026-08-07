@@ -1,24 +1,13 @@
 import { NextResponse } from 'next/server'
-import { createHash } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { hashSessionToken, SESSION_TTL_MS } from '@/lib/orderSession'
 
 // Resolves an order_sessions row (Phase 1, wa-bot/src/services/sessionService.js)
 // for the webview to bootstrap against — the link a customer gets from
 // WhatsApp is `${WEBVIEW_BASE_URL}/shop/{slug}?s={token}`, and this is
 // what turns that token into "which shop, which customer, what cart".
-//
-// wa-bot and this dashboard are separate deployments with no shared
-// module — the hashing scheme (plain SHA-256, no secret) and the
-// sliding-30-minute-expiry semantics are duplicated here rather than
-// imported, and MUST stay in sync with sessionService.js if either ever
-// changes. Only the hash is ever looked up, matching wa-bot's own
-// reasoning: nothing stored in order_sessions can mint a valid session
-// on its own.
-const SESSION_TTL_MS = 30 * 60 * 1000
-
-function hashToken(token: string) {
-  return createHash('sha256').update(token).digest('hex')
-}
+// See lib/orderSession.ts for why the hashing/expiry logic is duplicated
+// from wa-bot rather than imported.
 
 export async function GET(
   _request: Request,
@@ -30,7 +19,7 @@ export async function GET(
   }
 
   const adminClient = createAdminClient()
-  const tokenHash = hashToken(token)
+  const tokenHash = hashSessionToken(token)
 
   const { data: session, error } = await adminClient
     .from('order_sessions')
