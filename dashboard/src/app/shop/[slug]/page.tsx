@@ -7,7 +7,7 @@ type PublicShopPageProps = {
   searchParams: Promise<{ s?: string }>
 }
 
-const SHOP_COLUMNS = 'id, slug, name, description, logo_url, city, state, address_line_1, currency_code'
+const SHOP_COLUMNS = 'id, slug, name, description, logo_url, city, state, address_line_1, currency_code, timezone'
 const SETTINGS_COLUMNS =
   'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, business_hours, order_acceptance_enabled'
 

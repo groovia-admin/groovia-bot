@@ -44,3 +44,25 @@ export type StorefrontSettings = {
   business_hours: Record<string, unknown> | null
   order_acceptance_enabled: boolean
 } | null
+
+export type DeliveryAddressInput = {
+  label?: string
+  address_line_1: string
+  address_line_2?: string
+  landmark?: string
+  city?: string
+  state?: string
+  postal_code?: string
+  latitude?: number
+  longitude?: number
+}
+
+export type SubmitOrderBody = {
+  orderType: 'pickup' | 'delivery'
+  customerName: string
+  paymentMethod: string
+  pickupSlotLabel?: string
+  deliveryAddress?: DeliveryAddressInput
+}
+
+export type SubmitOrderResult = { success: true; orderNumber: string } | { success: false; error: string }

@@ -3,7 +3,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { notifyCustomer } = require('../services/customerNotifier');
 const { syncShopCatalog } = require('../services/catalogSync');
-const { resendPendingOrderAlerts } = require('../services/orderCreator');
+const { resendPendingOrderAlerts, sendOrderPlacedConfirmation } = require('../services/orderCreator');
 const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
 
 const router = express.Router();
@@ -77,6 +77,26 @@ router.post('/shops/:shopId/resend-pending-alerts', requireInternalSecret, async
   }
 
   const result = await resendPendingOrderAlerts(shopId);
+  return res.status(result.success ? 200 : 502).json(result);
+});
+
+// POST /internal/orders/:orderId/confirm-placement
+// Body: { shopId: string }
+// The webview (Phase 5/6) creates orders directly in Supabase from the
+// dashboard, not through wa-bot — so unlike the native-catalog flow
+// (which sends this inline right after creation, same conversation),
+// there's no in-progress WhatsApp exchange to reply into. This is the
+// dashboard's way of asking wa-bot to send that same "order placed,
+// cancel within 5 min" message on its behalf.
+router.post('/orders/:orderId/confirm-placement', requireInternalSecret, async (req, res) => {
+  const { orderId } = req.params;
+  const { shopId } = req.body || {};
+
+  if (!orderId || !shopId) {
+    return res.status(400).json({ error: 'orderId and shopId are required' });
+  }
+
+  const result = await sendOrderPlacedConfirmation(orderId, shopId);
   return res.status(result.success ? 200 : 502).json(result);
 });
 

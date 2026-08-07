@@ -1,7 +1,8 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
 const { getSupabase, normalizeWhatsappFrom } = require('./shopResolver');
-const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed } = require('./whatsappClient');
+const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed, sendButtonMessage } = require('./whatsappClient');
+const { logMessage } = require('./conversationLogger');
 const deliveryTracker = require('./deliveryTracker');
 
 // Registered once new_order_alert is created + approved in Meta as a
@@ -195,6 +196,66 @@ async function createOrderFromSession(shopId, phone, session) {
   }
 
   return order;
+}
+
+/**
+ * The "order placed" message + cancel button — shared so the copy can't
+ * drift between the native-catalog flow (messageHandler.js's confirm_yes
+ * handler, which already has the order/phone in hand and sends this
+ * directly) and the webview's order-submission endpoint, which creates
+ * the order straight in Supabase from the dashboard and has to reach
+ * back into wa-bot over the internal API (see sendOrderPlacedConfirmation
+ * below) to get the same WhatsApp message sent.
+ */
+function buildOrderPlacedPayload(orderNumber, orderId) {
+  const body =
+    `✅ *Order ${orderNumber} placed!*\n\n` +
+    `You can cancel within 5 minutes if needed.\n\n` +
+    `Waiting for the shop to confirm — we'll message you.`;
+
+  return { body, buttons: [{ id: `cancel_order_${orderId}`, title: '❌ Cancel order' }] };
+}
+
+/**
+ * Called from wa-bot/src/routes/internal.js — an order created by the
+ * webview (dashboard) has no WhatsApp conversation in progress to reply
+ * into, so the confirmation has to be sent this way instead of inline
+ * after creation like the native-catalog flow does.
+ */
+async function sendOrderPlacedConfirmation(orderId, shopId) {
+  const supabase = getSupabase();
+  if (!supabase) return { success: false };
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('id, order_number, shop_id, order_customer_details ( customer_phone_snapshot )')
+    .eq('id', orderId)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (error || !order) {
+    logger.error({ error, orderId, shopId }, 'Failed to load order for placement confirmation');
+    return { success: false };
+  }
+
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+  const phone = details?.customer_phone_snapshot;
+
+  if (!phone) {
+    logger.warn({ orderId, shopId }, 'No customer phone snapshot — cannot send placement confirmation');
+    return { success: false };
+  }
+
+  const { body, buttons } = buildOrderPlacedPayload(order.order_number, order.id);
+  const sent = await sendButtonMessage(phone, body, buttons);
+
+  if (sent) {
+    logMessage(shopId, phone, 'outbound', 'system', 'interactive', body);
+  }
+
+  return { success: sent };
 }
 
 /**
@@ -596,6 +657,8 @@ module.exports = {
   buildCartFromOrderMessage,
   cartTotal,
   createOrderFromSession,
+  buildOrderPlacedPayload,
+  sendOrderPlacedConfirmation,
   notifyStaffForOrder,
   processDueNewOrderAlerts,
   cancelOrderByCustomer,

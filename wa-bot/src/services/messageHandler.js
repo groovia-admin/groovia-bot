@@ -21,6 +21,7 @@ const {
   createOrderFromSession,
   cancelOrderByCustomer,
   sendNewOrderAlertTemplateFallback,
+  buildOrderPlacedPayload,
 } = require('./orderCreator');
 const {
   getEditSession,
@@ -636,13 +637,8 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
       // window to self-cancel via the button below without staff ever
       // seeing (and having to un-accept) an order that gets cancelled
       // moments later.
-      const placedText =
-        `✅ *Order ${order.order_number} placed!*\n\n` +
-        `You can cancel within 5 minutes if needed.\n\n` +
-        `Waiting for the shop to confirm — we'll message you.`;
-      await sendButtonMessage(from, placedText, [
-        { id: `cancel_order_${order.id}`, title: '❌ Cancel order' },
-      ]);
+      const { body: placedText, buttons: placedButtons } = buildOrderPlacedPayload(order.order_number, order.id);
+      await sendButtonMessage(from, placedText, placedButtons);
       logMessage(shopId, from, 'outbound', 'system', 'interactive', placedText);
     }
   }

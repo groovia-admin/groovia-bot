@@ -1,8 +1,9 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Minus, ShoppingBag, Loader2, MessageCircle } from 'lucide-react'
+import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2 } from 'lucide-react'
 import { CartView } from './CartView'
+import { CheckoutView } from './CheckoutView'
 import type { CartItem, StorefrontProduct, StorefrontCategory, StorefrontSettings } from '@/lib/storefront/types'
 
 type Shop = {
@@ -15,6 +16,7 @@ type Shop = {
   state: string | null
   address_line_1: string | null
   currency_code: string
+  timezone: string
 }
 
 type Props = {
@@ -40,7 +42,8 @@ export function StorefrontApp({ shop, settings, token }: Props) {
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [cart, setCart] = useState<Record<string, CartItem>>({})
-  const [view, setView] = useState<'browse' | 'cart' | 'saved'>('browse')
+  const [view, setView] = useState<'browse' | 'cart' | 'checkout' | 'placed'>('browse')
+  const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
   const hydratedCartFromSession = useRef(false)
 
   const formatMoney = useCallback(
@@ -188,25 +191,40 @@ export function StorefrontApp({ shop, settings, token }: Props) {
         onBack={() => setView('browse')}
         onQuantityChange={setLineQuantity}
         canCheckout={session.status === 'active'}
-        onCheckout={() => setView('saved')}
+        onCheckout={() => setView('checkout')}
       />
     )
   }
 
-  if (view === 'saved') {
+  if (view === 'checkout' && token) {
+    return (
+      <CheckoutView
+        token={token}
+        timezone={shop.timezone}
+        settings={settings}
+        total={cartTotal}
+        formatMoney={formatMoney}
+        onBack={() => setView('cart')}
+        onPlaced={(orderNumber) => {
+          setPlacedOrderNumber(orderNumber)
+          setCart({})
+          setView('placed')
+        }}
+      />
+    )
+  }
+
+  if (view === 'placed') {
     return (
       <main className="min-h-screen bg-surface flex items-center justify-center px-6">
         <div className="card max-w-sm w-full text-center">
           <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-light">
-            <MessageCircle size={28} className="text-brand-dark" />
+            <CheckCircle2 size={28} className="text-brand-dark" />
           </div>
-          <h2 className="text-lg font-semibold text-ink">Your cart is saved!</h2>
+          <h2 className="text-lg font-semibold text-ink">Order {placedOrderNumber} placed!</h2>
           <p className="mt-2 text-sm text-ink-muted">
-            Checkout is launching here very soon. For now, message us on WhatsApp and we&apos;ll help you finish this order.
+            We&apos;ve sent you a WhatsApp message with the details. The shop will confirm shortly.
           </p>
-          <button className="btn-primary mt-6 w-full justify-center" onClick={() => setView('browse')}>
-            Back to menu
-          </button>
         </div>
       </main>
     )
