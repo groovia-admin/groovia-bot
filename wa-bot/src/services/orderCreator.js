@@ -1,7 +1,8 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { getSupabase, normalizeWhatsappFrom } = require('./shopResolver');
-const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed } = require('./whatsappClient');
+const { getSupabase } = require('./shopResolver');
+const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed, sendWhatsAppMessage } = require('./whatsappClient');
+const { logMessage } = require('./conversationLogger');
 const deliveryTracker = require('./deliveryTracker');
 
 // Registered once new_order_alert is created + approved in Meta as a
@@ -286,7 +287,35 @@ async function notifyStaffForOrder(order) {
 const NEW_ORDER_SELECT =
   `id, order_number, shop_id, status, total_amount, pickup_slot_label, payment_method,
    order_items ( product_name_snapshot, quantity, subtotal ),
-   order_customer_details ( customer_name_snapshot )`;
+   order_customer_details ( customer_name_snapshot, customer_phone_snapshot ),
+   shops ( name )`;
+
+/**
+ * Tells the customer their self-cancel window has closed and the order
+ * is now with the shop — closes a real UX gap: previously the customer's
+ * last word on their order was the placement message with a "Cancel
+ * order" button that never visibly expired, leaving them to wonder
+ * whether anything happened at the 5-minute mark. Plain text, not a
+ * template — the customer messaged (placed the order) minutes ago, so
+ * this is well inside the 24h customer-service window.
+ */
+async function notifyCustomerWindowClosed(order) {
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+  const phone = details?.customer_phone_snapshot;
+  if (!phone) return;
+
+  const shop = Array.isArray(order.shops) ? order.shops[0] : order.shops;
+  const shopName = shop?.name || 'the shop';
+
+  const text =
+    `🔒 The cancellation window for order *${order.order_number}* has closed — ` +
+    `it's now confirmed and with *${shopName}* for preparation. We'll message you the moment it's ready.`;
+
+  await sendWhatsAppMessage(phone, text);
+  logMessage(order.shop_id, phone, 'outbound', 'system', 'text', text);
+}
 
 /**
  * The actual delay mechanism for the 5-minute customer self-cancel
@@ -323,14 +352,25 @@ async function processDueNewOrderAlerts() {
   for (const order of orders || []) {
     await notifyStaffForOrder(order);
 
-    const { error: markError } = await supabase
+    const { data: marked, error: markError } = await supabase
       .from('orders')
       .update({ shop_alert_sent_at: new Date().toISOString() })
       .eq('id', order.id)
-      .is('shop_alert_sent_at', null); // avoid a double-send if two poll ticks ever overlap
+      .is('shop_alert_sent_at', null) // avoid a double-send if two poll ticks ever overlap
+      .select('id')
+      .maybeSingle();
 
     if (markError) {
       logger.error({ error: markError, orderId: order.id }, 'Failed to mark shop_alert_sent_at');
+      continue;
+    }
+
+    // Only the tick that actually won the atomic mark above notifies the
+    // customer — same guard that protects the staff alert from a
+    // double-send, reused here so an overlapping tick can't also double
+    // up the "window closed" message.
+    if (marked) {
+      await notifyCustomerWindowClosed(order);
     }
   }
 }
@@ -553,8 +593,14 @@ async function cancelOrderByCustomer(orderId, phone) {
     ? order.order_customer_details[0]
     : order.order_customer_details;
 
-  const normalizedPhone = normalizeWhatsappFrom(phone);
-  if (!details?.customer_phone_snapshot || details.customer_phone_snapshot !== normalizedPhone) {
+  // customer_phone_snapshot is stored as the raw webhook `from` value
+  // (bare digits, e.g. "919876543210" — the same shape customerNotifier
+  // sends templates to), not the +91-normalized shape shopResolver uses
+  // for shop_users lookups. Comparing against a normalized phone here
+  // always mismatched, which meant every cancel attempt — regardless of
+  // timing or ownership — fell through to the generic "not found" reply
+  // instead of the correct window_expired/already_processed message.
+  if (!details?.customer_phone_snapshot || details.customer_phone_snapshot !== phone) {
     return { result: 'not_found' };
   }
 

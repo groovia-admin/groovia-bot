@@ -372,7 +372,16 @@ async function sendEditPrompt(from, shopId, orderId) {
 // instead of tapping.
 async function handleStaffListReply(from, shopId, listReplyId) {
   const editSession = await getEditSession(shopId, from);
-  if (!editSession) return;
+  if (!editSession) {
+    // Tapping a stale item-removal list (session already ended via
+    // "Done", or the order moved on some other way) used to be silent —
+    // indistinguishable from the tap being lost. This is the same class
+    // of never-expiring-WhatsApp-button issue as the customer-side
+    // cancel button: the message stays tappable forever, so the reply
+    // has to explain why the tap no longer does anything.
+    await sendWhatsAppMessage(from, `⚠️ This edit session has ended (already finished, or the order moved on). Tap *Edit* again on the order if you still need to change it.`);
+    return;
+  }
 
   const doneMatch = /^edit_done_(.+)$/.exec(listReplyId || '');
   if (doneMatch) {
@@ -383,7 +392,10 @@ async function handleStaffListReply(from, shopId, listReplyId) {
   }
 
   const removeMatch = /^remove_(.+)$/.exec(listReplyId || '');
-  if (!removeMatch) return;
+  if (!removeMatch) {
+    await sendWhatsAppMessage(from, `⚠️ Didn't recognize that. Tap an item to remove it, or "Done" to keep the rest.`);
+    return;
+  }
 
   const result = await removeItems(editSession.order_id, [removeMatch[1]]);
 
@@ -417,7 +429,15 @@ async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
   }
 
   const match = /^(accept|reject|ready|complete)_(.+)$/.exec(buttonId || '');
-  if (!match) return;
+  if (!match) {
+    // An unrecognized button id here (e.g. a stray customer-flow
+    // "cancel_order_" tap, plausible if the same phone was ever used to
+    // test both the staff and customer sides) used to return silently —
+    // indistinguishable from the tap being lost entirely. A short reply
+    // at least confirms the message was received.
+    await sendWhatsAppMessage(from, `Hi! 👋 I didn't recognize that action. Reply *HELP* to see available commands.`);
+    return;
+  }
 
   const [, action, orderId] = match;
   const command = STAFF_BUTTON_COMMANDS[action];
@@ -561,14 +581,21 @@ async function sendConfirmPrompt(shopId, from, session) {
     `💵 Payment: ${paymentLabel}\n\n` +
     `Confirm?`;
 
-  // 3 buttons — the max WhatsApp allows. "Change slot" loops back to
-  // slot selection reusing this same session/cart rather than making
-  // the customer abandon everything and re-browse the native catalog
-  // from scratch just to fix a wrong pickup time.
-  await sendButtonMessage(from, text, [
-    { id: 'confirm_yes', title: '✅ Place order' },
-    { id: 'confirm_edit_slot', title: '✏️ Change slot' },
-    { id: 'confirm_no', title: '❌ Cancel' },
+  // A list, not buttons — 4 options ("Edit cart" joining "Change slot")
+  // no longer fit WhatsApp's 3-button cap. "Change slot" loops back to
+  // slot selection reusing this same session/cart; "Edit cart" re-opens
+  // the native catalog so forgetting an item or picking the wrong
+  // quantity doesn't mean abandoning the whole order.
+  await sendListMessage(from, text, 'Confirm order', [
+    {
+      title: 'Options',
+      rows: [
+        { id: 'confirm_yes', title: '✅ Place order' },
+        { id: 'confirm_edit_cart', title: '🛒 Edit cart' },
+        { id: 'confirm_edit_slot', title: '✏️ Change slot' },
+        { id: 'confirm_no', title: '❌ Cancel' },
+      ],
+    },
   ]);
   logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
 }
@@ -608,6 +635,22 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
     if (buttonId === 'confirm_edit_slot') {
       const updated = await updateSession(session.id, { step: 'awaiting_slot' });
       await sendSlotPrompt(shopId, from, updated.cart_total);
+      return;
+    }
+
+    if (buttonId === 'confirm_edit_cart') {
+      // Item selection lives entirely in WhatsApp's native Catalog+Cart —
+      // this bot has no independent product-browsing UI to edit
+      // quantities within. Re-opening the catalog and deleting this
+      // session is the closest available stop-gap until the ordering
+      // webview (Phase 5) replaces the native cart with something this
+      // bot actually controls end to end.
+      await deleteSession(session.id);
+      const text =
+        `🛒 Tap below to update your cart — add items, change quantities, or remove things.\n\n` +
+        `Once you're done, submit it again and I'll pick up from there.`;
+      await sendCatalogMessage(from, text);
+      logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
       return;
     }
 
