@@ -4,6 +4,7 @@ import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
 import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
+import ShopQrCode from '@/components/settings/ShopQrCode'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,23 +19,31 @@ export default async function SettingsPage() {
   const isOwner = context.kind === 'super_admin' || context.role === 'owner'
 
   let settings = null
+  let shopSlug: string | null = null
+  let whatsappNumber: string | null = null
 
   if (context.kind === 'shop_user') {
     const adminClient = createAdminClient()
 
-    const { data: settingsData, error: settingsError } = await adminClient
-      .from('shop_settings')
-      .select(
-        'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message'
-      )
-      .eq('shop_id', context.shopId)
-      .maybeSingle()
+    const [{ data: settingsData, error: settingsError }, { data: shopData }, { data: connection }] = await Promise.all([
+      adminClient
+        .from('shop_settings')
+        .select(
+          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes'
+        )
+        .eq('shop_id', context.shopId)
+        .maybeSingle(),
+      adminClient.from('shops').select('slug').eq('id', context.shopId).maybeSingle(),
+      adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', context.shopId).maybeSingle(),
+    ])
 
     if (settingsError) {
       console.error('Failed to load shop settings:', settingsError)
     }
 
     settings = settingsData ?? null
+    shopSlug = shopData?.slug ?? null
+    whatsappNumber = connection?.display_phone_number ?? null
   }
 
   return (
@@ -44,6 +53,14 @@ export default async function SettingsPage() {
           <h2 style={cardTitleStyle}>Shop Profile</h2>
           <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
           <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+        </div>
+      )}
+
+      {context.kind === 'shop_user' && (
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Store QR Code</h2>
+          <p style={cardSubStyle}>Print or share this so customers can start ordering by scanning it.</p>
+          <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
         </div>
       )}
 

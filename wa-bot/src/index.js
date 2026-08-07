@@ -6,6 +6,7 @@ const webhookRouter = require('./routes/webhook');
 const internalRouter = require('./routes/internal');
 const { getDueRetries } = require('./services/deliveryTracker');
 const { retryNewOrderAlert, processDueNewOrderAlerts } = require('./services/orderCreator');
+const { processDueReminders } = require('./services/reminderService');
 
 const app = express();
 
@@ -127,6 +128,15 @@ const newOrderAlertTimer = setInterval(() => {
   processDueNewOrderAlerts().catch((err) => logger.error({ err }, 'Delayed new-order alert scan failed'));
 }, RETRY_INTERVAL_MS);
 newOrderAlertTimer.unref();
+
+// Reminder + auto-reject scan — same DB-polled pattern, same reason
+// (restart-safety). Independent of the two timers above: it only ever
+// touches orders whose staff alert has already gone out, so there's no
+// ordering dependency on processDueNewOrderAlerts within a single tick.
+const reminderTimer = setInterval(() => {
+  processDueReminders().catch((err) => logger.error({ err }, 'Reminder/auto-reject scan failed'));
+}, RETRY_INTERVAL_MS);
+reminderTimer.unref();
 
 // Graceful shutdown
 const shutdown = (signal) => {

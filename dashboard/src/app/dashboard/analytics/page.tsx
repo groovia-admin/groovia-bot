@@ -33,7 +33,7 @@ export default async function AnalyticsPage() {
   const [{ data: orders, error: ordersError }, { data: items, error: itemsError }] = await Promise.all([
     adminClient
       .from('orders')
-      .select('id, status, total_amount, created_at')
+      .select('id, status, total_amount, payment_method, created_at')
       .eq('shop_id', context.shopId)
       .gte('created_at', since),
     adminClient
@@ -55,6 +55,15 @@ export default async function AnalyticsPage() {
   const statusCounts: Record<string, number> = {}
   for (const o of allOrders) statusCounts[o.status] = (statusCounts[o.status] ?? 0) + 1
   const maxStatusCount = Math.max(1, ...Object.values(statusCounts))
+
+  // Revenue by payment method, completed orders only — same "actually
+  // fulfilled" scope as totalRevenue above, just broken down further.
+  const revenueByPaymentMethod = new Map<string, number>()
+  for (const o of fulfilledOrders) {
+    const method = o.payment_method || 'unspecified'
+    revenueByPaymentMethod.set(method, (revenueByPaymentMethod.get(method) ?? 0) + Number(o.total_amount))
+  }
+  const maxPaymentMethodRevenue = Math.max(1, ...revenueByPaymentMethod.values())
 
   // Revenue/order volume by day, oldest → newest, for the trend strip.
   const dayBuckets = new Map<string, { revenue: number; count: number }>()
@@ -183,6 +192,31 @@ export default async function AnalyticsPage() {
             </div>
           )}
         </div>
+
+        {showRevenue && (
+          <div style={S.card}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111B21', marginBottom: 14 }}>Revenue by payment method</div>
+            {revenueByPaymentMethod.size === 0 ? (
+              <p style={{ fontSize: 13, color: '#667781', margin: 0 }}>No completed orders yet.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {Array.from(revenueByPaymentMethod.entries())
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([method, revenue]) => (
+                    <div key={method} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ width: 80, fontSize: 12, color: '#667781', textTransform: 'capitalize' }}>{method}</div>
+                      <div style={{ flex: 1, background: '#F0F2F5', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                        <div style={{ width: `${(revenue / maxPaymentMethodRevenue) * 100}%`, height: '100%', background: '#128C7E' }} />
+                      </div>
+                      <div style={{ width: 60, fontSize: 12, color: '#111B21', fontWeight: 600, textAlign: 'right' }}>
+                        ₹{revenue.toFixed(0)}
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

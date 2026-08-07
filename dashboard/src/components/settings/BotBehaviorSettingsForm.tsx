@@ -12,6 +12,8 @@ export type BotBehaviorSettings = {
   welcome_message: string | null;
   away_message: string | null;
   business_hours: BusinessHours;
+  reminder_enabled: boolean;
+  auto_reject_after_minutes: number | null;
 };
 
 const DEFAULTS: BotBehaviorSettings = {
@@ -20,6 +22,8 @@ const DEFAULTS: BotBehaviorSettings = {
   welcome_message: null,
   away_message: null,
   business_hours: null,
+  reminder_enabled: true,
+  auto_reject_after_minutes: null,
 };
 
 export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<BotBehaviorSettings> | null }) {
@@ -33,6 +37,9 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
   const [hoursEnabled, setHoursEnabled] = useState(Boolean(merged.business_hours));
   const [openTime, setOpenTime] = useState(merged.business_hours?.open ?? "09:00");
   const [closeTime, setCloseTime] = useState(merged.business_hours?.close ?? "21:00");
+  const [reminderEnabled, setReminderEnabled] = useState(merged.reminder_enabled);
+  const [autoRejectEnabled, setAutoRejectEnabled] = useState(merged.auto_reject_after_minutes != null);
+  const [autoRejectMinutes, setAutoRejectMinutes] = useState(String(merged.auto_reject_after_minutes ?? 60));
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -54,6 +61,8 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
           welcome_message: welcomeMessage.trim() || null,
           away_message: awayMessage.trim() || null,
           business_hours: hoursEnabled ? { open: openTime, close: closeTime } : null,
+          reminder_enabled: reminderEnabled,
+          auto_reject_after_minutes: autoRejectEnabled ? Number(autoRejectMinutes) || 60 : null,
         }),
       });
 
@@ -78,9 +87,9 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
   return (
     <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={noticeStyle}>
-        The welcome message is sent live to customers. Auto-accept, business hours, and the away
-        message are saved here but not yet enforced by the WhatsApp bot — orders still need manual
-        Accept/Reject and the bot replies at any hour today.
+        The welcome message, reminders, and auto-reject are live. Auto-accept, business hours, and
+        the away message are saved here but not yet enforced by the WhatsApp bot — orders still
+        need manual Accept/Reject and the bot replies at any hour today.
       </div>
 
       {error && <div style={errorStyle}>{error}</div>}
@@ -131,6 +140,31 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
             <label style={labelStyle}>Closes at</label>
             <input style={inputStyle} type="time" value={closeTime} onChange={(e) => setCloseTime(e.target.value)} />
           </div>
+        </div>
+      )}
+
+      <ToggleRow
+        label="Remind staff about unanswered orders"
+        on={reminderEnabled}
+        onToggle={() => setReminderEnabled((v) => !v)}
+      />
+
+      <ToggleRow
+        label="Auto-reject orders nobody responds to"
+        on={autoRejectEnabled}
+        onToggle={() => setAutoRejectEnabled((v) => !v)}
+      />
+
+      {autoRejectEnabled && (
+        <div>
+          <label style={labelStyle}>Auto-reject after (minutes)</label>
+          <input
+            style={inputStyle}
+            type="number"
+            min={5}
+            value={autoRejectMinutes}
+            onChange={(e) => setAutoRejectMinutes(e.target.value)}
+          />
         </div>
       )}
 
