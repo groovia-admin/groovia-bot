@@ -351,6 +351,11 @@ export default function LoginPage() {
           Access by invitation only ·{' '}
           <a href="mailto:admin@groovia.co.in" style={{ color: '#128C7E' }}>admin@groovia.co.in</a>
         </p>
+
+        <p style={{ textAlign: 'center', fontSize: '11px', color: '#8696A0', marginTop: '10px' }}>
+          Powered by{' '}
+          <span style={{ color: '#128C7E', fontWeight: 700 }}>GrooVia</span>
+        </p>
       </div>
     </div>
   )

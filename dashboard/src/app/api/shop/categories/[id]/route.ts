@@ -36,7 +36,22 @@ export async function PATCH(request: Request, { params }: CategoryRouteContext) 
     if (typeof body.name !== 'string' || !body.name.trim()) {
       return NextResponse.json({ error: 'Category name cannot be empty' }, { status: 400 })
     }
-    changes.name = body.name.trim()
+    const name = body.name.trim()
+
+    const { data: existingCategories } = await adminClient
+      .from('categories')
+      .select('id, name')
+      .eq('shop_id', shopId)
+
+    const isDuplicate = (existingCategories ?? []).some(
+      (c) => c.id !== id && c.name.trim().toLowerCase() === name.toLowerCase()
+    )
+
+    if (isDuplicate) {
+      return NextResponse.json({ error: 'A category with this name already exists' }, { status: 409 })
+    }
+
+    changes.name = name
   }
 
   if (Object.prototype.hasOwnProperty.call(body, 'description')) {

@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { getSupabase } = require('./shopResolver');
+const { getSupabase, normalizeWhatsappFrom } = require('./shopResolver');
 
 // Customer-facing conversation history, shown to shop owners in the
 // dashboard — deliberately NOT used for staff command messages
@@ -16,6 +16,8 @@ async function getOrCreateConversation(shopId, phone) {
     .select('id')
     .eq('shop_id', shopId)
     .eq('customer_phone', phone)
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (findError) {
@@ -45,7 +47,13 @@ async function logMessage(shopId, phone, direction, senderType, messageType, con
     const supabase = getSupabase();
     if (!supabase || !shopId || !phone) return;
 
-    const conversationId = await getOrCreateConversation(shopId, phone);
+    // Callers pass whatever shape the webhook/staff-command handler had on
+    // hand (bare "919876543210" or "+919876543210") — normalize so the same
+    // customer always maps to the same conversation row regardless of which
+    // call site logged first.
+    const normalizedPhone = normalizeWhatsappFrom(phone) || phone;
+
+    const conversationId = await getOrCreateConversation(shopId, normalizedPhone);
     if (!conversationId) return;
 
     const { error } = await supabase.from('whatsapp_messages').insert({

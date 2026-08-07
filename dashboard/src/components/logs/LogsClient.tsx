@@ -2,7 +2,7 @@
 
 import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight, ScrollText } from "lucide-react";
+import { ChevronDown, ChevronRight, ScrollText, Search } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 
 type ActorType = "super_admin" | "owner" | "manager" | "staff" | "system" | "whatsapp" | "ai";
@@ -105,6 +105,9 @@ export default function LogsClient({
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [shopFilter, setShopFilter] = useState<string>("all");
   const [category, setCategory] = useState<"all" | "admin" | "shop">("all");
+  const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const logs = useMemo(
     () =>
@@ -112,9 +115,31 @@ export default function LogsClient({
         if (shopFilter !== "all" && row.shop_id !== shopFilter) return false;
         if (category === "admin" && row.actor_type !== "super_admin") return false;
         if (category === "shop" && row.actor_type === "super_admin") return false;
+
+        const rowDate = row.created_at.slice(0, 10);
+        if (dateFrom && rowDate < dateFrom) return false;
+        if (dateTo && rowDate > dateTo) return false;
+
+        const q = search.trim().toLowerCase();
+        if (q) {
+          const actorName = (row.metadata?.actor_name as string | undefined) ?? "";
+          const targetName = (row.metadata?.target_name as string | undefined) ?? row.entity_type;
+          const haystack = [
+            actorLabel(row.actor_type),
+            actorName,
+            ACTION_LABEL[row.action] ?? row.action,
+            row.action,
+            targetName,
+            row.shop_name ?? "",
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(q)) return false;
+        }
+
         return true;
       }),
-    [initialLogs, shopFilter, category],
+    [initialLogs, shopFilter, category, search, dateFrom, dateTo],
   );
 
   const columnCount = useMemo(() => (showShopColumn ? 5 : 4), [showShopColumn]);
@@ -202,6 +227,50 @@ export default function LogsClient({
         )}
       </div>
 
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
+          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>Search</label>
+          <Search size={14} color="#8696A0" style={{ position: "absolute", left: 10, top: 30, transform: "translateY(-50%)" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Actor, action, or target…"
+            style={{ ...S.input, paddingLeft: 30 }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>From</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #E9EDEF", background: "#FFFFFF", color: "#111B21", fontSize: 13, fontFamily: "inherit" }}
+          />
+        </div>
+        <div>
+          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>To</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #E9EDEF", background: "#FFFFFF", color: "#111B21", fontSize: 13, fontFamily: "inherit" }}
+          />
+        </div>
+        {(search || dateFrom || dateTo) && (
+          <button
+            type="button"
+            onClick={() => {
+              setSearch("");
+              setDateFrom("");
+              setDateTo("");
+            }}
+            style={S.btn("#F5F6F6", "#111B21")}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       <div style={S.card}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -220,7 +289,7 @@ export default function LogsClient({
                   <td style={S.td} colSpan={columnCount}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
                       <ScrollText size={14} />
-                      No activity recorded yet.
+                      {initialLogs.length === 0 ? "No activity recorded yet." : "No activity matches your filters."}
                     </div>
                   </td>
                 </tr>

@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Upload } from "lucide-react";
+import { S } from "@/lib/ui/dashboardStyles";
 
 type Category = {
   id: string;
@@ -22,49 +23,6 @@ type Product = {
   is_available: boolean;
   image_url: string | null;
   sku: string | null;
-};
-
-const S = {
-  card: {
-    background: "#1e293b",
-    border: "1px solid #334155",
-    borderRadius: 12,
-    padding: 20,
-  } as React.CSSProperties,
-  input: {
-    width: "100%",
-    padding: "9px 14px",
-    borderRadius: 8,
-    border: "1px solid #334155",
-    background: "#0f172a",
-    color: "#f1f5f9",
-    fontSize: 13,
-    outline: "none",
-    fontFamily: "inherit",
-    boxSizing: "border-box",
-  } as React.CSSProperties,
-  label: {
-    display: "block",
-    fontSize: 12,
-    color: "#94a3b8",
-    marginBottom: 6,
-    fontWeight: 600,
-  } as React.CSSProperties,
-  btn: (background: string, color: string) =>
-    ({
-      display: "inline-flex",
-      alignItems: "center",
-      gap: 6,
-      padding: "9px 16px",
-      borderRadius: 8,
-      border: "none",
-      background,
-      color,
-      fontSize: 13,
-      fontWeight: 600,
-      cursor: "pointer",
-      fontFamily: "inherit",
-    }) as React.CSSProperties,
 };
 
 export default function ProductDetailClient({
@@ -173,20 +131,20 @@ export default function ProductDetailClient({
       <button
         type="button"
         onClick={() => router.push("/dashboard/products")}
-        style={{ ...S.btn("transparent", "#94a3b8"), padding: 0, width: "fit-content" }}
+        style={{ ...S.btn("transparent", "#667781"), padding: 0, width: "fit-content" }}
       >
         <ArrowLeft size={15} />
         Back to products
       </button>
 
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9", margin: 0 }}>Edit product</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Edit product</h1>
 
       {error && (
         <div
           style={{
-            color: "#f87171",
-            background: "rgba(239,68,68,0.1)",
-            border: "1px solid rgba(239,68,68,0.2)",
+            color: "#C0392B",
+            background: "#FDECEA",
+            border: "1px solid #F5C6C2",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -199,9 +157,9 @@ export default function ProductDetailClient({
       {saved && !error && (
         <div
           style={{
-            color: "#4ade80",
-            background: "rgba(34,197,94,0.1)",
-            border: "1px solid rgba(34,197,94,0.2)",
+            color: "#128C7E",
+            background: "#DCF8C6",
+            border: "1px solid #B9EFA4",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -302,7 +260,7 @@ export default function ProductDetailClient({
               <img
                 src={form.image_url}
                 alt=""
-                style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid #334155" }}
+                style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid #E9EDEF" }}
               />
             ) : (
               <div
@@ -310,7 +268,7 @@ export default function ProductDetailClient({
                   width: 56,
                   height: 56,
                   borderRadius: 8,
-                  border: "1px dashed #334155",
+                  border: "1px dashed #E9EDEF",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -333,7 +291,7 @@ export default function ProductDetailClient({
               type="button"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              style={{ ...S.btn("#334155", "#f1f5f9"), opacity: uploading ? 0.5 : 1 }}
+              style={{ ...S.btn("#F5F6F6", "#111B21"), opacity: uploading ? 0.5 : 1 }}
             >
               <Upload size={14} />
               {uploading ? "Uploading…" : form.image_url ? "Replace image" : "Upload image"}
@@ -352,7 +310,7 @@ export default function ProductDetailClient({
           <input style={S.input} value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#cbd5e1" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#111B21" }}>
           <input
             type="checkbox"
             checked={form.is_available}
@@ -361,7 +319,7 @@ export default function ProductDetailClient({
           Available for sale
         </label>
 
-        <button type="submit" disabled={saving} style={{ ...S.btn("#3b82f6", "#fff"), opacity: saving ? 0.5 : 1, width: "fit-content" }}>
+        <button type="submit" disabled={saving} style={{ ...S.btn("#25D366", "#fff"), opacity: saving ? 0.5 : 1, width: "fit-content" }}>
           {saving ? "Saving…" : "Save changes"}
         </button>
       </form>

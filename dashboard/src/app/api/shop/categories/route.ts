@@ -60,10 +60,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Category name is required' }, { status: 400 })
   }
 
-  const { count: existingCount } = await adminClient
+  const { data: existingCategories } = await adminClient
     .from('categories')
-    .select('*', { count: 'exact', head: true })
+    .select('id, name')
     .eq('shop_id', shopId)
+
+  // Case-insensitive comparison so "Snacks" and "snacks" can't coexist —
+  // shop owners would otherwise end up with silently duplicated categories.
+  const isDuplicate = (existingCategories ?? []).some(
+    (c) => c.name.trim().toLowerCase() === name.toLowerCase()
+  )
+
+  if (isDuplicate) {
+    return NextResponse.json({ error: 'A category with this name already exists' }, { status: 409 })
+  }
 
   const { data: category, error } = await adminClient
     .from('categories')
@@ -71,7 +81,7 @@ export async function POST(request: Request) {
       shop_id: shopId,
       name,
       description: description || null,
-      display_order: existingCount ?? 0,
+      display_order: existingCategories?.length ?? 0,
       is_active: true,
     })
     .select('id, name, description, image_url, display_order, is_active, created_at')
