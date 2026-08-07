@@ -1,13 +1,47 @@
-export default function OrdersPage() {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', margin: 0 }}>Orders</h1>
-        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
-      </div>
-      <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20, color: '#94a3b8', fontSize: 13 }}>
-        Orders list coming soon.
-      </div>
-    </div>
-  );
+import { requireRole } from '@/lib/auth/require-role'
+import { createAdminClient } from '@/lib/supabase/admin'
+import OrdersClient from '@/components/orders/OrdersClient'
+
+export const dynamic = 'force-dynamic'
+
+export default async function OrdersPage() {
+  const context = await requireRole(['owner', 'manager', 'staff'])
+
+  if (context.kind !== 'shop_user') {
+    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
+  }
+
+  const adminClient = createAdminClient()
+
+  const { data: orders, error } = await adminClient
+    .from('orders')
+    .select(
+      'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot )'
+    )
+    .eq('shop_id', context.shopId)
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  if (error) {
+    console.error('Failed to load orders:', error)
+  }
+
+  const rows = (orders ?? []).map((o) => {
+    const details = Array.isArray(o.order_customer_details) ? o.order_customer_details[0] : o.order_customer_details
+    return {
+      id: o.id,
+      order_number: o.order_number,
+      status: o.status,
+      order_type: o.order_type,
+      payment_method: o.payment_method,
+      payment_status: o.payment_status,
+      total_amount: o.total_amount,
+      pickup_slot_label: o.pickup_slot_label,
+      created_at: o.created_at,
+      customer_name: details?.customer_name_snapshot ?? null,
+      customer_phone: details?.customer_phone_snapshot ?? null,
+    }
+  })
+
+  return <OrdersClient initialOrders={rows} showRevenue={context.role !== 'staff'} />
 }

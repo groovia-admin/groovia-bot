@@ -19,7 +19,7 @@ export async function GET(request: Request, { params }: RouteContext) {
   // conversation, even by guessing a UUID.
   const { data: conversation, error: conversationError } = await adminClient
     .from('whatsapp_conversations')
-    .select('id')
+    .select('id, customer_phone')
     .eq('id', conversationId)
     .eq('shop_id', shopId)
     .maybeSingle()
@@ -33,10 +33,27 @@ export async function GET(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'Conversation not found' }, { status: 404 })
   }
 
+  // A logging-side race can split one customer's history across more than
+  // one whatsapp_conversations row (see conversationLogger.js). Pull every
+  // sibling row for this phone so the thread reads as one continuous
+  // conversation regardless of which id the sidebar passed in.
+  const { data: siblingConversations, error: siblingsError } = await adminClient
+    .from('whatsapp_conversations')
+    .select('id')
+    .eq('shop_id', shopId)
+    .eq('customer_phone', conversation.customer_phone)
+
+  if (siblingsError) {
+    console.error('Sibling conversation lookup failed:', siblingsError)
+    return NextResponse.json({ error: 'Failed to load conversation' }, { status: 500 })
+  }
+
+  const conversationIds = (siblingConversations ?? []).map((c) => c.id)
+
   const { data: messages, error } = await adminClient
     .from('whatsapp_messages')
     .select('id, direction, sender_type, message_type, content, sent_at')
-    .eq('conversation_id', conversationId)
+    .in('conversation_id', conversationIds)
     .order('sent_at', { ascending: true })
 
   if (error) {

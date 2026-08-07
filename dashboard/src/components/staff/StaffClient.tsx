@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Plus, ShieldCheck, UserX, UserCheck } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
+import StatusLegend from "@/components/ui/StatusLegend";
 
 type StaffRole = "owner" | "manager" | "staff";
 
@@ -121,6 +122,13 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
           Add staff
         </button>
       </div>
+
+      <StatusLegend
+        items={[
+          { color: "#128C7E", label: "Active", hint: "can sign in and use the dashboard" },
+          { color: "#667781", label: "Inactive", hint: "access revoked, click Reactivate to restore" },
+        ]}
+      />
 
       {error && (
         <div
@@ -265,6 +273,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                             type="button"
                             disabled={busy}
                             onClick={() => updateStaff(row.id, { is_active: !row.is_active })}
+                            title={row.is_active ? "Revoke dashboard access" : "Restore dashboard access"}
                             style={{
                               ...S.btn(
                                 row.is_active ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",

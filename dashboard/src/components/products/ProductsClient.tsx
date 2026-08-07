@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
+import StatusLegend from "@/components/ui/StatusLegend";
 
 type Category = {
   id: string;
@@ -246,6 +247,14 @@ export default function ProductsClient({
           </p>
         </div>
       </div>
+
+      <StatusLegend
+        items={[
+          { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
+          { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
+          { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
+        ]}
+      />
 
       {error && (
         <div
@@ -498,6 +507,7 @@ export default function ProductsClient({
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                           <Link
                             href={`/dashboard/products/${product.id}`}
+                            title="Edit product"
                             style={{ ...S.btn("#F5F6F6", "#111B21"), padding: "6px 10px", textDecoration: "none" }}
                           >
                             <Pencil size={13} />
@@ -506,6 +516,7 @@ export default function ProductsClient({
                             type="button"
                             disabled={busy}
                             onClick={() => toggleAvailability(product)}
+                            title={product.is_available ? "Hide from customers" : "Show to customers"}
                             style={{
                               ...S.btn(
                                 product.is_available ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",

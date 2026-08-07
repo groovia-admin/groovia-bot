@@ -8,7 +8,7 @@ export default async function InventoryPage() {
   const context = await requireRole(['owner', 'manager', 'staff'])
 
   if (context.kind === 'super_admin') {
-    return <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20, color: '#94a3b8', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const adminClient = createAdminClient()
@@ -30,23 +30,24 @@ export default async function InventoryPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#f1f5f9', margin: 0 }}>Inventory</h1>
-        <p style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111B21', margin: 0 }}>Inventory</h1>
+        <p style={{ fontSize: 13, color: '#667781', marginTop: 4 }}>
           Products at or below their low-stock threshold.
         </p>
       </div>
 
       <div
         style={{
-          background: '#1e293b',
-          border: '1px solid #334155',
+          background: '#FFFFFF',
+          border: '1px solid #E9EDEF',
           borderRadius: 12,
           padding: 0,
           overflow: 'hidden',
+          boxShadow: '0 1px 2px rgba(17,27,33,0.04)',
         }}
       >
         {lowStock.length === 0 ? (
-          <p style={{ padding: 20, fontSize: 13, color: '#64748b', margin: 0 }}>
+          <p style={{ padding: 20, fontSize: 13, color: '#667781', margin: 0 }}>
             Nothing low on stock right now.
           </p>
         ) : (
@@ -63,12 +64,12 @@ export default async function InventoryPage() {
             <tbody>
               {lowStock.map((product) => (
                 <tr key={product.id}>
-                  <td style={{ ...td, color: '#f1f5f9', fontWeight: 500 }}>{product.name}</td>
+                  <td style={{ ...td, color: '#111B21', fontWeight: 500 }}>{product.name}</td>
                   <td style={td}>{product.unit}</td>
-                  <td style={{ ...td, color: '#f59e0b', fontWeight: 600 }}>{product.stock_quantity}</td>
+                  <td style={{ ...td, color: '#D97706', fontWeight: 600 }}>{product.stock_quantity}</td>
                   <td style={td}>{product.low_stock_threshold}</td>
                   <td style={{ ...td, textAlign: 'right' }}>
-                    <Link href={`/dashboard/products/${product.id}`} style={{ color: '#3b82f6', fontSize: 13, textDecoration: 'none' }}>
+                    <Link href={`/dashboard/products/${product.id}`} style={{ color: '#128C7E', fontSize: 13, textDecoration: 'none' }}>
                       Restock →
                     </Link>
                   </td>
@@ -88,14 +89,14 @@ const th: React.CSSProperties = {
   fontSize: 11,
   textTransform: 'uppercase',
   letterSpacing: '0.7px',
-  color: '#64748b',
+  color: '#667781',
   fontWeight: 600,
-  borderBottom: '1px solid #334155',
+  borderBottom: '1px solid #E9EDEF',
 }
 
 const td: React.CSSProperties = {
   padding: '12px 16px',
   fontSize: 13,
-  color: '#94a3b8',
-  borderBottom: '1px solid rgba(30,41,59,0.8)',
+  color: '#667781',
+  borderBottom: '1px solid #F0F2F5',
 }

@@ -1,0 +1,183 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { format } from "date-fns";
+import { Search, ShoppingBag } from "lucide-react";
+import { S } from "@/lib/ui/dashboardStyles";
+import StatusLegend from "@/components/ui/StatusLegend";
+
+type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
+
+type OrderRow = {
+  id: string;
+  order_number: string;
+  status: OrderStatus;
+  order_type: string;
+  payment_method: string | null;
+  payment_status: string;
+  total_amount: number;
+  pickup_slot_label: string | null;
+  created_at: string;
+  customer_name: string | null;
+  customer_phone: string | null;
+};
+
+const STATUS_STYLE: Record<OrderStatus, [string, string]> = {
+  pending: ["#B7791F", "rgba(245,158,11,0.12)"],
+  accepted: ["#1D4ED8", "rgba(59,130,246,0.12)"],
+  preparing: ["#6D28D9", "rgba(139,92,246,0.12)"],
+  ready: ["#0F9D6B", "rgba(16,185,129,0.12)"],
+  completed: ["#4B5563", "rgba(107,114,128,0.12)"],
+  rejected: ["#C0392B", "rgba(239,68,68,0.12)"],
+  cancelled: ["#C0392B", "rgba(239,68,68,0.12)"],
+};
+
+const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "pending", label: "Pending" },
+  { value: "accepted", label: "Accepted" },
+  { value: "preparing", label: "Preparing" },
+  { value: "ready", label: "Ready" },
+  { value: "completed", label: "Completed" },
+  { value: "rejected", label: "Rejected" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
+export default function OrdersClient({ initialOrders, showRevenue }: { initialOrders: OrderRow[]; showRevenue: boolean }) {
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+
+  const counts = useMemo(() => {
+    const map: Partial<Record<OrderStatus, number>> = {};
+    for (const o of initialOrders) map[o.status] = (map[o.status] ?? 0) + 1;
+    return map;
+  }, [initialOrders]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return initialOrders.filter((o) => {
+      if (statusFilter !== "all" && o.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        o.order_number.toLowerCase().includes(q) ||
+        (o.customer_name ?? "").toLowerCase().includes(q) ||
+        (o.customer_phone ?? "").toLowerCase().includes(q)
+      );
+    });
+  }, [initialOrders, search, statusFilter]);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
+        <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
+      </div>
+
+      <StatusLegend
+        items={[
+          { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
+          { color: "#1D4ED8", label: "Accepted", hint: "shop confirmed, not yet started" },
+          { color: "#6D28D9", label: "Preparing", hint: "being packed" },
+          { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
+          { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
+          { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
+        ]}
+      />
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ position: "relative", maxWidth: 340 }}>
+          <Search size={14} color="#8696A0" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search order #, customer name or phone…"
+            style={{ ...S.input, paddingLeft: 30 }}
+          />
+        </div>
+
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {STATUS_TABS.map((tab) => {
+            const active = statusFilter === tab.value;
+            const count = tab.value === "all" ? initialOrders.length : counts[tab.value] ?? 0;
+            return (
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setStatusFilter(tab.value)}
+                style={{
+                  padding: "5px 12px",
+                  borderRadius: 999,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  border: "1px solid " + (active ? "#25D366" : "#E9EDEF"),
+                  background: active ? "#DCF8C6" : "#FFFFFF",
+                  color: active ? "#128C7E" : "#667781",
+                }}
+              >
+                {tab.label} {count > 0 && <span style={{ opacity: 0.7 }}>({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={S.th}>Order</th>
+                <th style={S.th}>Customer</th>
+                <th style={S.th}>Status</th>
+                <th style={S.th}>Placed</th>
+                {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Total</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td style={S.td} colSpan={showRevenue ? 5 : 4}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
+                      <ShoppingBag size={14} />
+                      {initialOrders.length === 0 ? "No orders yet." : "No orders match your search."}
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((o) => {
+                  const [color, background] = STATUS_STYLE[o.status];
+                  return (
+                    <tr key={o.id}>
+                      <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
+                        <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#128C7E", textDecoration: "none" }}>
+                          #{o.order_number}
+                        </Link>
+                      </td>
+                      <td style={S.td}>
+                        {o.customer_name || o.customer_phone || "—"}
+                      </td>
+                      <td style={S.td}>
+                        <span style={S.badge(color, background)}>{o.status}</span>
+                      </td>
+                      <td style={{ ...S.td, whiteSpace: "nowrap" }}>
+                        {o.pickup_slot_label ?? format(new Date(o.created_at), "MMM d, HH:mm")}
+                      </td>
+                      {showRevenue && (
+                        <td style={{ ...S.td, textAlign: "right", color: "#111B21", fontWeight: 600 }}>
+                          ₹{Number(o.total_amount).toFixed(2)}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
