@@ -19,7 +19,7 @@ const {
   buildCartFromOrderMessage,
   cartTotal,
   createOrderFromSession,
-  notifyShopOfNewOrder,
+  cancelOrderByCustomer,
   sendNewOrderAlertTemplateFallback,
 } = require('./orderCreator');
 const {
@@ -32,13 +32,76 @@ const {
 } = require('./orderEditor');
 const deliveryTracker = require('./deliveryTracker');
 
-// Static for now — the demo's "recommended based on time of day" logic is
-// a deliberate scope cut for the core loop.
-const PICKUP_SLOTS = [
-  { id: 'slot_1', label: '6:00–6:30 PM' },
-  { id: 'slot_2', label: '6:30–7:00 PM' },
-  { id: 'slot_3', label: '7:00–7:30 PM' },
-];
+// ── Dynamic hourly pickup slots ──────────────────────────────────
+// Replaces the old hardcoded 3-slot list — real slots now come from
+// the shop's own configured business_hours (dashboard: Settings ->
+// Bot behavior), generated hourly for the rest of today. List messages
+// cap at 10 rows total, so this caps at 9 to leave room in case a
+// "done"-style row is ever added later.
+const MAX_PICKUP_SLOTS = 9;
+
+function getCurrentHourAndMinute(timezone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone || 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: 'numeric',
+    hour12: false,
+  }).formatToParts(new Date());
+
+  return {
+    hour: Number(parts.find((p) => p.type === 'hour')?.value ?? 0) % 24,
+    minute: Number(parts.find((p) => p.type === 'minute')?.value ?? 0),
+  };
+}
+
+function formatHourLabel(hour) {
+  const h = ((hour % 24) + 24) % 24;
+  const period = h < 12 ? 'AM' : 'PM';
+  const displayHour = h % 12 === 0 ? 12 : h % 12;
+  return `${displayHour}:00 ${period}`;
+}
+
+// Deliberately today-only for now — a shop open past midnight, or a
+// customer ordering after closing for pickup tomorrow, isn't handled
+// here. Returns [] if the shop hasn't configured hours, or if there's
+// no time left today to offer.
+function generateHourlySlots(businessHours, timezone) {
+  if (!businessHours?.open || !businessHours?.close) return [];
+
+  const [openHour] = String(businessHours.open).split(':').map(Number);
+  const [closeHour] = String(businessHours.close).split(':').map(Number);
+
+  if (!Number.isInteger(openHour) || !Number.isInteger(closeHour) || closeHour <= openHour) {
+    return [];
+  }
+
+  const { hour: currentHour, minute: currentMinute } = getCurrentHourAndMinute(timezone);
+
+  // The current hour's slot is already (partly) gone once we're inside
+  // it — e.g. at 2:15pm the 2-3pm slot no longer makes sense to offer,
+  // so the earliest option becomes 3-4pm.
+  const nextFullHour = currentMinute > 0 ? currentHour + 1 : currentHour;
+  const startHour = Math.max(openHour, nextFullHour);
+
+  const slots = [];
+  for (let h = startHour; h < closeHour && slots.length < MAX_PICKUP_SLOTS; h++) {
+    slots.push({ id: `slot_${h}`, hour: h, label: `${formatHourLabel(h)} – ${formatHourLabel(h + 1)}` });
+  }
+
+  return slots;
+}
+
+async function getPickupSlots(shopId) {
+  const supabase = getSupabase();
+  if (!supabase) return [];
+
+  const [{ data: shop }, { data: settings }] = await Promise.all([
+    supabase.from('shops').select('timezone').eq('id', shopId).maybeSingle(),
+    supabase.from('shop_settings').select('business_hours').eq('shop_id', shopId).maybeSingle(),
+  ]);
+
+  return generateHourlySlots(settings?.business_hours, shop?.timezone);
+}
 
 const PAYMENT_OPTIONS = [
   { id: 'pay_cash', label: 'Cash at counter', value: 'cash' },
@@ -452,14 +515,25 @@ async function sendGreeting(from, shopId, name) {
 // round trip, and the button message's own body text can carry everything
 // the first message said, so there's no reason to pay for two.
 async function sendSlotPrompt(shopId, from, total, note) {
+  const slots = await getPickupSlots(shopId);
   const body =
     (note ? `${note}\n\n` : '') +
     `🛒 *Cart total: ₹${total.toFixed(2)}*\n\n⏰ When would you like to pick up?`;
 
-  await sendButtonMessage(
+  if (slots.length === 0) {
+    const closedText = `${body}\n\n😕 Sorry, we're closed for today — please message us again during business hours.`;
+    await sendWhatsAppMessage(from, closedText);
+    logMessage(shopId, from, 'outbound', 'system', 'text', closedText);
+    return;
+  }
+
+  // A list, not buttons — business hours can easily produce more than
+  // the 3-button limit's worth of hourly slots.
+  await sendListMessage(
     from,
     body,
-    PICKUP_SLOTS.map((s) => ({ id: s.id, title: s.label }))
+    'Select time',
+    [{ title: 'Pickup slots', rows: slots.map((s) => ({ id: s.id, title: s.label })) }]
   );
   logMessage(shopId, from, 'outbound', 'system', 'interactive', body);
 }
@@ -487,8 +561,13 @@ async function sendConfirmPrompt(shopId, from, session) {
     `💵 Payment: ${paymentLabel}\n\n` +
     `Confirm?`;
 
+  // 3 buttons — the max WhatsApp allows. "Change slot" loops back to
+  // slot selection reusing this same session/cart rather than making
+  // the customer abandon everything and re-browse the native catalog
+  // from scratch just to fix a wrong pickup time.
   await sendButtonMessage(from, text, [
     { id: 'confirm_yes', title: '✅ Place order' },
+    { id: 'confirm_edit_slot', title: '✏️ Change slot' },
     { id: 'confirm_no', title: '❌ Cancel' },
   ]);
   logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
@@ -496,7 +575,15 @@ async function sendConfirmPrompt(shopId, from, session) {
 
 async function handleSessionButtonReply(from, shopId, session, buttonId) {
   if (session.step === 'awaiting_slot') {
-    const slot = PICKUP_SLOTS.find((s) => s.id === buttonId);
+    // Re-derive current slots rather than trust the tapped id blindly —
+    // a stale list message tapped minutes later could reference an hour
+    // that's already passed or fallen outside business hours since it
+    // was sent.
+    const slotMatch = /^slot_(\d+)$/.exec(buttonId || '');
+    const requestedHour = slotMatch ? Number(slotMatch[1]) : null;
+    const currentSlots = requestedHour !== null ? await getPickupSlots(shopId) : [];
+    const slot = currentSlots.find((s) => s.hour === requestedHour);
+
     if (!slot) {
       await sendSlotPrompt(shopId, from, session.cart_total);
       return;
@@ -518,6 +605,12 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
   }
 
   if (session.step === 'awaiting_confirm') {
+    if (buttonId === 'confirm_edit_slot') {
+      const updated = await updateSession(session.id, { step: 'awaiting_slot' });
+      await sendSlotPrompt(shopId, from, updated.cart_total);
+      return;
+    }
+
     if (buttonId === 'confirm_no') {
       await deleteSession(session.id);
       const cancelText = 'Order cancelled. Message *Hi* anytime to start again.';
@@ -537,15 +630,20 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
         return;
       }
 
-      const placedText = `✅ *Order ${order.order_number} placed!*\n\nWaiting for the shop to confirm — we'll message you.`;
-      await sendWhatsAppMessage(from, placedText);
-      logMessage(shopId, from, 'outbound', 'system', 'text', placedText);
-
-      try {
-        await notifyShopOfNewOrder(shopId, order, session);
-      } catch (err) {
-        logger.error({ err, orderId: order.id }, 'Failed to notify shop of new order');
-      }
+      // No shop notification here — the shopkeeper alert is
+      // deliberately delayed 5 minutes (processDueNewOrderAlerts,
+      // orderCreator.js + index.js) to give the customer this same
+      // window to self-cancel via the button below without staff ever
+      // seeing (and having to un-accept) an order that gets cancelled
+      // moments later.
+      const placedText =
+        `✅ *Order ${order.order_number} placed!*\n\n` +
+        `You can cancel within 5 minutes if needed.\n\n` +
+        `Waiting for the shop to confirm — we'll message you.`;
+      await sendButtonMessage(from, placedText, [
+        { id: `cancel_order_${order.id}`, title: '❌ Cancel order' },
+      ]);
+      logMessage(shopId, from, 'outbound', 'system', 'interactive', placedText);
     }
   }
 }
@@ -652,6 +750,46 @@ async function handleNearbyShopPick(from, shopId, name) {
   await startCustomerOrderingSession(from, shop, name);
 }
 
+// Customer-initiated cancel, within the 5-minute window enforced
+// server-side by cancelOrderByCustomer (orderCreator.js) — never trust
+// that the button simply not being tapped past 5 minutes is enough,
+// since WhatsApp doesn't expire button messages on its own and a stale
+// tap must still be rejected.
+async function handleCustomerCancelRequest(shopId, from, orderId) {
+  const { result, order } = await cancelOrderByCustomer(orderId, from);
+
+  if (result === 'not_found') {
+    // Deliberately the same message for "no such order" and "wrong
+    // customer" — never confirms or denies that an order exists to a
+    // phone it doesn't belong to.
+    await sendWhatsAppMessage(from, `❌ Order not found.`);
+    return;
+  }
+
+  if (result === 'already_processed') {
+    const text = `⚠️ Order *${order.order_number}* is already being prepared and can no longer be cancelled here — please contact the shop directly.`;
+    await sendWhatsAppMessage(from, text);
+    logMessage(order.shop_id, from, 'outbound', 'system', 'text', text);
+    return;
+  }
+
+  if (result === 'window_expired') {
+    const text = `⚠️ The 5-minute cancellation window for order *${order.order_number}* has passed.`;
+    await sendWhatsAppMessage(from, text);
+    logMessage(order.shop_id, from, 'outbound', 'system', 'text', text);
+    return;
+  }
+
+  if (result === 'db_unavailable') {
+    await sendWhatsAppMessage(from, '⚠️ Something went wrong cancelling your order. Please try again.');
+    return;
+  }
+
+  const text = `✅ Order *${order.order_number}* has been cancelled.`;
+  await sendWhatsAppMessage(from, text);
+  logMessage(order.shop_id, from, 'outbound', 'system', 'text', text);
+}
+
 async function handleCustomerMessage(from, message, shopId, name) {
   logInboundCustomerMessage(shopId, from, message);
 
@@ -690,8 +828,29 @@ async function handleCustomerMessage(from, message, shopId, name) {
     return;
   }
 
-  if (message.type === 'interactive' && message.interactive?.type === 'button_reply' && session) {
-    await handleSessionButtonReply(from, shopId, session, message.interactive.button_reply.id);
+  // Checked regardless of an active session — by the time a customer
+  // can tap this button, createOrderFromSession has already deleted the
+  // cart session that produced the order, so there's nothing in
+  // `session` to gate this on.
+  if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
+    const cancelMatch = /^cancel_order_(.+)$/.exec(message.interactive.button_reply.id || '');
+    if (cancelMatch) {
+      await handleCustomerCancelRequest(shopId, from, cancelMatch[1]);
+      return;
+    }
+  }
+
+  // Pickup-slot selection is a list message (business-hours-derived,
+  // can exceed the 3-button cap), everything else in this flow is still
+  // plain buttons — accept either shape here and hand the tapped id
+  // through unchanged.
+  if (
+    message.type === 'interactive' &&
+    (message.interactive?.type === 'button_reply' || message.interactive?.type === 'list_reply') &&
+    session
+  ) {
+    const replyId = message.interactive.button_reply?.id || message.interactive.list_reply?.id;
+    await handleSessionButtonReply(from, shopId, session, replyId);
     return;
   }
 

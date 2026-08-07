@@ -5,7 +5,7 @@ const logger = require('./utils/logger');
 const webhookRouter = require('./routes/webhook');
 const internalRouter = require('./routes/internal');
 const { getDueRetries } = require('./services/deliveryTracker');
-const { retryNewOrderAlert } = require('./services/orderCreator');
+const { retryNewOrderAlert, processDueNewOrderAlerts } = require('./services/orderCreator');
 
 const app = express();
 
@@ -114,6 +114,19 @@ const retryTimer = setInterval(() => {
   processDueRetries().catch((err) => logger.error({ err }, 'Notification retry loop failed'));
 }, RETRY_INTERVAL_MS);
 retryTimer.unref();
+
+// Delayed new-order alert — deliberately NOT an in-memory setTimeout
+// per order. A per-order timer would silently vanish on a Railway
+// restart/redeploy mid-window, leaving that order's shopkeeper alert
+// never sent at all; polling a DB column every minute survives a
+// restart fine, it just picks the order back up on the next tick.
+// Shares the same 60s cadence as the retry loop above — no reason for
+// a tighter poll when the underlying delay is a fixed 5 minutes either
+// way.
+const newOrderAlertTimer = setInterval(() => {
+  processDueNewOrderAlerts().catch((err) => logger.error({ err }, 'Delayed new-order alert scan failed'));
+}, RETRY_INTERVAL_MS);
+newOrderAlertTimer.unref();
 
 // Graceful shutdown
 const shutdown = (signal) => {
