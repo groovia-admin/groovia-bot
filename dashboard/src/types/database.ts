@@ -2,6 +2,7 @@
 
 export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'cancelled' | 'expired' | 'suspended'
 export type OrderStatus = 'pending' | 'accepted' | 'preparing' | 'ready' | 'completed' | 'rejected' | 'cancelled'
+export type OrderType = 'pickup' | 'delivery'
 export type PaymentMethod = 'cash' | 'upi' | 'online' | 'pay_later'
 export type PaymentStatus = 'pending' | 'paid' | 'failed' | 'refunded'
 export type ShopRole = 'owner' | 'manager' | 'staff'
@@ -90,7 +91,7 @@ export interface Order {
   shop_id: string
   customer_id: string | null
   status: OrderStatus
-  order_type: string
+  order_type: OrderType
   payment_method: PaymentMethod | null
   payment_status: PaymentStatus
   subtotal: number
@@ -100,6 +101,8 @@ export interface Order {
   total_amount: number
   preferred_pickup_time: string | null
   pickup_slot_label: string | null
+  delivery_address_id: string | null
+  delivery_distance_km: number | null
   notes: string | null
   created_via: string
   last_updated_via: string | null
@@ -150,6 +153,24 @@ export interface Customer {
   outstanding_credit: number
   last_order_at: string | null
   is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+// ── customer_addresses ────────────────────────────────────────────────────────
+export interface CustomerAddress {
+  id: string
+  customer_id: string
+  label: string | null
+  address_line_1: string
+  address_line_2: string | null
+  landmark: string | null
+  city: string | null
+  state: string | null
+  postal_code: string | null
+  latitude: number | null
+  longitude: number | null
+  is_default: boolean
   created_at: string
   updated_at: string
 }
