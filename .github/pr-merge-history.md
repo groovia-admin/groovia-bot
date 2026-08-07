@@ -39,3 +39,4 @@
 | #71 | Phase 4 (v2 architecture): public catalog API for the ordering webview | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 16:03 UTC | 0d 0h 0m |
 | #73 | Bot phase4 public catalog api | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 19:50 UTC | 0d 0h 0m |
 | #74 | Phase 6 (v2 architecture): order submission via the webview | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 20:08 UTC | 0d 0h 0m |
+| #75 | Phase 7 (v2 architecture): itemized receipt on order acceptance | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 20:14 UTC | 0d 0h 0m |
