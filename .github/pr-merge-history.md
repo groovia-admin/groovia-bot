@@ -34,3 +34,4 @@
 | #66 | Phase 2 (v2 architecture): shop routing — SHOP-{slug}, location share… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 09:11 UTC | 0d 0h 0m |
 | #67 | Wire order_confirm to the accepted transition (restores customer noti… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 09:31 UTC | 0d 0h 0m |
 | #68 | Order-flow improvements: real hourly slots, self-cancel window, delay… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 13:51 UTC | 0d 0h 0m |
+| #69 | Bot dashboard orders actions tooltips catalog fix | dashboard | @groovia-admin | @groovia-admin | 2026-08-07 15:36 UTC | 0d 0h 0m |
