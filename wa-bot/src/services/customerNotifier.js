@@ -1,7 +1,8 @@
 const logger = require('../utils/logger');
 const { getSupabase } = require('./shopResolver');
-const { getTemplate } = require('./templates');
-const { sendWhatsAppTemplate } = require('./whatsappClient');
+const { getTemplate, fmtMoney } = require('./templates');
+const { sendWhatsAppTemplate, sendWhatsAppMessage } = require('./whatsappClient');
+const { logMessage } = require('./conversationLogger');
 
 // Meta's template UI often defaults to "English (US)" (en_US) rather
 // than the neutral "English" (en) templates.js declares — picking the
@@ -31,6 +32,57 @@ async function sendTemplateWithFallback(phone, template, components) {
   }
 
   return false;
+}
+
+/**
+ * Plain-text itemized receipt — sent alongside order_confirm on ACCEPT,
+ * per the v2 build brief's own Phase 7 flow (ACCEPT -> order_confirm +
+ * receipt). Deliberately plain text, not a generated PDF/image: nothing
+ * else in this codebase produces documents, and a formatted text list is
+ * exactly what every other WhatsApp-commerce bot sends as a "receipt" in
+ * practice — adding a PDF pipeline (generation + either a new public
+ * storage bucket or WhatsApp's Media Upload API) is real infrastructure
+ * for a nice-to-have, not core to placing/confirming an order.
+ *
+ * Best-effort and NOT retried, unlike the new-order-alert path: this is
+ * a plain free-form message, so it inherits the same 24h customer-
+ * service-window limit as any other non-template send (Meta error
+ * 131047) if a shop sits on a pending order for a very long time before
+ * accepting. Building the same tracked-retry/template-fallback machinery
+ * deliveryTracker.js already has, just for this, would be a lot of
+ * infrastructure for a supplementary message the customer's order_confirm
+ * template already covers the essential half of (their order was
+ * accepted) — logged and dropped on failure instead.
+ */
+function buildReceiptText(order, shopName) {
+  const currencyCode = order.currency_code;
+  const items = order.order_items || [];
+  const itemLines = items
+    .map(
+      (item) =>
+        `${item.product_name_snapshot} × ${item.quantity} (${item.unit_snapshot}) — ${fmtMoney(item.subtotal, currencyCode)}`
+    )
+    .join('\n');
+
+  const deliveryLine =
+    order.order_type === 'delivery' && order.delivery_fee
+      ? `Delivery fee: ${fmtMoney(order.delivery_fee, currencyCode)}\n`
+      : '';
+
+  const deliveryAddressLine =
+    order.order_type === 'delivery' && order.delivery_address_snapshot?.address_line_1
+      ? `Delivering to: ${order.delivery_address_snapshot.address_line_1}\n`
+      : '';
+
+  return (
+    `🧾 *Receipt — Order ${order.order_number}*\n\n` +
+    `${itemLines}\n\n` +
+    deliveryLine +
+    `*Total: ${fmtMoney(order.total_amount, currencyCode)}*\n` +
+    (order.pickup_slot_label ? `Pickup: ${order.pickup_slot_label}\n` : '') +
+    deliveryAddressLine +
+    `\nThank you for ordering from *${shopName}*! 🙏`
+  );
 }
 
 /**
@@ -79,9 +131,10 @@ async function notifyCustomer(orderId, status, shopId) {
     .from('orders')
     .select(
       `order_number, total_amount, pickup_slot_label, preferred_pickup_time,
-       rejection_reason, cancellation_reason,
+       rejection_reason, cancellation_reason, order_type, delivery_fee,
        shops ( name, currency_code ),
-       order_customer_details ( customer_name_snapshot, customer_phone_snapshot )`
+       order_customer_details ( customer_name_snapshot, customer_phone_snapshot, delivery_address_snapshot ),
+       order_items ( product_name_snapshot, unit_snapshot, quantity, subtotal )`
     )
     .eq('id', orderId)
     .eq('shop_id', shopId)
@@ -106,7 +159,11 @@ async function notifyCustomer(orderId, status, shopId) {
   const customerName = details?.customer_name_snapshot || 'there';
   const shopName = shop?.name || 'the shop';
 
-  const orderForParams = { ...order, currency_code: shop?.currency_code };
+  const orderForParams = {
+    ...order,
+    currency_code: shop?.currency_code,
+    delivery_address_snapshot: details?.delivery_address_snapshot,
+  };
 
   // Two different component shapes depending on how the approved
   // template was actually authored — see templates.js's `mode` comment.
@@ -131,7 +188,23 @@ async function notifyCustomer(orderId, status, shopId) {
     components = [{ type: 'body', parameters }];
   }
 
-  return sendTemplateWithFallback(phone, template, components);
+  const sent = await sendTemplateWithFallback(phone, template, components);
+
+  // Receipt rides along with order_confirm specifically — matches the
+  // v2 build brief's ACCEPT -> order_confirm + receipt flow. Not sent
+  // for other statuses (ready/completed/rejected/cancelled don't repeat
+  // the itemized list).
+  if (sent && status === 'accepted') {
+    const receiptText = buildReceiptText(orderForParams, shopName);
+    const receiptSent = await sendWhatsAppMessage(phone, receiptText);
+    if (receiptSent) {
+      logMessage(shopId, phone, 'outbound', 'system', 'text', receiptText);
+    } else {
+      logger.warn({ orderId }, 'Failed to send order receipt (best-effort, not retried)');
+    }
+  }
+
+  return sent;
 }
 
 module.exports = { notifyCustomer };

@@ -118,4 +118,4 @@ function getTemplate(status) {
   return ORDER_TEMPLATES[status] || null;
 }
 
-module.exports = { ORDER_TEMPLATES, getTemplate };
+module.exports = { ORDER_TEMPLATES, getTemplate, fmtMoney };
