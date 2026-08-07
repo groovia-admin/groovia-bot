@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
+import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
 import OrderActions from '@/components/orders/OrderActions'
@@ -84,7 +85,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      <OrderActions orderId={order.id} status={order.status} />
+      {viewerHasPermission(context, 'manage_orders') && <OrderActions orderId={order.id} status={order.status} />}
 
       {!isTerminalFail && (
         <div style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 0 }}>

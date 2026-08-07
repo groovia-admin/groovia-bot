@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { requireShopRole } from '@/lib/auth/require-shop-role'
+import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'
 import type { OrderStatus } from '@/types/database'
 
@@ -42,6 +42,13 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
 
   if ('error' in authorization) {
     return authorization.error
+  }
+
+  if (!hasStaffPermission(authorization, 'manage_orders')) {
+    return NextResponse.json(
+      { error: "You don't have permission to update orders. Ask the shop owner to grant it." },
+      { status: 403 }
+    )
   }
 
   const { adminClient, shopId } = authorization
@@ -110,6 +117,51 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
   if (updateError) {
     console.error('Failed to update order status:', updateError)
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
+  }
+
+  // Stock is committed as sold on acceptance (not at order creation, since
+  // orderCreator only checks availability at that point) and restored if a
+  // shop backs out afterward. 'cancelled' is only reachable from
+  // accepted/preparing/ready (see ALLOWED_TRANSITIONS), so stock was always
+  // decremented already — 'rejected' only happens straight from 'pending',
+  // before any decrement occurred, so it needs no restore.
+  const stockEffect: 'decrement' | 'restore' | null =
+    nextStatus === 'accepted' ? 'decrement' : nextStatus === 'cancelled' ? 'restore' : null
+
+  if (stockEffect) {
+    const { data: items, error: itemsError } = await adminClient
+      .from('order_items')
+      .select('product_id, product_name_snapshot, quantity')
+      .eq('order_id', order.id)
+
+    if (itemsError) {
+      console.error('Failed to load order items for stock adjustment:', itemsError)
+    } else {
+      const sign = stockEffect === 'decrement' ? -1 : 1
+      for (const item of items ?? []) {
+        if (!item.product_id) continue // custom/removed products have no stock to adjust
+
+        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
+          p_product_id: item.product_id,
+          p_delta: sign * item.quantity,
+        })
+
+        if (rpcError) {
+          console.error('Failed to adjust stock for product', item.product_id, rpcError)
+          continue
+        }
+
+        await adminClient.from('inventory_movements').insert({
+          shop_id: shopId,
+          product_id: item.product_id,
+          quantity_delta: sign * item.quantity,
+          movement_type: stockEffect === 'decrement' ? 'sale' : 'cancelled_order',
+          reference_id: order.id,
+          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+          created_by: authorization.userId,
+        })
+      }
+    }
   }
 
   await logAuditEvent({

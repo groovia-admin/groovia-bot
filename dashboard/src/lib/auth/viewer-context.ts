@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ShopRole } from '@/types/database'
+import type { StaffPermission } from './require-shop-role'
 
 export type ViewerContext =
   | { kind: 'unauthenticated' }
@@ -14,7 +15,15 @@ export type ViewerContext =
       fullName: string
       shopName: string | null
       shopLogoUrl: string | null
+      permissions: Partial<Record<StaffPermission, boolean>>
     }
+
+/** Owner/manager always pass; staff need the specific permission granted. */
+export function viewerHasPermission(context: ViewerContext, permission: StaffPermission): boolean {
+  if (context.kind !== 'shop_user') return false
+  if (context.role !== 'staff') return true
+  return context.permissions[permission] === true
+}
 
 /**
  * Resolves the current request's viewer once (super admin vs. shop user vs.
@@ -43,7 +52,7 @@ export const getViewerContext = cache(async (): Promise<ViewerContext> => {
 
   const { data, error } = await adminClient
     .from('shop_users')
-    .select('shop_id, role, full_name, shops ( name, logo_url )')
+    .select('shop_id, role, full_name, permissions, shops ( name, logo_url )')
     .eq('auth_user_id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -62,5 +71,6 @@ export const getViewerContext = cache(async (): Promise<ViewerContext> => {
     fullName: data.full_name,
     shopName: shop?.name ?? null,
     shopLogoUrl: shop?.logo_url ?? null,
+    permissions: (data.permissions as Partial<Record<StaffPermission, boolean>>) ?? {},
   }
 })

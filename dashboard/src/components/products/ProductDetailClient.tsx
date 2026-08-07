@@ -28,9 +28,11 @@ type Product = {
 export default function ProductDetailClient({
   product,
   categories,
+  canManage,
 }: {
   product: Product;
   categories: Category[];
+  canManage: boolean;
 }) {
   const router = useRouter();
 
@@ -137,7 +139,13 @@ export default function ProductDetailClient({
         Back to products
       </button>
 
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Edit product</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>{canManage ? "Edit product" : "View product"}</h1>
+
+      {!canManage && (
+        <div style={{ color: "#667781", background: "#F0F2F5", border: "1px solid #E9EDEF", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+          You don&apos;t have permission to edit products. Ask the shop owner to grant it.
+        </div>
+      )}
 
       {error && (
         <div
@@ -170,6 +178,7 @@ export default function ProductDetailClient({
       )}
 
       <form onSubmit={handleSave} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 16 }}>
+        <fieldset disabled={!canManage} style={{ display: "contents", border: "none", padding: 0, margin: 0 }}>
         <div>
           <label style={S.label}>Name</label>
           <input style={S.input} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
@@ -322,6 +331,7 @@ export default function ProductDetailClient({
         <button type="submit" disabled={saving} style={{ ...S.btn("#25D366", "#fff"), opacity: saving ? 0.5 : 1, width: "fit-content" }}>
           {saving ? "Saving…" : "Save changes"}
         </button>
+        </fieldset>
       </form>
     </div>
   );

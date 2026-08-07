@@ -165,7 +165,26 @@ export default function MasterCatalogClient() {
         // upsert in case some already exist
         await supabase.from('shop_master_products').upsert(rows, { onConflict: 'shop_id,master_product_id', ignoreDuplicates: true })
       }
-      showToast('Category enabled — all products added to shop catalog')
+
+      // shop_master_products above isn't read by the shop's own Products
+      // page or the WhatsApp bot — mirror the products into the shop's
+      // actual categories/products tables so "enabled" is actually visible
+      // to the shop owner, not just recorded here.
+      try {
+        const syncResponse = await fetch(`/api/admin/shops/${selectedShop}/sync-master-category`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ masterCategoryId: catId }),
+        })
+        const syncData = await syncResponse.json()
+        if (!syncResponse.ok) {
+          showToast(`Category enabled, but syncing products to the shop failed: ${syncData.error}`)
+        } else {
+          showToast(`Category enabled — ${syncData.productsCreated} product(s) added to the shop's catalog`)
+        }
+      } catch {
+        showToast('Category enabled, but syncing products to the shop failed')
+      }
     }
   }
 

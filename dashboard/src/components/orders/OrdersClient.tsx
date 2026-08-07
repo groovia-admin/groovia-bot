@@ -45,7 +45,15 @@ const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
-export default function OrdersClient({ initialOrders, showRevenue }: { initialOrders: OrderRow[]; showRevenue: boolean }) {
+export default function OrdersClient({
+  initialOrders,
+  showRevenue,
+  canManage,
+}: {
+  initialOrders: OrderRow[];
+  showRevenue: boolean;
+  canManage: boolean;
+}) {
   const toast = useToast();
   const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
   const [search, setSearch] = useState("");
@@ -202,7 +210,7 @@ export default function OrdersClient({ initialOrders, showRevenue }: { initialOr
                         </td>
                       )}
                       <td style={{ ...S.td, textAlign: "right" }}>
-                        {o.status === "pending" ? (
+                        {o.status === "pending" && canManage ? (
                           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
                             <button
                               type="button"

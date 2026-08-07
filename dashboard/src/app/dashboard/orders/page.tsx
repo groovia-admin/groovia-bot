@@ -1,4 +1,5 @@
 import { requireRole } from '@/lib/auth/require-role'
+import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import OrdersClient from '@/components/orders/OrdersClient'
 
@@ -43,5 +44,11 @@ export default async function OrdersPage() {
     }
   })
 
-  return <OrdersClient initialOrders={rows} showRevenue={context.role !== 'staff'} />
+  return (
+    <OrdersClient
+      initialOrders={rows}
+      showRevenue={context.role !== 'staff'}
+      canManage={viewerHasPermission(context, 'manage_orders')}
+    />
+  )
 }

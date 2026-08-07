@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import type { ShopRole } from '@/types/database'
 
+export type StaffPermission = 'manage_orders' | 'manage_products'
+
 type RequireShopRoleResult =
   | { error: NextResponse }
   | {
@@ -11,6 +13,7 @@ type RequireShopRoleResult =
       role: ShopRole
       userId: string
       actorName: string
+      permissions: Partial<Record<StaffPermission, boolean>>
     }
 
 /**
@@ -38,7 +41,7 @@ export async function requireShopRole(
 
   const { data: shopUser, error: shopUserError } = await adminClient
     .from('shop_users')
-    .select('shop_id, role, full_name')
+    .select('shop_id, role, full_name, permissions')
     .eq('auth_user_id', user.id)
     .eq('is_active', true)
     .maybeSingle()
@@ -77,5 +80,21 @@ export async function requireShopRole(
     role: shopUser.role as ShopRole,
     userId: user.id,
     actorName: shopUser.full_name,
+    permissions: (shopUser.permissions as Partial<Record<StaffPermission, boolean>>) ?? {},
   }
+}
+
+/**
+ * Second gate for actions that staff can only take if their owner has
+ * explicitly granted the specific permission. Owner/manager are never
+ * restricted by this — permissions only narrow what an already-allowed
+ * staff member can do, they don't grant staff anything requireShopRole's
+ * role list wouldn't have let through anyway.
+ */
+export function hasStaffPermission(
+  authorization: Extract<RequireShopRoleResult, { adminClient: unknown }>,
+  permission: StaffPermission
+): boolean {
+  if (authorization.role !== 'staff') return true
+  return authorization.permissions[permission] === true
 }

@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { requireRole } from '@/lib/auth/require-role'
+import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ProductDetailClient from '@/components/products/ProductDetailClient'
 
@@ -13,7 +14,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const context = await requireRole(['owner', 'manager', 'staff'])
 
   if (context.kind === 'super_admin') {
-    return <div style={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 12, padding: 20, color: '#94a3b8', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const { id } = await params
@@ -46,5 +47,11 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     notFound()
   }
 
-  return <ProductDetailClient product={product} categories={categories ?? []} />
+  return (
+    <ProductDetailClient
+      product={product}
+      categories={categories ?? []}
+      canManage={viewerHasPermission(context, 'manage_products')}
+    />
+  )
 }

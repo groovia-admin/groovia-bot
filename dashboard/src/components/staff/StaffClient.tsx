@@ -7,6 +7,7 @@ import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 
 type StaffRole = "owner" | "manager" | "staff";
+type StaffPermission = "manage_orders" | "manage_products";
 
 type StaffRow = {
   id: string;
@@ -14,7 +15,13 @@ type StaffRow = {
   phone_number: string | null;
   role: StaffRole;
   is_active: boolean;
+  permissions: Partial<Record<StaffPermission, boolean>>;
   created_at: string;
+};
+
+const PERMISSION_LABEL: Record<StaffPermission, string> = {
+  manage_orders: "Accept/reject orders",
+  manage_products: "Manage products",
 };
 
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -81,7 +88,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
     }
   }
 
-  async function updateStaff(id: string, changes: { role?: StaffRole; is_active?: boolean }) {
+  async function updateStaff(id: string, changes: { role?: StaffRole; is_active?: boolean; permissions?: Partial<Record<StaffPermission, boolean>> }) {
     setBusyId(id);
     setError("");
 
@@ -216,6 +223,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                 <th style={S.th}>Name</th>
                 <th style={S.th}>Phone</th>
                 <th style={S.th}>Role</th>
+                <th style={S.th}>Permissions</th>
                 <th style={S.th}>Status</th>
                 <th style={{ ...S.th, textAlign: "right" }}>Actions</th>
               </tr>
@@ -223,7 +231,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
             <tbody>
               {staff.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={5}>
+                  <td style={S.td} colSpan={6}>
                     No staff added yet.
                   </td>
                 </tr>
@@ -256,6 +264,25 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                             <option value="staff">Staff</option>
                             <option value="manager">Manager</option>
                           </select>
+                        )}
+                      </td>
+                      <td style={S.td}>
+                        {row.role === "staff" ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                            {(Object.keys(PERMISSION_LABEL) as StaffPermission[]).map((perm) => (
+                              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#111B21", cursor: busy ? "default" : "pointer" }}>
+                                <input
+                                  type="checkbox"
+                                  disabled={busy}
+                                  checked={row.permissions?.[perm] === true}
+                                  onChange={(e) => updateStaff(row.id, { permissions: { [perm]: e.target.checked } })}
+                                />
+                                {PERMISSION_LABEL[perm]}
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 12, color: "#8696A0" }}>Full access</span>
                         )}
                       </td>
                       <td style={S.td}>
