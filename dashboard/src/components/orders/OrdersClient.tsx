@@ -1,12 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { format } from "date-fns";
-import { Search, ShoppingBag, Check, X } from "lucide-react";
+import { format, formatDistanceToNowStrict } from "date-fns";
+import { Search, ShoppingBag, Check, X, RefreshCw } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import { useToast } from "@/components/ui/ToastProvider";
+
+// How often to silently re-fetch the order list in the background so a new
+// WhatsApp order shows up without the staff member hitting refresh.
+const AUTO_REFRESH_MS = 2 * 60 * 1000;
 
 type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
 
@@ -54,11 +59,46 @@ export default function OrdersClient({
   showRevenue: boolean;
   canManage: boolean;
 }) {
+  const router = useRouter();
   const toast = useToast();
   const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
+  const [refreshing, setRefreshing] = useState(false);
+  const knownOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
+
+  // Server re-fetches (initial load, or a manual/auto refresh below) land
+  // here as a new `initialOrders` prop — reconcile local state against it
+  // rather than replacing outright, so an optimistic update from
+  // quickAccept isn't clobbered if it lands in the same tick as a refresh.
+  useEffect(() => {
+    const newOnes = initialOrders.filter((o) => !knownOrderIds.current.has(o.id));
+    if (newOnes.length > 0 && knownOrderIds.current.size > 0) {
+      toast(`${newOnes.length} new order${newOnes.length > 1 ? "s" : ""} came in`);
+    }
+    knownOrderIds.current = new Set(initialOrders.map((o) => o.id));
+    setOrders(initialOrders);
+    setLastRefreshedAt(new Date());
+    setRefreshing(false);
+    // toast identity is stable from context; only re-run when the server
+    // actually gave us new data.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOrders]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshing(true);
+      router.refresh();
+    }, AUTO_REFRESH_MS);
+    return () => clearInterval(interval);
+  }, [router]);
+
+  function manualRefresh() {
+    setRefreshing(true);
+    router.refresh();
+  }
 
   const counts = useMemo(() => {
     const map: Partial<Record<OrderStatus, number>> = {};
@@ -105,21 +145,46 @@ export default function OrdersClient({
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
-          <InfoTooltip
-            items={[
-              { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
-              { color: "#1D4ED8", label: "Accepted", hint: "shop confirmed, not yet started" },
-              { color: "#6D28D9", label: "Preparing", hint: "being packed" },
-              { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
-              { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
-              { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
-            ]}
-          />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
+            <InfoTooltip
+              items={[
+                { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
+                { color: "#1D4ED8", label: "Accepted", hint: "shop confirmed, not yet started" },
+                { color: "#6D28D9", label: "Preparing", hint: "being packed" },
+                { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
+                { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
+                { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
+              ]}
+            />
+          </div>
+          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
-        <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
+        <button
+          type="button"
+          onClick={manualRefresh}
+          disabled={refreshing}
+          title="Refresh now"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid #E9EDEF",
+            background: "#FFFFFF",
+            color: "#667781",
+            fontSize: 12,
+            cursor: refreshing ? "default" : "pointer",
+            fontFamily: "inherit",
+          }}
+        >
+          <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
+          Updated {formatDistanceToNowStrict(lastRefreshedAt, { addSuffix: true })}
+        </button>
+        <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -136,7 +201,7 @@ export default function OrdersClient({
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
           {STATUS_TABS.map((tab) => {
             const active = statusFilter === tab.value;
-            const count = tab.value === "all" ? initialOrders.length : counts[tab.value] ?? 0;
+            const count = tab.value === "all" ? orders.length : counts[tab.value] ?? 0;
             return (
               <button
                 key={tab.value}
