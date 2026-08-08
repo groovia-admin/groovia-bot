@@ -61,3 +61,4 @@
 | #95 | Add new-order alerts: sound + browser notification, dashboard-wide | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:16 UTC | 0d 0h 0m |
 | #96 | Add order aging indicators — a pending order at 2 minutes and one at … | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:28 UTC | 0d 0h 12m |
 | #100 | Add global search (Ctrl/Cmd+K) across orders, products, and customers | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:29 UTC | 0d 0h 13m |
+| #97 | Add CSV export for Orders and Products | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:38 UTC | 0d 0h 22m |
