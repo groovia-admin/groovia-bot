@@ -64,3 +64,4 @@
 | #97 | Add CSV export for Orders and Products | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:38 UTC | 0d 0h 22m |
 | #98 | Add bulk order actions — accept multiple pending orders at once | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:38 UTC | 0d 0h 22m |
 | #99 | Add a one-click pause-orders toggle to the dashboard Overview | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:43 UTC | 0d 0h 28m |
+| #101 | Add in-app notification center — a persistent bell, not just toasts t… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:45 UTC | 0d 0h 29m |
