@@ -70,6 +70,8 @@ export default function OrdersClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const knownOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
 
@@ -143,6 +145,29 @@ export default function OrdersClient({
     });
   }, [orders, search, statusFilter]);
 
+  // Bulk actions only ever apply to pending orders — accepting is the only
+  // status change safe to fire off in a batch without per-order context
+  // (reject/cancel require a reason, which doesn't make sense to type once
+  // for N different orders).
+  const selectablePendingIds = useMemo(() => filtered.filter((o) => o.status === "pending").map((o) => o.id), [filtered]);
+  const allSelectableSelected = selectablePendingIds.length > 0 && selectablePendingIds.every((id) => selectedIds.has(id));
+
+  function toggleSelected(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allSelectableSelected) return new Set();
+      return new Set(selectablePendingIds);
+    });
+  }
+
   async function quickAccept(id: string) {
     setBusyId(id);
     try {
@@ -164,6 +189,36 @@ export default function OrdersClient({
       toast("Failed to accept order. Please try again.", "error");
     } finally {
       setBusyId(null);
+    }
+  }
+
+  async function bulkAccept() {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkBusy(true);
+
+    const results = await Promise.all(
+      ids.map((id) =>
+        fetch(`/api/shop/orders/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "accepted" }),
+        })
+          .then((res) => ({ id, ok: res.ok }))
+          .catch(() => ({ id, ok: false }))
+      )
+    );
+
+    const succeededIds = new Set(results.filter((r) => r.ok).map((r) => r.id));
+    setOrders((prev) => prev.map((o) => (succeededIds.has(o.id) ? { ...o, status: "accepted" } : o)));
+    setSelectedIds(new Set());
+    setBulkBusy(false);
+
+    const failedCount = results.length - succeededIds.size;
+    if (failedCount === 0) {
+      toast(`${succeededIds.size} order${succeededIds.size > 1 ? "s" : ""} accepted`);
+    } else {
+      toast(`${succeededIds.size} accepted, ${failedCount} failed — try those individually`, "error");
     }
   }
 
@@ -275,11 +330,48 @@ export default function OrdersClient({
         </div>
       </div>
 
+      {canManage && selectedIds.size > 0 && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "10px 14px",
+            borderRadius: 10,
+            background: "#DCF8C6",
+            border: "1px solid #B9EFA4",
+          }}
+        >
+          <span style={{ fontSize: 13, color: "#128C7E", fontWeight: 600 }}>
+            {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
+          </span>
+          <button
+            type="button"
+            onClick={bulkAccept}
+            disabled={bulkBusy}
+            style={{ ...S.btn("#25D366", "#fff"), padding: "6px 12px", opacity: bulkBusy ? 0.5 : 1 }}
+          >
+            <Check size={13} />
+            {bulkBusy ? "Accepting…" : "Accept selected"}
+          </button>
+          <button type="button" onClick={() => setSelectedIds(new Set())} style={{ ...S.btn("transparent", "#667781"), padding: "6px 10px" }}>
+            Clear
+          </button>
+        </div>
+      )}
+
       <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
+                {canManage && (
+                  <th style={{ ...S.th, width: 32 }}>
+                    {selectablePendingIds.length > 0 && (
+                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" />
+                    )}
+                  </th>
+                )}
                 <th style={S.th}>Order</th>
                 <th style={S.th}>Customer</th>
                 <th style={S.th}>Status</th>
@@ -291,7 +383,7 @@ export default function OrdersClient({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={showRevenue ? 6 : 5}>
+                  <td style={S.td} colSpan={(showRevenue ? 6 : 5) + (canManage ? 1 : 0)}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
                       <ShoppingBag size={14} />
                       {orders.length === 0 ? "No orders yet." : "No orders match your search."}
@@ -305,6 +397,13 @@ export default function OrdersClient({
                   const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
                   return (
                     <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 #C0392B" } : undefined}>
+                      {canManage && (
+                        <td style={S.td}>
+                          {o.status === "pending" && (
+                            <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelected(o.id)} />
+                          )}
+                        </td>
+                      )}
                       <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
                         <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#128C7E", textDecoration: "none" }}>
                           #{o.order_number}
