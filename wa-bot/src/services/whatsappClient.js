@@ -1,5 +1,9 @@
 const logger = require('../utils/logger');
 const config = require('../config');
+// Explicit import, not the bare global — Railway's Node 20 runtime doesn't
+// expose Blob as a global the same way Node 24 (used locally) does, the
+// same File-not-defined class of gap already hit in api/shop/logo/route.ts.
+const { Blob } = require('node:buffer');
 
 // Surfaces the actual Graph API error (code/message/fbtrace_id) instead of
 // a blind "send failed" — the id-mismatch class of bug (e.g. #131009,
@@ -318,6 +322,83 @@ async function sendCtaUrlMessage(to, bodyText, buttonText, url, overrides = {}) 
   }
 }
 
+// ── Media upload (step 1 of sending a document — Graph API requires the
+// file to be uploaded to get a media id before it can be referenced by
+// any message, there's no way to send raw bytes inline) ──
+async function uploadWhatsAppMedia(buffer, filename, mimeType, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const form = new FormData();
+    form.append('messaging_product', 'whatsapp');
+    form.append('file', new Blob([buffer], { type: mimeType }), filename);
+
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/media`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form,
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logSendFailure('❌ WhatsApp media upload failed', { filename }, data);
+      return null;
+    }
+
+    return data.id || null;
+  } catch (err) {
+    logger.error({ err, filename }, '❌ WhatsApp media upload error');
+    return null;
+  }
+}
+
+// ── Document message — sends a previously uploaded media id as a file
+// (used for the completion invoice PDF). Not a URL-based `link` document,
+// deliberately: this avoids standing up any new public storage bucket
+// just to host invoices, reusing Meta's own media hosting instead. ──
+async function sendWhatsAppDocument(to, mediaId, filename, caption, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'document',
+          document: { id: mediaId, filename, caption },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logSendFailure('❌ WhatsApp document send failed', { to, mediaId }, data);
+      return false;
+    }
+
+    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp document sent');
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, '❌ WhatsApp document send error');
+    return false;
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
@@ -327,4 +408,6 @@ module.exports = {
   sendButtonMessageDetailed,
   sendListMessage,
   sendCtaUrlMessage,
+  uploadWhatsAppMedia,
+  sendWhatsAppDocument,
 };

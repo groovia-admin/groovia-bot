@@ -1,7 +1,7 @@
 const express = require('express');
 const config = require('../config');
 const logger = require('../utils/logger');
-const { notifyCustomer, notifyCustomerOfOrderEdit } = require('../services/customerNotifier');
+const { notifyCustomer, notifyCustomerOfOrderEdit, generateOrderInvoicePdf } = require('../services/customerNotifier');
 const { syncShopCatalog } = require('../services/catalogSync');
 const { resendPendingOrderAlerts, sendOrderPlacedConfirmation, notifyStaffOfDashboardStatusChange } = require('../services/orderCreator');
 const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
@@ -145,6 +145,39 @@ router.post('/orders/:orderId/notify-edit', requireInternalSecret, async (req, r
   } catch (err) {
     logger.error({ err, orderId, shopId }, 'Internal notify-edit endpoint failed');
     return res.status(500).json({ error: 'Failed to send edit notification' });
+  }
+});
+
+// GET /internal/orders/:orderId/invoice?shopId=...
+// Lets the dashboard show/download the same invoice PDF the customer got
+// on completion, without duplicating PDF-generation logic in a second
+// language/runtime — the dashboard just proxies this response through to
+// the browser (see /api/shop/orders/[id]/invoice). Not gated on the
+// order's status: works for any completed-or-not order in the shop, since
+// staff may want to preview it before the order is actually marked
+// complete. Deliberately not exposed anywhere in the staff WhatsApp
+// flow — only reachable via this internal route, matching "not in shop
+// owner WhatsApp."
+router.get('/orders/:orderId/invoice', requireInternalSecret, async (req, res) => {
+  const { orderId } = req.params;
+  const shopId = req.query.shopId;
+
+  if (!orderId || !shopId) {
+    return res.status(400).json({ error: 'orderId and shopId are required' });
+  }
+
+  try {
+    const result = await generateOrderInvoicePdf(orderId, String(shopId));
+    if (!result) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="Invoice-${result.orderNumber}.pdf"`);
+    return res.send(result.buffer);
+  } catch (err) {
+    logger.error({ err, orderId, shopId }, 'Internal invoice endpoint failed');
+    return res.status(500).json({ error: 'Failed to generate invoice' });
   }
 });
 
