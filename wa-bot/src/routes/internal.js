@@ -3,7 +3,7 @@ const config = require('../config');
 const logger = require('../utils/logger');
 const { notifyCustomer } = require('../services/customerNotifier');
 const { syncShopCatalog } = require('../services/catalogSync');
-const { resendPendingOrderAlerts, sendOrderPlacedConfirmation } = require('../services/orderCreator');
+const { resendPendingOrderAlerts, sendOrderPlacedConfirmation, notifyStaffOfDashboardStatusChange } = require('../services/orderCreator');
 const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
 
 const router = express.Router();
@@ -98,6 +98,31 @@ router.post('/orders/:orderId/confirm-placement', requireInternalSecret, async (
 
   const result = await sendOrderPlacedConfirmation(orderId, shopId);
   return res.status(result.success ? 200 : 502).json(result);
+});
+
+// POST /internal/orders/:orderId/notify-staff
+// Body: { status: string, shopId: string, actorName?: string, reason?: string }
+// Proactive visibility for staff still watching WhatsApp when the
+// dashboard actions an order instead — without this, the original
+// new-order-alert message (with live Accept/Reject/Edit buttons that
+// WhatsApp never grays out) just sits there unchanged, and a teammate
+// has no way to know the order was already handled short of tapping a
+// stale button and getting handleOrderCommand's own bounce-back.
+router.post('/orders/:orderId/notify-staff', requireInternalSecret, async (req, res) => {
+  const { orderId } = req.params;
+  const { status, shopId, actorName, reason } = req.body || {};
+
+  if (!orderId || !status || !shopId) {
+    return res.status(400).json({ error: 'orderId, status, and shopId are required' });
+  }
+
+  try {
+    await notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason);
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    logger.error({ err, orderId, status, shopId }, 'Internal notify-staff endpoint failed');
+    return res.status(500).json({ error: 'Failed to notify staff' });
+  }
 });
 
 module.exports = router;

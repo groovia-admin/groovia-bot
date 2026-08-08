@@ -157,6 +157,31 @@ async function resolveShopUserGlobal(from) {
 }
 
 /**
+ * Active staff phone numbers for a shop — shared by every staff-facing
+ * broadcast (new-order alerts, reminders, and dashboard-status-change
+ * visibility) instead of each one running its own copy of the same
+ * query.
+ */
+async function getActiveStaffPhones(shopId) {
+  const supabase = getSupabase();
+  if (!supabase || !shopId) return [];
+
+  const { data, error } = await supabase
+    .from('shop_users')
+    .select('phone_number')
+    .eq('shop_id', shopId)
+    .eq('is_active', true)
+    .not('phone_number', 'is', null);
+
+  if (error) {
+    logger.error({ error, shopId }, 'Failed to load active staff phones');
+    return [];
+  }
+
+  return (data || []).map((s) => s.phone_number);
+}
+
+/**
  * Resolves a shop from the slug carried in a "SHOP-{slug}" QR message.
  * Only matches active shops — a disabled/suspended shop's QR should
  * fail the same way a nonexistent slug does, not leak that the shop
@@ -212,6 +237,7 @@ module.exports = {
   resolveShopByPhoneNumberId,
   resolveShopUserByPhone,
   resolveShopUserGlobal,
+  getActiveStaffPhones,
   findShopBySlug,
   findNearbyShops,
 };

@@ -184,11 +184,36 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
   const waBotUrl = process.env.WA_BOT_INTERNAL_URL
   const internalSecret = process.env.INTERNAL_API_SECRET
   if (waBotUrl && internalSecret) {
-    fetch(`${waBotUrl.replace(/\/$/, '')}/internal/orders/${order.id}/notify`, {
+    const base = waBotUrl.replace(/\/$/, '')
+
+    fetch(`${base}/internal/orders/${order.id}/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
       body: JSON.stringify({ status: nextStatus, shopId }),
-    }).catch((err) => console.error('Failed to notify wa-bot of order status change:', err))
+    })
+      .then(async (res) => {
+        if (!res.ok) console.error('wa-bot rejected the customer notify:', res.status, await res.text().catch(() => ''))
+      })
+      .catch((err) => console.error('Failed to notify wa-bot of order status change:', err))
+
+    // Proactive visibility for staff still watching WhatsApp — the
+    // original alert message's Accept/Reject/Edit buttons never gray
+    // out, so without this a teammate has no way to know this order was
+    // just handled here instead, short of tapping a stale button.
+    fetch(`${base}/internal/orders/${order.id}/notify-staff`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
+      body: JSON.stringify({ status: nextStatus, shopId, actorName: authorization.actorName, reason: reason || undefined }),
+    })
+      .then(async (res) => {
+        if (!res.ok) console.error('wa-bot rejected the staff notify:', res.status, await res.text().catch(() => ''))
+      })
+      .catch((err) => console.error('Failed to notify wa-bot staff of order status change:', err))
+  } else {
+    console.error(
+      'WA_BOT_INTERNAL_URL / INTERNAL_API_SECRET not configured — skipping both the customer and staff WhatsApp notifications for order',
+      order.id
+    )
   }
 
   return NextResponse.json(

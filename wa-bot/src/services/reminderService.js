@@ -1,5 +1,5 @@
 const logger = require('../utils/logger');
-const { getSupabase } = require('./shopResolver');
+const { getSupabase, getActiveStaffPhones } = require('./shopResolver');
 const { sendWhatsAppTemplate } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 
@@ -43,22 +43,6 @@ function formatTime(date, timezone) {
     minute: '2-digit',
     hour12: true,
   }).format(date);
-}
-
-async function loadActiveStaffPhones(supabase, shopId) {
-  const { data, error } = await supabase
-    .from('shop_users')
-    .select('phone_number')
-    .eq('shop_id', shopId)
-    .eq('is_active', true)
-    .not('phone_number', 'is', null);
-
-  if (error) {
-    logger.error({ error, shopId }, 'Failed to load shop staff for reminder');
-    return [];
-  }
-
-  return (data || []).map((s) => s.phone_number);
 }
 
 async function sendReminder(supabase, order, timezone) {
@@ -108,7 +92,7 @@ async function sendReminder(supabase, order, timezone) {
     },
   ];
 
-  const phones = await loadActiveStaffPhones(supabase, order.shop_id);
+  const phones = await getActiveStaffPhones(order.shop_id);
   await Promise.all(
     phones.map((phone) =>
       sendWhatsAppTemplate(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)

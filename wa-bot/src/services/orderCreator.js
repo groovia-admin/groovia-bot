@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const logger = require('../utils/logger');
-const { getSupabase, normalizeWhatsappFrom } = require('./shopResolver');
-const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed, sendButtonMessage } = require('./whatsappClient');
+const { getSupabase, normalizeWhatsappFrom, getActiveStaffPhones } = require('./shopResolver');
+const { sendButtonMessageDetailed, sendWhatsAppTemplateDetailed, sendButtonMessage, sendWhatsAppMessage } = require('./whatsappClient');
 const { logMessage } = require('./conversationLogger');
 const deliveryTracker = require('./deliveryTracker');
 
@@ -311,17 +311,7 @@ async function notifyStaffForOrder(order) {
   const supabase = getSupabase();
   if (!supabase) return;
 
-  const { data: staff, error } = await supabase
-    .from('shop_users')
-    .select('phone_number')
-    .eq('shop_id', order.shop_id)
-    .eq('is_active', true)
-    .not('phone_number', 'is', null);
-
-  if (error) {
-    logger.error({ error, shopId: order.shop_id }, 'Failed to load shop staff for new-order notify');
-    return;
-  }
+  const phones = await getActiveStaffPhones(order.shop_id);
 
   const details = Array.isArray(order.order_customer_details)
     ? order.order_customer_details[0]
@@ -340,8 +330,59 @@ async function notifyStaffForOrder(order) {
   });
 
   await Promise.all(
-    (staff || []).map((s) => sendTrackedNewOrderAlert(order.id, s.phone_number, payload))
+    phones.map((phone) => sendTrackedNewOrderAlert(order.id, phone, payload))
   );
+}
+
+const STATUS_STAFF_LABEL = {
+  accepted: { emoji: '✅', verb: 'accepted' },
+  rejected: { emoji: '❌', verb: 'rejected' },
+  ready: { emoji: '📦', verb: 'marked ready' },
+  completed: { emoji: '✅', verb: 'marked completed' },
+  cancelled: { emoji: '🚫', verb: 'cancelled' },
+};
+
+/**
+ * Proactive visibility for staff still watching WhatsApp when someone
+ * actions an order through the dashboard instead. Without this, the
+ * original new-order-alert message (with live Accept/Reject/Edit
+ * buttons — WhatsApp never grays these out) just sits there unchanged;
+ * another staff member has no way to know the order was already
+ * handled until they tap one of those buttons themselves and get
+ * handleOrderCommand's "someone may have already updated it" bounce.
+ * That reactive guard was already correct, this adds the proactive half.
+ *
+ * Deliberately notifies every active staff phone, including whoever
+ * actually took the dashboard action — there's no reliable way to map a
+ * dashboard login back to one specific WhatsApp number, and re-informing
+ * your own action is a much smaller cost than leaving a teammate
+ * out of the loop.
+ */
+async function notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const label = STATUS_STAFF_LABEL[status];
+  if (!label) return; // no staff-relevant copy for this status — nothing to say
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('order_number')
+    .eq('id', orderId)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (error || !order) {
+    logger.error({ error, orderId, shopId }, 'Failed to load order for dashboard-status-change staff notify');
+    return;
+  }
+
+  const byLine = actorName ? ` via the dashboard by ${actorName}` : ' via the dashboard';
+  const reasonLine = reason ? `\nReason: ${reason}` : '';
+  const text = `${label.emoji} Order *${order.order_number}* was ${label.verb}${byLine}.${reasonLine}`;
+
+  const phones = await getActiveStaffPhones(shopId);
+  await Promise.all(phones.map((phone) => sendWhatsAppMessage(phone, text)));
 }
 
 const NEW_ORDER_SELECT =
@@ -679,6 +720,7 @@ module.exports = {
   buildOrderPlacedPayload,
   sendOrderPlacedConfirmation,
   notifyStaffForOrder,
+  notifyStaffOfDashboardStatusChange,
   processDueNewOrderAlerts,
   cancelOrderByCustomer,
   retryNewOrderAlert,

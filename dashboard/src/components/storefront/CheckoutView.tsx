@@ -1,9 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { ArrowLeft, Loader2 } from 'lucide-react'
+import { ArrowLeft, Loader2, Plus } from 'lucide-react'
 import { generateHourlySlots } from '@/lib/storefront/slots'
-import type { StorefrontSettings, SubmitOrderBody, CheckoutFormState } from '@/lib/storefront/types'
+import type { CartItem, StorefrontSettings, SubmitOrderBody, CheckoutFormState } from '@/lib/storefront/types'
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: 'Cash',
@@ -16,11 +16,13 @@ type Props = {
   token: string
   timezone: string
   settings: StorefrontSettings
+  items: CartItem[]
   total: number
   formatMoney: (amount: number) => string
   form: CheckoutFormState
   onFormChange: (updater: (prev: CheckoutFormState) => CheckoutFormState) => void
   onBack: () => void
+  onAddItems: () => void
   onPlaced: (orderNumber: string) => void
 }
 
@@ -28,7 +30,19 @@ type Props = {
 // this component owns no form data itself, only submission-in-flight
 // state, so navigating away and back never loses what was already
 // filled in.
-export function CheckoutView({ token, timezone, settings, total, formatMoney, form, onFormChange, onBack, onPlaced }: Props) {
+export function CheckoutView({
+  token,
+  timezone,
+  settings,
+  items,
+  total,
+  formatMoney,
+  form,
+  onFormChange,
+  onBack,
+  onAddItems,
+  onPlaced,
+}: Props) {
   const allowPickup = settings?.allow_pickup ?? true
   const allowDelivery = settings?.allow_delivery ?? false
 
@@ -125,6 +139,29 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, fo
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-4">
+        <div className="card">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium text-ink">Your order ({items.length} item{items.length === 1 ? '' : 's'})</p>
+            <button
+              className="text-xs font-semibold text-brand-dark flex items-center gap-1"
+              onClick={onAddItems}
+              disabled={submitting}
+            >
+              <Plus size={14} /> Add more items
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {items.map((item) => (
+              <div key={item.product_id} className="flex items-center justify-between text-sm">
+                <span className="text-ink-muted">
+                  {item.name} × {item.quantity}
+                </span>
+                <span className="text-ink">{formatMoney(item.subtotal)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {allowPickup && allowDelivery && (
           <div className="card">
             <p className="text-sm font-medium text-ink mb-2">How would you like to get your order?</p>
