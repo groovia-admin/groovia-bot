@@ -8,7 +8,7 @@ const {
   findNearbyShops,
 } = require('./shopResolver');
 const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage, sendCtaUrlMessage } = require('./whatsappClient');
-const { notifyCustomer } = require('./customerNotifier');
+const { notifyCustomer, notifyCustomerOfOrderEdit } = require('./customerNotifier');
 const { logMessage } = require('./conversationLogger');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
 // Aliased — sessionStore.js's createSession (above) is the existing
@@ -27,9 +27,12 @@ const {
   getEditSession,
   startEditSession,
   endEditSession,
+  setPendingItem,
   getOrderWithItems,
   formatItemList,
   removeItems,
+  adjustItemQuantity,
+  buildEditDiffSummary,
 } = require('./orderEditor');
 const deliveryTracker = require('./deliveryTracker');
 
@@ -312,9 +315,14 @@ async function sendOrderActionButtons(from, order, items) {
 // fall back to the reply-with-a-number flow, which has no such limit.
 const MAX_EDIT_LIST_ITEMS = 9;
 
+// Tapping an item opens a quantity prompt rather than removing it
+// outright — "deliver 1 of the 2 ordered" (a real availability case, not
+// just "keep or drop") needs a number, not a single tap. Row id kept as
+// `adjust_` rather than the old `remove_` to name what actually happens
+// now.
 function buildEditListSections(order, items) {
   const rows = items.map((item) => ({
-    id: `remove_${item.id}`,
+    id: `adjust_${item.id}`,
     title: item.product_name_snapshot.slice(0, 24),
     description: `Qty ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`.slice(0, 72),
   }));
@@ -332,7 +340,7 @@ async function sendEditListPrompt(from, order, items) {
   const body =
     `✏️ *Editing ${order.order_number}*\n\n` +
     `Total: ₹${Number(order.total_amount).toFixed(2)}\n\n` +
-    `Tap an item to remove it, or "Done" to keep the rest.`;
+    `Tap an item to change its quantity or remove it, or "Done" to keep the rest.`;
 
   await sendListMessage(from, body, 'Select item', buildEditListSections(order, items));
 }
@@ -349,7 +357,16 @@ async function sendEditPrompt(from, shopId, orderId) {
     return;
   }
 
-  const started = await startEditSession(shopId, from, orderId);
+  // Snapshotted now, kept for the whole session — finishEditSession
+  // diffs against this at "done" to tell the customer what actually
+  // changed, not just the final state.
+  const itemsSnapshot = loaded.items.map((item) => ({
+    id: item.id,
+    product_name_snapshot: item.product_name_snapshot,
+    quantity: item.quantity,
+  }));
+
+  const started = await startEditSession(shopId, from, orderId, itemsSnapshot);
   if (!started) {
     await sendWhatsAppMessage(from, '⚠️ Could not start editing right now. Please try again, or Accept/Reject as-is.');
     return;
@@ -358,7 +375,7 @@ async function sendEditPrompt(from, shopId, orderId) {
   if (loaded.items.length > MAX_EDIT_LIST_ITEMS) {
     await sendWhatsAppMessage(from,
       `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
-      `Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done* when finished.`
+      `Reply with the item number(s) to remove (e.g. "2" or "1,3"), *edit N* to change one item's quantity (e.g. "edit 2"), or type *done* when finished.`
     );
     return;
   }
@@ -366,48 +383,68 @@ async function sendEditPrompt(from, shopId, orderId) {
   await sendEditListPrompt(from, loaded.order, loaded.items);
 }
 
-// ── Staff list-tap handler (the edit flow's "remove one item" UI) ────
+// Shared by both the list-tap "Done" row and the text "done" reply —
+// tells the customer what changed (if anything did) before closing out
+// the session, so this can't drift into only firing from one path.
+async function finishEditSession(from, shopId, editSession, loaded) {
+  const diff = buildEditDiffSummary(editSession.original_items_snapshot, loaded.items);
+
+  if (diff.changed) {
+    try {
+      await notifyCustomerOfOrderEdit(editSession.order_id, shopId, diff.lines, loaded.order.total_amount);
+    } catch (err) {
+      logger.error({ err, orderId: editSession.order_id }, 'Failed to notify customer of order edit');
+    }
+  }
+
+  await endEditSession(shopId, from);
+  await sendOrderActionButtons(from, loaded.order, loaded.items);
+}
+
+// ── Staff list-tap handler (the edit flow's item-quantity/removal UI) ──
 // Only reached while a staff_order_edits row exists — mirrors
 // handleStaffEditReply's text-based equivalent, which stays in place
 // both as the >9-item fallback and as a safety net if someone types
 // instead of tapping.
 async function handleStaffListReply(from, shopId, listReplyId) {
   const editSession = await getEditSession(shopId, from);
-  if (!editSession) return;
+  if (!editSession) {
+    // Tapping a stale item list (session already ended via "Done", or
+    // the order moved on some other way) used to be silent —
+    // indistinguishable from the tap being lost. WhatsApp never expires
+    // a message on its own, so the reply has to explain why the tap no
+    // longer does anything.
+    await sendWhatsAppMessage(from, `⚠️ This edit session has ended (already finished, or the order moved on). Tap *Edit* again on the order if you still need to change it.`);
+    return;
+  }
 
   const doneMatch = /^edit_done_(.+)$/.exec(listReplyId || '');
   if (doneMatch) {
-    await endEditSession(shopId, from);
     const loaded = await getOrderWithItems(editSession.order_id, shopId);
-    if (loaded) await sendOrderActionButtons(from, loaded.order, loaded.items);
+    if (loaded) await finishEditSession(from, shopId, editSession, loaded);
     return;
   }
 
-  const removeMatch = /^remove_(.+)$/.exec(listReplyId || '');
-  if (!removeMatch) return;
-
-  const result = await removeItems(editSession.order_id, [removeMatch[1]]);
-
-  if (!result) {
-    await sendWhatsAppMessage(from, '⚠️ Something went wrong removing that. Please try again.');
-    return;
-  }
-
-  if (result.blocked) {
-    await sendWhatsAppMessage(from,
-      `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
-    );
+  const adjustMatch = /^adjust_(.+)$/.exec(listReplyId || '');
+  if (!adjustMatch) {
+    await sendWhatsAppMessage(from, `⚠️ Didn't recognize that. Tap an item to change its quantity or remove it, or "Done" to keep the rest.`);
     return;
   }
 
   const loaded = await getOrderWithItems(editSession.order_id, shopId);
-  if (!loaded) {
+  const item = loaded?.items.find((i) => i.id === adjustMatch[1]);
+
+  if (!loaded || !item) {
     await endEditSession(shopId, from);
     await sendWhatsAppMessage(from, '❌ Order not found. Edit cancelled.');
     return;
   }
 
-  await sendEditListPrompt(from, loaded.order, loaded.items);
+  await setPendingItem(shopId, from, item.id);
+  await sendWhatsAppMessage(from,
+    `*${item.product_name_snapshot}* — current quantity: ${item.quantity} (${item.unit_snapshot}).\n\n` +
+    `Reply with the new quantity (0 to remove this item), or *cancel*.`
+  );
 }
 
 async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
@@ -445,13 +482,75 @@ async function handleStaffEditReply(from, shopId, editSession, text) {
 
   const trimmed = (text || '').trim().toLowerCase();
 
-  if (trimmed === 'done') {
-    await endEditSession(shopId, from);
-    await sendOrderActionButtons(from, loaded.order, loaded.items);
+  // Answering a "what's the new quantity" prompt takes priority over
+  // every other interpretation of a text reply while one is pending —
+  // this is what a list-tap's quantity question (or "edit N" below)
+  // actually waits for.
+  if (editSession.pending_item_id) {
+    const pendingItem = loaded.items.find((i) => i.id === editSession.pending_item_id);
+
+    if (trimmed === 'cancel' || !pendingItem) {
+      await setPendingItem(shopId, from, null);
+      await sendEditListPrompt(from, loaded.order, loaded.items);
+      return;
+    }
+
+    const newQuantity = Number(trimmed);
+    if (!Number.isInteger(newQuantity) || newQuantity < 0) {
+      await sendWhatsAppMessage(from,
+        `Reply with a number — the new quantity for *${pendingItem.product_name_snapshot}* (0 to remove it), or *cancel*.`
+      );
+      return;
+    }
+
+    const result = await adjustItemQuantity(editSession.order_id, pendingItem.id, newQuantity);
+    await setPendingItem(shopId, from, null);
+
+    if (!result) {
+      await sendWhatsAppMessage(from, '⚠️ Something went wrong updating that. Please try again.');
+      return;
+    }
+
+    if (result.blocked) {
+      await sendWhatsAppMessage(from,
+        `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
+      );
+      return;
+    }
+
+    const updated = await getOrderWithItems(editSession.order_id, shopId);
+    await sendWhatsAppMessage(from,
+      newQuantity === 0
+        ? `Removed. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\nReply with more item number(s), *edit N*, or type *done* when finished.`
+        : `Updated. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\nReply with more changes, or type *done* when finished.`
+    );
     return;
   }
 
-  // Parse "2" / "1,3" / "1, 3, 4" into 1-based item numbers.
+  if (trimmed === 'done') {
+    await finishEditSession(from, shopId, editSession, loaded);
+    return;
+  }
+
+  // "edit N" — the text-fallback's equivalent of tapping an item in the
+  // list flow: asks for a new quantity rather than removing outright.
+  const editOneMatch = /^edit\s+(\d+)$/.exec(trimmed);
+  if (editOneMatch) {
+    const n = Number(editOneMatch[1]);
+    if (!Number.isInteger(n) || n < 1 || n > loaded.items.length) {
+      await sendWhatsAppMessage(from, `That's not a valid item number.`);
+      return;
+    }
+    const item = loaded.items[n - 1];
+    await setPendingItem(shopId, from, item.id);
+    await sendWhatsAppMessage(from,
+      `*${item.product_name_snapshot}* — current quantity: ${item.quantity} (${item.unit_snapshot}).\n\n` +
+      `Reply with the new quantity (0 to remove this item), or *cancel*.`
+    );
+    return;
+  }
+
+  // Parse "2" / "1,3" / "1, 3, 4" into 1-based item numbers (removal).
   const numbers = trimmed
     .split(',')
     .map((part) => Number(part.trim()))
@@ -459,7 +558,7 @@ async function handleStaffEditReply(from, shopId, editSession, text) {
 
   if (numbers.length === 0) {
     await sendWhatsAppMessage(from,
-      `Didn't catch that. Reply with the item number(s) to remove (e.g. "2" or "1,3"), or type *done*.`
+      `Didn't catch that. Reply with the item number(s) to remove (e.g. "2" or "1,3"), *edit N* to change one item's quantity, or type *done*.`
     );
     return;
   }
@@ -482,7 +581,7 @@ async function handleStaffEditReply(from, shopId, editSession, text) {
   const updated = await getOrderWithItems(editSession.order_id, shopId);
   await sendWhatsAppMessage(from,
     `Removed. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\n` +
-    `Reply with more item number(s) to remove, or type *done* when finished.`
+    `Reply with more item number(s) to remove, *edit N* to change a quantity, or type *done* when finished.`
   );
 }
 

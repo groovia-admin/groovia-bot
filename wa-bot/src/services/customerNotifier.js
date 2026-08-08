@@ -207,4 +207,56 @@ async function notifyCustomer(orderId, status, shopId) {
   return sent;
 }
 
-module.exports = { notifyCustomer };
+/**
+ * Tells the customer what actually changed when staff edits a pending
+ * order (a quantity reduced because only 1 of the 2 they ordered was in
+ * stock, an item dropped entirely). Without this, the only signal a
+ * customer ever got was a total that quietly didn't match what they
+ * remembered ordering, with no explanation. Plain text, not a template
+ * — the order was placed recently enough that the shop is still
+ * actively working it, well inside the 24h customer-service window.
+ * Best-effort and not retried, same reasoning as the receipt: this is
+ * supplementary detail, not the order's core status change.
+ */
+async function notifyCustomerOfOrderEdit(orderId, shopId, diffLines, newTotal) {
+  const supabase = getSupabase();
+  if (!supabase) return false;
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select('order_number, order_customer_details ( customer_phone_snapshot )')
+    .eq('id', orderId)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (error || !order) {
+    logger.error({ error, orderId }, 'Failed to load order for edit notify');
+    return false;
+  }
+
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+  const phone = details?.customer_phone_snapshot;
+
+  if (!phone) {
+    logger.warn({ orderId }, 'No customer phone snapshot on this order — skipping edit notify');
+    return false;
+  }
+
+  const text =
+    `📝 Your order *${order.order_number}* was updated by the shop:\n\n` +
+    diffLines.join('\n') +
+    `\n\nNew total: ₹${Number(newTotal).toFixed(2)}\n\nWe'll notify you once it's ready.`;
+
+  const sent = await sendWhatsAppMessage(phone, text);
+  if (sent) {
+    logMessage(shopId, phone, 'outbound', 'system', 'text', text);
+  } else {
+    logger.warn({ orderId }, 'Failed to send order-edit notification (best-effort, not retried)');
+  }
+
+  return sent;
+}
+
+module.exports = { notifyCustomer, notifyCustomerOfOrderEdit };

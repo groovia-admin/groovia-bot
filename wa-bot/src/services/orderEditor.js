@@ -11,7 +11,7 @@ async function getEditSession(shopId, phone) {
 
   const { data, error } = await supabase
     .from('staff_order_edits')
-    .select('id, order_id')
+    .select('id, order_id, pending_item_id, original_items_snapshot')
     .eq('shop_id', shopId)
     .eq('phone', phone)
     .maybeSingle();
@@ -24,7 +24,10 @@ async function getEditSession(shopId, phone) {
   return data;
 }
 
-async function startEditSession(shopId, phone, orderId) {
+// itemsSnapshot is the item list as it stood the moment editing started —
+// kept for the whole session so "done" can diff against whatever's left
+// and tell the customer what actually changed, not just the final state.
+async function startEditSession(shopId, phone, orderId, itemsSnapshot) {
   const supabase = getSupabase();
   if (!supabase) return false;
 
@@ -35,7 +38,7 @@ async function startEditSession(shopId, phone, orderId) {
 
   const { error } = await supabase
     .from('staff_order_edits')
-    .insert({ shop_id: shopId, phone, order_id: orderId });
+    .insert({ shop_id: shopId, phone, order_id: orderId, original_items_snapshot: itemsSnapshot || [] });
 
   if (error) {
     logger.error({ error, shopId, orderId }, 'Failed to start staff edit session');
@@ -49,6 +52,16 @@ async function endEditSession(shopId, phone) {
   const supabase = getSupabase();
   if (!supabase) return;
   await supabase.from('staff_order_edits').delete().eq('shop_id', shopId).eq('phone', phone);
+}
+
+// Set when a list tap or "edit N" asks "what's the new quantity" —
+// cleared (itemId null) once that's answered or cancelled. The next
+// text reply while this is set is interpreted as a quantity, not a
+// generic edit command.
+async function setPendingItem(shopId, phone, itemId) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+  await supabase.from('staff_order_edits').update({ pending_item_id: itemId }).eq('shop_id', shopId).eq('phone', phone);
 }
 
 // Loads the order (scoped to shopId, so an edit session can never touch
@@ -70,7 +83,7 @@ async function getOrderWithItems(orderId, shopId) {
 
   const { data: items, error: itemsError } = await supabase
     .from('order_items')
-    .select('id, product_name_snapshot, quantity, unit_price, subtotal')
+    .select('id, product_name_snapshot, unit_snapshot, quantity, unit_price, subtotal')
     .eq('order_id', orderId)
     .order('created_at', { ascending: true });
 
@@ -83,6 +96,49 @@ function formatItemList(items) {
   return items
     .map((item, i) => `${i + 1}. ${item.product_name_snapshot} × ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`)
     .join('\n');
+}
+
+// Shared by removeItems and adjustItemQuantity — both end with "reload
+// whatever's left and recompute the order's subtotal/total_amount from
+// it," and duplicating that a second time would risk the two drifting
+// apart on rounding or fee handling.
+async function recomputeOrderTotals(supabase, orderId) {
+  const { data: remaining, error: remainingError } = await supabase
+    .from('order_items')
+    .select('subtotal')
+    .eq('order_id', orderId);
+
+  if (remainingError) {
+    logger.error({ error: remainingError, orderId }, 'Failed to reload order items after edit');
+    return null;
+  }
+
+  const { data: order, error: orderError } = await supabase
+    .from('orders')
+    .select('delivery_fee, tax_amount, discount_amount')
+    .eq('id', orderId)
+    .single();
+
+  if (orderError || !order) {
+    logger.error({ error: orderError, orderId }, 'Failed to load order fees before recomputing total');
+    return null;
+  }
+
+  const newSubtotal = (remaining || []).reduce((sum, item) => sum + Number(item.subtotal), 0);
+  const newTotal =
+    newSubtotal + Number(order.delivery_fee || 0) + Number(order.tax_amount || 0) - Number(order.discount_amount || 0);
+
+  const { error: updateError } = await supabase
+    .from('orders')
+    .update({ subtotal: newSubtotal, total_amount: newTotal })
+    .eq('id', orderId);
+
+  if (updateError) {
+    logger.error({ error: updateError, orderId }, 'Failed to update order totals after edit');
+    return null;
+  }
+
+  return { subtotal: newSubtotal, total: newTotal, remainingCount: (remaining || []).length };
 }
 
 /**
@@ -115,49 +171,92 @@ async function removeItems(orderId, itemIdsToRemove) {
     return null;
   }
 
-  const { data: remaining, error: remainingError } = await supabase
+  const totals = await recomputeOrderTotals(supabase, orderId);
+  if (!totals) return null;
+
+  return { blocked: false, ...totals };
+}
+
+/**
+ * Adjusts one item's quantity — the actual "deliver 1 of the 2 ordered"
+ * case a plain remove/keep choice couldn't express. newQuantity <= 0 is
+ * treated as removing the item entirely (delegates to removeItems' own
+ * "can't empty the whole order" guard, so this can't be used to sneak
+ * around that check). Otherwise updates quantity and recomputes that
+ * line's subtotal from the item's own unit_price — never trusts a
+ * client-supplied subtotal — then recomputes the order the same way
+ * removeItems does.
+ */
+async function adjustItemQuantity(orderId, itemId, newQuantity) {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  if (newQuantity <= 0) {
+    return removeItems(orderId, [itemId]);
+  }
+
+  const { data: item, error: itemError } = await supabase
     .from('order_items')
-    .select('subtotal')
-    .eq('order_id', orderId);
+    .select('id, unit_price')
+    .eq('id', itemId)
+    .eq('order_id', orderId)
+    .maybeSingle();
 
-  if (remainingError) {
-    logger.error({ error: remainingError, orderId }, 'Failed to reload order items after removal');
+  if (itemError || !item) {
+    logger.error({ error: itemError, orderId, itemId }, 'Failed to load item before quantity adjustment');
     return null;
   }
 
-  const { data: order, error: orderError } = await supabase
-    .from('orders')
-    .select('delivery_fee, tax_amount, discount_amount')
-    .eq('id', orderId)
-    .single();
+  const newSubtotalForItem = Number(item.unit_price) * newQuantity;
 
-  if (orderError || !order) {
-    logger.error({ error: orderError, orderId }, 'Failed to load order fees before recomputing total');
+  const { error: updateItemError } = await supabase
+    .from('order_items')
+    .update({ quantity: newQuantity, subtotal: newSubtotalForItem })
+    .eq('id', itemId);
+
+  if (updateItemError) {
+    logger.error({ error: updateItemError, orderId, itemId }, 'Failed to update item quantity');
     return null;
   }
 
-  const newSubtotal = (remaining || []).reduce((sum, item) => sum + Number(item.subtotal), 0);
-  const newTotal =
-    newSubtotal + Number(order.delivery_fee || 0) + Number(order.tax_amount || 0) - Number(order.discount_amount || 0);
+  const totals = await recomputeOrderTotals(supabase, orderId);
+  if (!totals) return null;
 
-  const { error: updateError } = await supabase
-    .from('orders')
-    .update({ subtotal: newSubtotal, total_amount: newTotal })
-    .eq('id', orderId);
+  return { blocked: false, ...totals };
+}
 
-  if (updateError) {
-    logger.error({ error: updateError, orderId }, 'Failed to update order totals after item removal');
-    return null;
+/**
+ * Compares the snapshot taken at edit-session start against the order's
+ * current items and produces a customer-facing summary of what actually
+ * changed. Returns { changed: false } if nothing did (e.g. staff opened
+ * Edit, looked around, and just tapped Done) — callers should skip
+ * sending anything in that case rather than notify about a no-op.
+ */
+function buildEditDiffSummary(originalItems, currentItems) {
+  const lines = [];
+  const currentById = new Map(currentItems.map((item) => [item.id, item]));
+
+  for (const original of originalItems || []) {
+    const current = currentById.get(original.id);
+
+    if (!current) {
+      lines.push(`❌ ${original.product_name_snapshot} — removed`);
+    } else if (current.quantity !== original.quantity) {
+      lines.push(`✏️ ${original.product_name_snapshot} — quantity ${original.quantity} → ${current.quantity}`);
+    }
   }
 
-  return { blocked: false, subtotal: newSubtotal, total: newTotal, remainingCount: (remaining || []).length };
+  return { changed: lines.length > 0, lines };
 }
 
 module.exports = {
   getEditSession,
   startEditSession,
   endEditSession,
+  setPendingItem,
   getOrderWithItems,
   formatItemList,
   removeItems,
+  adjustItemQuantity,
+  buildEditDiffSummary,
 };
