@@ -266,6 +266,58 @@ async function sendListMessage(to, bodyText, buttonText, sections, overrides = {
   }
 }
 
+// ── Call-to-action URL button (a single tappable button carrying a
+// link) ── used instead of pasting a raw URL into a text message for
+// two reasons: (1) it reads as a proper button rather than a link
+// buried in a paragraph, and (2) WhatsApp opens cta_url links in its
+// own in-app browser consistently; a plain auto-linkified URL in a text
+// message doesn't reliably get the same treatment and can kick out to
+// the phone's system browser instead.
+async function sendCtaUrlMessage(to, bodyText, buttonText, url, overrides = {}) {
+  const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
+  const token = overrides.token || config.whatsappToken;
+
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          recipient_type: 'individual',
+          to,
+          type: 'interactive',
+          interactive: {
+            type: 'cta_url',
+            body: { text: bodyText },
+            action: {
+              name: 'cta_url',
+              parameters: { display_text: buttonText, url },
+            },
+          },
+        }),
+      }
+    );
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      logSendFailure('❌ WhatsApp CTA URL message send failed', { to }, data);
+      return false;
+    }
+
+    logger.info({ to, messageId: data.messages?.[0]?.id }, '✅ WhatsApp CTA URL message sent');
+    return true;
+  } catch (err) {
+    logger.error({ err, to }, '❌ WhatsApp CTA URL message send error');
+    return false;
+  }
+}
+
 module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
@@ -274,4 +326,5 @@ module.exports = {
   sendButtonMessage,
   sendButtonMessageDetailed,
   sendListMessage,
+  sendCtaUrlMessage,
 };
