@@ -83,6 +83,21 @@ export async function POST(request: Request) {
   })
 
   if (error) {
+    // otp_disabled (422) is Supabase's actual "no account for this phone,
+    // and shouldCreateUser is false" response — the only case this message
+    // is correct for. Anything else (e.g. a 500 from the WhatsApp delivery
+    // hook) is a real send failure, not an unrecognized number, and was
+    // previously misreported as the same "not recognized" message —
+    // logging it here so a delivery outage shows up instead of looking
+    // like every phone number is simply unknown.
+    if (error.code !== 'otp_disabled') {
+      console.error('OTP send failed:', { code: error.code, status: error.status, message: error.message })
+      return NextResponse.json(
+        { error: 'Could not send the code right now. Please try again in a moment.' },
+        { status: 502 }
+      )
+    }
+
     return NextResponse.json(
       { error: 'Phone not recognized. Contact your shop owner to be added as staff.' },
       { status: 400 }
