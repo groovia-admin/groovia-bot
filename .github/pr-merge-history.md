@@ -49,3 +49,4 @@
 | #82 | Send the webview link as a CTA URL button, not a raw link in text | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 04:51 UTC | 0d 0h 0m |
 | #84 | Fix duplicate new-order alerts and the staff welcome message swallowi… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 05:40 UTC | 0d 0h 0m |
 | #85 | Auto-return to WhatsApp after order placement, surface silent interna… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 05:42 UTC | 0d 0h 0m |
+| #86 | Webview UX fixes: search, persisted checkout state, name pre-fill, ca… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 06:15 UTC | 0d 0h 0m |
