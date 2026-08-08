@@ -45,3 +45,4 @@
 | #78 | Align order_reminder to its final approved copy (clock time, not dura… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 02:41 UTC | 0d 0h 0m |
 | #79 | Fix dashboard Overview "Today's Orders" count using shop-local midnig… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 03:47 UTC | 0d 0h 0m |
 | #80 | Fix WhatsApp OTP login: template payload didn't match the newly-appro… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 04:18 UTC | 0d 0h 0m |
+| #81 | Bot cutover to webview fallback | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 04:26 UTC | 0d 0h 0m |
