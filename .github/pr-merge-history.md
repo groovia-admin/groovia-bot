@@ -59,3 +59,4 @@
 | #87 | Add loading states dashboard-wide, fix storefront image pop-in, poll … | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 08:41 UTC | 0d 0h 0m |
 | #92 | Build real Customers page — was a literal dark-theme placeholder desp… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:16 UTC | 0d 0h 0m |
 | #95 | Add new-order alerts: sound + browser notification, dashboard-wide | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:16 UTC | 0d 0h 0m |
+| #96 | Add order aging indicators — a pending order at 2 minutes and one at … | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:28 UTC | 0d 0h 12m |
