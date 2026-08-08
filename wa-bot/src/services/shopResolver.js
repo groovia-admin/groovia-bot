@@ -157,21 +157,13 @@ async function resolveShopUserGlobal(from) {
 }
 
 /**
- * Active staff phone numbers for a shop — shared by every *proactive*
+ * Active staff phone numbers for a shop — shared by every proactive
  * staff-facing broadcast (new-order alerts, reminders, dashboard-status-
  * change visibility, the first-contact welcome message) instead of each
- * one running its own copy of the same query.
- *
- * Deliberately excludes role='owner': the owner runs the shop from the
- * dashboard and gets WhatsApp for exactly one thing today — the
- * Supabase phone-auth login OTP, sent through its own separate hook,
- * nothing to do with this bot's messaging at all. Every proactive push
- * built on top of this function would otherwise also land in the
- * owner's chat, including (absurdly) telling them about an action they
- * just took themselves from the dashboard. This does NOT affect the
- * owner's ability to act reactively — resolveShopUserGlobal still
- * resolves them as staff if they choose to text a command themselves;
- * this only controls what gets pushed at them unprompted.
+ * one running its own copy of the same query. Includes every active
+ * role (owner included) — the owner wants the same order-alert
+ * visibility as everyone else, on top of their existing dashboard OTP
+ * login, not instead of it.
  */
 async function getActiveStaffPhones(shopId) {
   const supabase = getSupabase();
@@ -182,7 +174,6 @@ async function getActiveStaffPhones(shopId) {
     .select('phone_number')
     .eq('shop_id', shopId)
     .eq('is_active', true)
-    .neq('role', 'owner')
     .not('phone_number', 'is', null);
 
   if (error) {
