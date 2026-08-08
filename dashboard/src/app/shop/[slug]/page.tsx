@@ -36,15 +36,21 @@ export default async function PublicShopPage({ params, searchParams }: PublicSho
     notFound()
   }
 
-  const { data: settings, error: settingsError } = await adminClient
-    .from('shop_settings')
-    .select(SETTINGS_COLUMNS)
-    .eq('shop_id', shop.id)
-    .maybeSingle()
+  const [{ data: settings, error: settingsError }, { data: connection }] = await Promise.all([
+    adminClient.from('shop_settings').select(SETTINGS_COLUMNS).eq('shop_id', shop.id).maybeSingle(),
+    adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', shop.id).maybeSingle(),
+  ])
 
   if (settingsError) {
     console.error('Failed to load public shop settings:', settingsError)
   }
 
-  return <StorefrontApp shop={shop} settings={settings ?? null} token={token ?? null} />
+  return (
+    <StorefrontApp
+      shop={shop}
+      settings={settings ?? null}
+      token={token ?? null}
+      whatsappNumber={connection?.display_phone_number ?? null}
+    />
+  )
 }
