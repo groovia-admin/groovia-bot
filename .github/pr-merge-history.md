@@ -53,3 +53,6 @@
 | #88 | Bot checkout additem and concurrency visibility | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 08:40 UTC | 0d 0h 0m |
 | #89 | Let staff order as a customer via QR scan or location share | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 08:45 UTC | 0d 0h 0m |
 | #90 | Revert owner exclusion — owner should get all order notifications, no… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 08:53 UTC | 0d 0h 0m |
+| #91 | Rebuild Master Catalog: sidebar+panel IA, thumbnails, bulk shop enabl… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:15 UTC | 0d 0h 0m |
+| #93 | Add period-over-period comparisons and gross margin to Analytics | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:16 UTC | 0d 0h 0m |
+| #94 | Add PWA manifest so the dashboard can be installed/added to home screen | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 11:16 UTC | 0d 0h 0m |
