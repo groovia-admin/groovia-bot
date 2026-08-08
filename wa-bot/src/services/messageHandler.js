@@ -948,14 +948,18 @@ async function handleStaffMessage(message, value, staffMatch) {
   const contact = value.contacts?.[0];
   const name    = contact?.profile?.name || 'there';
 
-  // First-ever contact from this staff member — welcome them instead of
-  // processing whatever they happened to send as a command. Deliberately
-  // returns rather than also falling through to command parsing below:
-  // a clean first message, not "welcome" stacked on top of "I didn't
-  // understand that".
+  // First-ever contact from this staff member — send the welcome as a
+  // bonus first message, but do NOT return: a staff member's first-ever
+  // interaction is just as likely to be tapping Accept/Reject/Edit on a
+  // real order (arriving as their first message ever) as it is to be a
+  // plain "Hi". Returning here used to silently swallow that tap
+  // entirely — confirmed in production: an Edit tap on a real order was
+  // replaced with only the welcome text (which even mentions a
+  // dashboard link), and the actual edit action was lost, never
+  // retried. Falling through means both happen: the welcome, then
+  // whatever they actually sent gets processed normally right after.
   if (!staffMatch.whatsappWelcomedAt) {
     await sendStaffWelcomeMessage(from, shopId, staffMatch.id);
-    return;
   }
 
   if (type === 'interactive' && message.interactive?.type === 'button_reply') {
