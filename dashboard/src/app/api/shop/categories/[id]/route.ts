@@ -119,18 +119,29 @@ export async function DELETE(request: Request, { params }: CategoryRouteContext)
   const { adminClient, shopId } = authorization
   const { id } = await params
 
-  // Untag every product in this category first — category_id is nullable
-  // specifically so a category can be removed without deleting or
-  // orphaning the products that were in it.
-  const { error: untagError } = await adminClient
+  // Deleting a category out from under products that still reference it
+  // would either orphan them or silently untag them — neither is a call
+  // this endpoint should make on the owner's behalf. Require the products
+  // to be reassigned (or removed) first, same as most e-commerce catalogs.
+  const { count: productCount, error: countError } = await adminClient
     .from('products')
-    .update({ category_id: null })
+    .select('id', { count: 'exact', head: true })
     .eq('category_id', id)
     .eq('shop_id', shopId)
 
-  if (untagError) {
-    console.error('Failed to untag products before category deletion:', untagError)
+  if (countError) {
+    console.error('Failed to check products before category deletion:', countError)
     return NextResponse.json({ error: 'Failed to remove category' }, { status: 500 })
+  }
+
+  if (productCount && productCount > 0) {
+    return NextResponse.json(
+      {
+        error: `Move or delete the ${productCount} product${productCount > 1 ? 's' : ''} in this category before deleting it.`,
+        productCount,
+      },
+      { status: 409 }
+    )
   }
 
   const { error, count } = await adminClient

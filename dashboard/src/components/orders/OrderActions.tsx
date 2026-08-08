@@ -57,6 +57,7 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
       toast(`Order marked ${nextStatus}`);
       setPendingReasonFor(null);
       setReason("");
+      if (status === "pending") window.dispatchEvent(new Event("groovia:pending-orders-changed"));
       router.refresh();
     } catch {
       toast("Failed to update order. Please try again.", "error");

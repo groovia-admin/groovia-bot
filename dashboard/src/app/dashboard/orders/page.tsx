@@ -17,7 +17,7 @@ export default async function OrdersPage() {
   const { data: orders, error } = await adminClient
     .from('orders')
     .select(
-      'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot )'
+      'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot ), order_items ( quantity )'
     )
     .eq('shop_id', context.shopId)
     .order('created_at', { ascending: false })
@@ -29,6 +29,7 @@ export default async function OrdersPage() {
 
   const rows = (orders ?? []).map((o) => {
     const details = Array.isArray(o.order_customer_details) ? o.order_customer_details[0] : o.order_customer_details
+    const items = o.order_items ?? []
     return {
       id: o.id,
       order_number: o.order_number,
@@ -41,6 +42,7 @@ export default async function OrdersPage() {
       created_at: o.created_at,
       customer_name: details?.customer_name_snapshot ?? null,
       customer_phone: details?.customer_phone_snapshot ?? null,
+      item_count: items.reduce((sum, it) => sum + (it.quantity ?? 0), 0),
     }
   })
 

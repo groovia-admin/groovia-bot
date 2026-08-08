@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
+import ShopProfileForm from '@/components/settings/ShopProfileForm'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
 import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
@@ -21,6 +22,15 @@ export default async function SettingsPage() {
   let settings = null
   let shopSlug: string | null = null
   let whatsappNumber: string | null = null
+  let shopProfile: {
+    name: string
+    description: string | null
+    address_line_1: string | null
+    address_line_2: string | null
+    city: string | null
+    state: string | null
+    postal_code: string | null
+  } | null = null
 
   if (context.kind === 'shop_user') {
     const adminClient = createAdminClient()
@@ -33,7 +43,11 @@ export default async function SettingsPage() {
         )
         .eq('shop_id', context.shopId)
         .maybeSingle(),
-      adminClient.from('shops').select('slug').eq('id', context.shopId).maybeSingle(),
+      adminClient
+        .from('shops')
+        .select('slug, name, description, address_line_1, address_line_2, city, state, postal_code')
+        .eq('id', context.shopId)
+        .maybeSingle(),
       adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', context.shopId).maybeSingle(),
     ])
 
@@ -44,6 +58,17 @@ export default async function SettingsPage() {
     settings = settingsData ?? null
     shopSlug = shopData?.slug ?? null
     whatsappNumber = connection?.display_phone_number ?? null
+    shopProfile = shopData
+      ? {
+          name: shopData.name,
+          description: shopData.description,
+          address_line_1: shopData.address_line_1,
+          address_line_2: shopData.address_line_2,
+          city: shopData.city,
+          state: shopData.state,
+          postal_code: shopData.postal_code,
+        }
+      : null
   }
 
   return (
@@ -53,6 +78,14 @@ export default async function SettingsPage() {
           <h2 style={cardTitleStyle}>Shop Profile</h2>
           <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
           <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+        </div>
+      )}
+
+      {context.kind === 'shop_user' && isOwner && shopProfile && (
+        <div style={cardStyle}>
+          <h2 style={cardTitleStyle}>Shop Details</h2>
+          <p style={cardSubStyle}>Name, address, and phone shown to customers in the WhatsApp order link.</p>
+          <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
         </div>
       )}
 

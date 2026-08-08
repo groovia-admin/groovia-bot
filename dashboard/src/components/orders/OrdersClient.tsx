@@ -30,6 +30,7 @@ type OrderRow = {
   created_at: string;
   customer_name: string | null;
   customer_phone: string | null;
+  item_count: number;
 };
 
 const STATUS_STYLE: Record<OrderStatus, [string, string]> = {
@@ -119,6 +120,7 @@ export default function OrdersClient({
       { key: "status", label: "Status" },
       { key: "customer_name", label: "Customer name" },
       { key: "customer_phone", label: "Customer phone" },
+      { key: "item_count", label: "Items" },
       { key: "pickup_slot_label", label: "Pickup slot" },
       { key: "created_at", label: "Placed at" },
       ...(showRevenue ? [{ key: "total_amount" as const, label: "Total" }] : []),
@@ -185,6 +187,7 @@ export default function OrdersClient({
 
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: "accepted" } : o)));
       toast("Order accepted");
+      window.dispatchEvent(new Event("groovia:pending-orders-changed"));
     } catch {
       toast("Failed to accept order. Please try again.", "error");
     } finally {
@@ -220,6 +223,7 @@ export default function OrdersClient({
     } else {
       toast(`${succeededIds.size} accepted, ${failedCount} failed — try those individually`, "error");
     }
+    if (succeededIds.size > 0) window.dispatchEvent(new Event("groovia:pending-orders-changed"));
   }
 
   return (
@@ -374,6 +378,7 @@ export default function OrdersClient({
                 )}
                 <th style={S.th}>Order</th>
                 <th style={S.th}>Customer</th>
+                <th style={{ ...S.th, textAlign: "right" }}>Items</th>
                 <th style={S.th}>Status</th>
                 <th style={S.th}>Placed</th>
                 {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Total</th>}
@@ -383,7 +388,7 @@ export default function OrdersClient({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={(showRevenue ? 6 : 5) + (canManage ? 1 : 0)}>
+                  <td style={S.td} colSpan={(showRevenue ? 7 : 6) + (canManage ? 1 : 0)}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
                       <ShoppingBag size={14} />
                       {orders.length === 0 ? "No orders yet." : "No orders match your search."}
@@ -410,8 +415,18 @@ export default function OrdersClient({
                         </Link>
                       </td>
                       <td style={S.td}>
-                        {o.customer_name || o.customer_phone || "—"}
+                        {o.customer_name ? (
+                          <div>
+                            <div style={{ color: "#111B21" }}>{o.customer_name}</div>
+                            {o.customer_phone && (
+                              <div style={{ fontSize: 12, color: "#667781", marginTop: 1 }}>{o.customer_phone}</div>
+                            )}
+                          </div>
+                        ) : (
+                          o.customer_phone || "—"
+                        )}
                       </td>
+                      <td style={{ ...S.td, textAlign: "right", color: "#667781" }}>{o.item_count}</td>
                       <td style={S.td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={S.badge(color, background)}>{o.status}</span>

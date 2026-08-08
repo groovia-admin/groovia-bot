@@ -63,7 +63,7 @@ async function resolveShopByPhoneNumberId(phoneNumberId) {
 
   const { data, error } = await supabase
     .from('whatsapp_connections')
-    .select('shops ( id, name, slug, is_active )')
+    .select('shops ( id, name, slug, is_active, address_line_1, address_line_2, city, state, postal_code )')
     .eq('phone_number_id', phoneNumberId)
     .maybeSingle();
 
@@ -185,6 +185,32 @@ async function getActiveStaffPhones(shopId) {
 }
 
 /**
+ * The shop's own WhatsApp display number (whatsapp_connections.display_phone_number
+ * — the same source catalogSync.js already uses for its wa.me deep link),
+ * for showing in the customer-facing welcome message so the shop looks
+ * like a real, contactable business rather than an anonymous webview
+ * link. Returns null rather than throwing if no connection is on file —
+ * callers should just omit the phone line in that case.
+ */
+async function getShopDisplayPhone(shopId) {
+  const supabase = getSupabase();
+  if (!supabase || !shopId) return null;
+
+  const { data, error } = await supabase
+    .from('whatsapp_connections')
+    .select('display_phone_number')
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (error) {
+    logger.error({ error, shopId }, 'Failed to load WhatsApp display phone for shop');
+    return null;
+  }
+
+  return data?.display_phone_number || null;
+}
+
+/**
  * Resolves a shop from the slug carried in a "SHOP-{slug}" QR message.
  * Only matches active shops — a disabled/suspended shop's QR should
  * fail the same way a nonexistent slug does, not leak that the shop
@@ -196,7 +222,7 @@ async function findShopBySlug(slug) {
 
   const { data, error } = await supabase
     .from('shops')
-    .select('id, name, slug')
+    .select('id, name, slug, address_line_1, address_line_2, city, state, postal_code')
     .eq('slug', slug)
     .eq('is_active', true)
     .maybeSingle();
@@ -243,4 +269,5 @@ module.exports = {
   getActiveStaffPhones,
   findShopBySlug,
   findNearbyShops,
+  getShopDisplayPhone,
 };
