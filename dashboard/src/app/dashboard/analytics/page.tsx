@@ -1,7 +1,7 @@
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
-import { TrendingUp, Package, ShoppingBag, XCircle } from 'lucide-react'
+import { TrendingUp, TrendingDown, Minus, Package, ShoppingBag, XCircle, PiggyBank } from 'lucide-react'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +17,10 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: '#C0392B',
 }
 
+function daysAgoIso(days: number): string {
+  return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
+}
+
 export default async function AnalyticsPage() {
   // Owner sees revenue figures; manager sees volume/operational metrics
   // only — matches the permission matrix used elsewhere in the dashboard.
@@ -28,9 +32,10 @@ export default async function AnalyticsPage() {
 
   const showRevenue = context.role === 'owner'
   const adminClient = createAdminClient()
-  const since = new Date(Date.now() - PERIOD_DAYS * 24 * 60 * 60 * 1000).toISOString()
+  const since = daysAgoIso(PERIOD_DAYS)
+  const prevSince = daysAgoIso(PERIOD_DAYS * 2)
 
-  const [{ data: orders, error: ordersError }, { data: items, error: itemsError }] = await Promise.all([
+  const [{ data: orders, error: ordersError }, { data: items, error: itemsError }, { data: prevOrders, error: prevOrdersError }] = await Promise.all([
     adminClient
       .from('orders')
       .select('id, status, total_amount, payment_method, created_at')
@@ -38,13 +43,23 @@ export default async function AnalyticsPage() {
       .gte('created_at', since),
     adminClient
       .from('order_items')
-      .select('product_name_snapshot, quantity, subtotal, orders!inner ( shop_id, status, created_at )')
+      .select('product_id, product_name_snapshot, quantity, unit_price, subtotal, orders!inner ( shop_id, status, created_at )')
       .eq('orders.shop_id', context.shopId)
       .gte('orders.created_at', since),
+    // Previous 30-day window (days 31-60 ago) — purely for the vs-last-period
+    // deltas on the stat cards below. A raw "₹12,400" tells an owner nothing
+    // about whether that's a good week without something to compare it to.
+    adminClient
+      .from('orders')
+      .select('id, status, total_amount, created_at')
+      .eq('shop_id', context.shopId)
+      .gte('created_at', prevSince)
+      .lt('created_at', since),
   ])
 
   if (ordersError) console.error('Failed to load orders for analytics:', ordersError)
   if (itemsError) console.error('Failed to load order items for analytics:', itemsError)
+  if (prevOrdersError) console.error('Failed to load previous-period orders for analytics:', prevOrdersError)
 
   const allOrders = orders ?? []
   const fulfilledOrders = allOrders.filter((o) => o.status === 'completed')
@@ -52,18 +67,15 @@ export default async function AnalyticsPage() {
   const totalRevenue = fulfilledOrders.reduce((sum, o) => sum + Number(o.total_amount), 0)
   const avgOrderValue = fulfilledOrders.length > 0 ? totalRevenue / fulfilledOrders.length : 0
 
+  const prevAllOrders = prevOrders ?? []
+  const prevFulfilledOrders = prevAllOrders.filter((o) => o.status === 'completed')
+  const prevFailedOrders = prevAllOrders.filter((o) => o.status === 'rejected' || o.status === 'cancelled')
+  const prevTotalRevenue = prevFulfilledOrders.reduce((sum, o) => sum + Number(o.total_amount), 0)
+  const prevAvgOrderValue = prevFulfilledOrders.length > 0 ? prevTotalRevenue / prevFulfilledOrders.length : 0
+
   const statusCounts: Record<string, number> = {}
   for (const o of allOrders) statusCounts[o.status] = (statusCounts[o.status] ?? 0) + 1
   const maxStatusCount = Math.max(1, ...Object.values(statusCounts))
-
-  // Revenue by payment method, completed orders only — same "actually
-  // fulfilled" scope as totalRevenue above, just broken down further.
-  const revenueByPaymentMethod = new Map<string, number>()
-  for (const o of fulfilledOrders) {
-    const method = o.payment_method || 'unspecified'
-    revenueByPaymentMethod.set(method, (revenueByPaymentMethod.get(method) ?? 0) + Number(o.total_amount))
-  }
-  const maxPaymentMethodRevenue = Math.max(1, ...revenueByPaymentMethod.values())
 
   // Revenue/order volume by day, oldest → newest, for the trend strip.
   const dayBuckets = new Map<string, { revenue: number; count: number }>()
@@ -100,19 +112,68 @@ export default async function AnalyticsPage() {
     .slice(0, 5)
   const maxProductValue = Math.max(1, ...topProducts.map((p) => (showRevenue ? p.revenue : p.qty)))
 
+  // Gross margin — order_items only snapshots unit_price, not cost_price at
+  // time of sale, so this joins back to products' CURRENT cost_price. That's
+  // an approximation if a cost has changed since the sale, which is why the
+  // card is explicit about "at today's cost prices" rather than presenting
+  // it as an exact historical figure.
+  let grossMargin: number | null = null
+  let marginPct: number | null = null
+  if (showRevenue) {
+    const completedItems = (items ?? []).filter((item) => {
+      const order = Array.isArray(item.orders) ? item.orders[0] : item.orders
+      return order?.status === 'completed' && item.product_id
+    })
+    const productIds = Array.from(new Set(completedItems.map((item) => item.product_id as string)))
+
+    if (productIds.length > 0) {
+      const { data: costRows, error: costError } = await adminClient
+        .from('products')
+        .select('id, cost_price')
+        .in('id', productIds)
+
+      if (costError) {
+        console.error('Failed to load cost prices for margin calc:', costError)
+      } else {
+        const costById = new Map((costRows ?? []).map((p) => [p.id, p.cost_price]))
+        let marginTotal = 0
+        let revenueWithKnownCost = 0
+        for (const item of completedItems) {
+          const cost = costById.get(item.product_id as string)
+          if (cost === null || cost === undefined) continue
+          marginTotal += (Number(item.unit_price) - Number(cost)) * Number(item.quantity)
+          revenueWithKnownCost += Number(item.subtotal)
+        }
+        grossMargin = marginTotal
+        marginPct = revenueWithKnownCost > 0 ? (marginTotal / revenueWithKnownCost) * 100 : null
+      }
+    } else {
+      grossMargin = 0
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111B21', margin: 0 }}>Analytics</h1>
-        <p style={{ fontSize: 13, color: '#667781', marginTop: 4 }}>Last {PERIOD_DAYS} days.</p>
+        <p style={{ fontSize: 13, color: '#667781', marginTop: 4 }}>Last {PERIOD_DAYS} days, vs the {PERIOD_DAYS} days before that.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
-        <StatCard icon={ShoppingBag} label="Orders" value={String(allOrders.length)} />
-        <StatCard icon={Package} label="Completed" value={String(fulfilledOrders.length)} />
-        <StatCard icon={XCircle} label="Rejected / cancelled" value={String(failedOrders.length)} accent="#C0392B" />
-        {showRevenue && <StatCard icon={TrendingUp} label="Revenue" value={`₹${totalRevenue.toFixed(0)}`} accent="#128C7E" />}
-        {showRevenue && <StatCard icon={TrendingUp} label="Avg order value" value={`₹${avgOrderValue.toFixed(0)}`} />}
+        <StatCard icon={ShoppingBag} label="Orders" value={String(allOrders.length)} prevValue={prevAllOrders.length} />
+        <StatCard icon={Package} label="Completed" value={String(fulfilledOrders.length)} prevValue={prevFulfilledOrders.length} />
+        <StatCard icon={XCircle} label="Rejected / cancelled" value={String(failedOrders.length)} prevValue={prevFailedOrders.length} accent="#C0392B" invertDelta />
+        {showRevenue && <StatCard icon={TrendingUp} label="Revenue" value={`₹${totalRevenue.toFixed(0)}`} prevValue={prevTotalRevenue} rawValue={totalRevenue} accent="#128C7E" />}
+        {showRevenue && <StatCard icon={TrendingUp} label="Avg order value" value={`₹${avgOrderValue.toFixed(0)}`} prevValue={prevAvgOrderValue} rawValue={avgOrderValue} />}
+        {showRevenue && grossMargin !== null && (
+          <StatCard
+            icon={PiggyBank}
+            label="Gross margin"
+            value={`₹${grossMargin.toFixed(0)}${marginPct !== null ? ` (${marginPct.toFixed(0)}%)` : ''}`}
+            accent="#128C7E"
+            hint="At today's cost prices — order items don't snapshot cost at time of sale"
+          />
+        )}
       </div>
 
       <div style={S.card}>
@@ -192,44 +253,55 @@ export default async function AnalyticsPage() {
             </div>
           )}
         </div>
-
-        {showRevenue && (
-          <div style={S.card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111B21', marginBottom: 14 }}>Revenue by payment method</div>
-            {revenueByPaymentMethod.size === 0 ? (
-              <p style={{ fontSize: 13, color: '#667781', margin: 0 }}>No completed orders yet.</p>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {Array.from(revenueByPaymentMethod.entries())
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([method, revenue]) => (
-                    <div key={method} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div style={{ width: 80, fontSize: 12, color: '#667781', textTransform: 'capitalize' }}>{method}</div>
-                      <div style={{ flex: 1, background: '#F0F2F5', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                        <div style={{ width: `${(revenue / maxPaymentMethodRevenue) * 100}%`, height: '100%', background: '#128C7E' }} />
-                      </div>
-                      <div style={{ width: 60, fontSize: 12, color: '#111B21', fontWeight: 600, textAlign: 'right' }}>
-                        ₹{revenue.toFixed(0)}
-                      </div>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        )}
       </div>
     </div>
   )
 }
 
-function StatCard({ icon: Icon, label, value, accent }: { icon: React.ElementType; label: string; value: string; accent?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  prevValue,
+  rawValue,
+  invertDelta,
+  hint,
+}: {
+  icon: React.ElementType
+  label: string
+  value: string
+  accent?: string
+  prevValue?: number
+  rawValue?: number
+  invertDelta?: boolean
+  hint?: string
+}) {
+  const current = rawValue ?? Number(value.replace(/[^0-9.-]/g, ''))
+  const hasComparison = prevValue !== undefined
+  const delta = hasComparison && prevValue! > 0 ? ((current - prevValue!) / prevValue!) * 100 : null
+  const noChange = hasComparison && prevValue === 0 && current === 0
+
+  // "More orders" is good; "more rejected" is bad — invertDelta flips which
+  // direction reads as green vs red without duplicating the whole card.
+  const isGood = delta === null ? null : invertDelta ? delta < 0 : delta > 0
+
   return (
-    <div style={S.card}>
+    <div style={S.card} title={hint}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontSize: 12, color: '#667781' }}>{label}</span>
         <Icon size={15} color={accent ?? '#8696A0'} />
       </div>
-      <div style={{ fontSize: 22, fontWeight: 800, color: accent ?? '#111B21' }}>{value}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 800, color: accent ?? '#111B21' }}>{value}</div>
+        {hasComparison && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: noChange || delta === null ? '#8696A0' : isGood ? '#128C7E' : '#C0392B' }}>
+            {noChange || delta === null ? <Minus size={11} /> : delta > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {noChange ? '—' : delta === null ? 'new' : `${Math.abs(delta).toFixed(0)}%`}
+          </span>
+        )}
+      </div>
+      {hasComparison && <div style={{ fontSize: 10, color: '#8696A0', marginTop: 2 }}>vs {prevValue} last period</div>}
     </div>
   )
 }
