@@ -51,8 +51,11 @@ function normalizeWhatsappFrom(from) {
 
 /**
  * Resolves which shop owns the WhatsApp Business number that received the
- * message, via the whatsapp_connections table. Returns the shop_id, or
- * null if this phone_number_id isn't linked to any shop.
+ * message, via the whatsapp_connections table. Returns the shop itself
+ * (id/name/slug — what starting a v2 webview session needs), not just
+ * its id, so the fallback path in messageHandler.js can hand a customer
+ * straight to the ordering webview without a second lookup. Returns
+ * null if this phone_number_id isn't linked to any active shop.
  */
 async function resolveShopByPhoneNumberId(phoneNumberId) {
   const supabase = getSupabase();
@@ -60,7 +63,7 @@ async function resolveShopByPhoneNumberId(phoneNumberId) {
 
   const { data, error } = await supabase
     .from('whatsapp_connections')
-    .select('shop_id')
+    .select('shops ( id, name, slug, is_active )')
     .eq('phone_number_id', phoneNumberId)
     .maybeSingle();
 
@@ -69,7 +72,12 @@ async function resolveShopByPhoneNumberId(phoneNumberId) {
     return null;
   }
 
-  return data?.shop_id ?? null;
+  if (!data) return null;
+
+  const shop = Array.isArray(data.shops) ? data.shops[0] : data.shops;
+  if (!shop || !shop.is_active) return null;
+
+  return shop;
 }
 
 /**

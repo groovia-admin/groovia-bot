@@ -1085,24 +1085,29 @@ async function handleIncomingMessage(message, value) {
     }
   }
 
-  // ── Preserved fallback: today's behavior, unchanged. Resolves the
-  // shop from which WhatsApp number received the message, exactly as
-  // before Phase 2 — kept deliberately so current pilot customers (who
-  // haven't scanned a QR or shared location yet) keep seeing the
-  // native-catalog flow uninterrupted. Once shops genuinely share one
-  // number and this becomes ambiguous, this should be replaced with an
-  // explicit "share your location or scan a shop QR" prompt instead —
-  // not yet, since only 1-2 shops exist on the shared number today.
+  // Fallback: a customer who didn't arrive via a QR scan or shared
+  // location — still the common case, since most people just message
+  // the number directly — resolves to a shop the same way the pre-v2
+  // bot always did, but now starts a v2 webview session instead of
+  // routing into the old native-catalog flow (handleCustomerMessage,
+  // below — now unreachable from here, kept for now rather than deleted
+  // immediately; see the PR this shipped in for the cleanup list).
+  //
+  // Same ambiguity caveat Phase 2 originally flagged: this still
+  // assumes phone_number_id maps to exactly one shop. That breaks once
+  // a second shop genuinely shares the number — at that point this
+  // needs to become an explicit "share your location or scan a shop QR"
+  // prompt instead of guessing which shop a bare "Hi" was meant for.
   const phoneNumberId = value.metadata?.phone_number_id;
-  const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
+  const shop = await resolveShopByPhoneNumberId(phoneNumberId);
 
-  if (!shopId) {
+  if (!shop) {
     logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
     await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
     return;
   }
 
-  await handleCustomerMessage(from, message, shopId, name);
+  await startCustomerOrderingSession(from, shop, name);
 }
 
 async function handleStatusUpdate(status) {
