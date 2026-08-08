@@ -4,10 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { Search, ShoppingBag, Check, X, RefreshCw } from "lucide-react";
+import { Search, ShoppingBag, Check, X, RefreshCw, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import { useToast } from "@/components/ui/ToastProvider";
+import { toCsv, downloadCsv } from "@/lib/csv";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
@@ -100,6 +101,19 @@ export default function OrdersClient({
     router.refresh();
   }
 
+  function exportCsv() {
+    const csv = toCsv(filtered, [
+      { key: "order_number", label: "Order #" },
+      { key: "status", label: "Status" },
+      { key: "customer_name", label: "Customer name" },
+      { key: "customer_phone", label: "Customer phone" },
+      { key: "pickup_slot_label", label: "Pickup slot" },
+      { key: "created_at", label: "Placed at" },
+      ...(showRevenue ? [{ key: "total_amount" as const, label: "Total" }] : []),
+    ]);
+    downloadCsv(`orders-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  }
+
   const counts = useMemo(() => {
     const map: Partial<Record<OrderStatus, number>> = {};
     for (const o of orders) map[o.status] = (map[o.status] ?? 0) + 1;
@@ -162,28 +176,53 @@ export default function OrdersClient({
           </div>
           <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
-        <button
-          type="button"
-          onClick={manualRefresh}
-          disabled={refreshing}
-          title="Refresh now"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: "1px solid #E9EDEF",
-            background: "#FFFFFF",
-            color: "#667781",
-            fontSize: 12,
-            cursor: refreshing ? "default" : "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
-          Updated {formatDistanceToNowStrict(lastRefreshedAt, { addSuffix: true })}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            title="Export the orders currently shown to a CSV file"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #E9EDEF",
+              background: "#FFFFFF",
+              color: "#667781",
+              fontSize: 12,
+              cursor: filtered.length === 0 ? "default" : "pointer",
+              fontFamily: "inherit",
+              opacity: filtered.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={manualRefresh}
+            disabled={refreshing}
+            title="Refresh now"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #E9EDEF",
+              background: "#FFFFFF",
+              color: "#667781",
+              fontSize: 12,
+              cursor: refreshing ? "default" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
+            Updated {formatDistanceToNowStrict(lastRefreshedAt, { addSuffix: true })}
+          </button>
+        </div>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
 
