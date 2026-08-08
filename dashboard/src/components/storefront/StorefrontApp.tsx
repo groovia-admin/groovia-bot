@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2, Search, X } from 'lucide-react'
 import { CartView } from './CartView'
 import { CheckoutView } from './CheckoutView'
+import CartLoader from '@/components/ui/CartLoader'
+import ProductImage from './ProductImage'
 import type {
   CartItem,
   StorefrontProduct,
@@ -404,8 +406,8 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
 
       <div className="mx-auto max-w-2xl px-4 grid grid-cols-2 gap-3 mt-2">
         {catalogLoading ? (
-          <div className="col-span-2 flex justify-center py-12">
-            <Loader2 className="animate-spin text-ink-faint" size={28} />
+          <div className="col-span-2">
+            <CartLoader label="Loading the shop…" size="inline" />
           </div>
         ) : visibleProducts.length === 0 ? (
           <p className="col-span-2 text-center py-12 text-sm text-ink-muted">
@@ -416,13 +418,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             const inCart = cart[product.id]
             return (
               <div key={product.id} className="card flex flex-col">
-                {product.image_url ? (
-                  <img src={product.image_url} alt={product.name} className="h-24 w-full rounded-lg object-cover mb-2" />
-                ) : (
-                  <div className="h-24 w-full rounded-lg mb-2 flex items-center justify-center bg-surface-hover">
-                    <span className="text-2xl font-bold text-ink-faint">{product.name.charAt(0).toUpperCase()}</span>
-                  </div>
-                )}
+                <ProductImage src={product.image_url} alt={product.name} />
                 <h3 className="text-sm font-medium leading-tight text-ink">{product.name}</h3>
                 <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
                 <div className="mt-auto pt-2 flex items-center justify-between">
