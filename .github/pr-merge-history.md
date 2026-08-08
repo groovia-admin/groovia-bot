@@ -46,3 +46,4 @@
 | #79 | Fix dashboard Overview "Today's Orders" count using shop-local midnig… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 03:47 UTC | 0d 0h 0m |
 | #80 | Fix WhatsApp OTP login: template payload didn't match the newly-appro… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 04:18 UTC | 0d 0h 0m |
 | #81 | Bot cutover to webview fallback | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 04:26 UTC | 0d 0h 0m |
+| #82 | Send the webview link as a CTA URL button, not a raw link in text | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 04:51 UTC | 0d 0h 0m |
