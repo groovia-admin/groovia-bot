@@ -9,6 +9,8 @@ import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import { useToast } from "@/components/ui/ToastProvider";
 import { toCsv, downloadCsv } from "@/lib/csv";
+import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
+import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
@@ -68,7 +70,15 @@ export default function OrdersClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const knownOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
+
+  // Ticks every 30s so pending-order age badges age visibly without
+  // needing a real data refetch — one shared timer for the whole table.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
 
   // Server re-fetches (initial load, or a manual/auto refresh below) land
   // here as a new `initialOrders` prop — reconcile local state against it
@@ -292,8 +302,9 @@ export default function OrdersClient({
                 filtered.map((o) => {
                   const [color, background] = STATUS_STYLE[o.status];
                   const busy = busyId === o.id;
+                  const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
                   return (
-                    <tr key={o.id}>
+                    <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 #C0392B" } : undefined}>
                       <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
                         <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#128C7E", textDecoration: "none" }}>
                           #{o.order_number}
@@ -303,7 +314,10 @@ export default function OrdersClient({
                         {o.customer_name || o.customer_phone || "—"}
                       </td>
                       <td style={S.td}>
-                        <span style={S.badge(color, background)}>{o.status}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={S.badge(color, background)}>{o.status}</span>
+                          {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
+                        </div>
                       </td>
                       <td style={{ ...S.td, whiteSpace: "nowrap" }}>
                         {o.pickup_slot_label ?? format(new Date(o.created_at), "MMM d, HH:mm")}
