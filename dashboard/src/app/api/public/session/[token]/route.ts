@@ -23,7 +23,7 @@ export async function GET(
 
   const { data: session, error } = await adminClient
     .from('order_sessions')
-    .select('id, shop_id, customer_phone, cart_snapshot, expires_at')
+    .select('id, shop_id, customer_phone, customer_name, cart_snapshot, expires_at')
     .eq('token_hash', tokenHash)
     .eq('status', 'active')
     .maybeSingle()
@@ -65,6 +65,7 @@ export async function GET(
     {
       shopId: session.shop_id,
       customerPhone: session.customer_phone,
+      customerName: session.customer_name,
       cartSnapshot: session.cart_snapshot,
       expiresAt: newExpiresAt,
     },

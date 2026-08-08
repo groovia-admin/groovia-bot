@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 import { generateHourlySlots } from '@/lib/storefront/slots'
-import type { StorefrontSettings, SubmitOrderBody } from '@/lib/storefront/types'
+import type { StorefrontSettings, SubmitOrderBody, CheckoutFormState } from '@/lib/storefront/types'
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: 'Cash',
@@ -18,23 +18,36 @@ type Props = {
   settings: StorefrontSettings
   total: number
   formatMoney: (amount: number) => string
+  form: CheckoutFormState
+  onFormChange: (updater: (prev: CheckoutFormState) => CheckoutFormState) => void
   onBack: () => void
   onPlaced: (orderNumber: string) => void
 }
 
-export function CheckoutView({ token, timezone, settings, total, formatMoney, onBack, onPlaced }: Props) {
+// Fully controlled by StorefrontApp's own state (see its checkoutForm) —
+// this component owns no form data itself, only submission-in-flight
+// state, so navigating away and back never loses what was already
+// filled in.
+export function CheckoutView({ token, timezone, settings, total, formatMoney, form, onFormChange, onBack, onPlaced }: Props) {
   const allowPickup = settings?.allow_pickup ?? true
   const allowDelivery = settings?.allow_delivery ?? false
 
-  const [orderType, setOrderType] = useState<'pickup' | 'delivery'>(allowPickup ? 'pickup' : 'delivery')
-  const [customerName, setCustomerName] = useState('')
-  const [pickupSlotId, setPickupSlotId] = useState<string | null>(null)
-  const [addressLine1, setAddressLine1] = useState('')
-  const [addressLine2, setAddressLine2] = useState('')
-  const [landmark, setLandmark] = useState('')
-  const [city, setCity] = useState('')
-  const [postalCode, setPostalCode] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState<string>('')
+  const {
+    orderType,
+    customerName,
+    pickupSlotId,
+    addressLine1,
+    addressLine2,
+    landmark,
+    city,
+    postalCode,
+    paymentMethod,
+  } = form
+
+  function set<K extends keyof CheckoutFormState>(key: K, value: CheckoutFormState[K]) {
+    onFormChange((prev) => ({ ...prev, [key]: value }))
+  }
+
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -118,13 +131,13 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
             <div className="flex gap-2">
               <button
                 className={orderType === 'pickup' ? 'btn text-white bg-brand flex-1 justify-center' : 'btn-secondary flex-1 justify-center'}
-                onClick={() => setOrderType('pickup')}
+                onClick={() => set('orderType', 'pickup')}
               >
                 Pickup
               </button>
               <button
                 className={orderType === 'delivery' ? 'btn text-white bg-brand flex-1 justify-center' : 'btn-secondary flex-1 justify-center'}
-                onClick={() => setOrderType('delivery')}
+                onClick={() => set('orderType', 'delivery')}
               >
                 Delivery
               </button>
@@ -140,7 +153,7 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
             id="customerName"
             className="input"
             value={customerName}
-            onChange={(e) => setCustomerName(e.target.value)}
+            onChange={(e) => set('customerName', e.target.value)}
             placeholder="e.g. Priya Sharma"
             disabled={submitting}
           />
@@ -157,7 +170,7 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
                   <button
                     key={slot.id}
                     className={slot.id === pickupSlotId ? 'btn text-white bg-brand' : 'btn-secondary'}
-                    onClick={() => setPickupSlotId(slot.id)}
+                    onClick={() => set('pickupSlotId', slot.id)}
                     disabled={submitting}
                   >
                     {slot.label}
@@ -172,21 +185,21 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
             <input
               className="input"
               value={addressLine1}
-              onChange={(e) => setAddressLine1(e.target.value)}
+              onChange={(e) => set('addressLine1', e.target.value)}
               placeholder="House/flat no., street *"
               disabled={submitting}
             />
             <input
               className="input"
               value={addressLine2}
-              onChange={(e) => setAddressLine2(e.target.value)}
+              onChange={(e) => set('addressLine2', e.target.value)}
               placeholder="Area, locality"
               disabled={submitting}
             />
             <input
               className="input"
               value={landmark}
-              onChange={(e) => setLandmark(e.target.value)}
+              onChange={(e) => set('landmark', e.target.value)}
               placeholder="Landmark (optional)"
               disabled={submitting}
             />
@@ -194,14 +207,14 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
               <input
                 className="input"
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => set('city', e.target.value)}
                 placeholder="City"
                 disabled={submitting}
               />
               <input
                 className="input"
                 value={postalCode}
-                onChange={(e) => setPostalCode(e.target.value)}
+                onChange={(e) => set('postalCode', e.target.value)}
                 placeholder="Pincode"
                 disabled={submitting}
               />
@@ -222,7 +235,7 @@ export function CheckoutView({ token, timezone, settings, total, formatMoney, on
                   name="paymentMethod"
                   value={method}
                   checked={paymentMethod === method}
-                  onChange={() => setPaymentMethod(method)}
+                  onChange={() => set('paymentMethod', method)}
                   disabled={submitting}
                 />
                 {PAYMENT_LABELS[method] || method}

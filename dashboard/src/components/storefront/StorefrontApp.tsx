@@ -1,10 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2 } from 'lucide-react'
+import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2, Search, X } from 'lucide-react'
 import { CartView } from './CartView'
 import { CheckoutView } from './CheckoutView'
-import type { CartItem, StorefrontProduct, StorefrontCategory, StorefrontSettings } from '@/lib/storefront/types'
+import type {
+  CartItem,
+  StorefrontProduct,
+  StorefrontCategory,
+  StorefrontSettings,
+  CheckoutFormState,
+} from '@/lib/storefront/types'
 
 type Shop = {
   id: string
@@ -36,16 +42,38 @@ type SessionState =
   | { status: 'invalid' }
   | { status: 'active'; customerPhone: string }
 
+const DEFAULT_CHECKOUT_FORM: CheckoutFormState = {
+  orderType: 'pickup',
+  customerName: '',
+  pickupSlotId: null,
+  addressLine1: '',
+  addressLine2: '',
+  landmark: '',
+  city: '',
+  postalCode: '',
+  paymentMethod: '',
+}
+
 export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) {
   const [session, setSession] = useState<SessionState>(token ? { status: 'loading' } : { status: 'none' })
   const [categories, setCategories] = useState<StorefrontCategory[]>([])
   const [products, setProducts] = useState<StorefrontProduct[]>([])
   const [catalogLoading, setCatalogLoading] = useState(true)
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [view, setView] = useState<'browse' | 'cart' | 'checkout' | 'placed'>('browse')
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
+  // Lifted up here (not local to CheckoutView) so it survives the
+  // customer navigating back to browse for a forgotten item and
+  // returning to checkout — this component doesn't unmount between
+  // those view switches, only its children do.
+  const [checkoutForm, setCheckoutForm] = useState<CheckoutFormState>({
+    ...DEFAULT_CHECKOUT_FORM,
+    orderType: settings?.allow_pickup === false && settings?.allow_delivery ? 'delivery' : 'pickup',
+  })
   const hydratedCartFromSession = useRef(false)
+  const hydratedNameFromSession = useRef(false)
 
   const formatMoney = useCallback(
     (amount: number) =>
@@ -110,6 +138,15 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
           for (const item of data.cartSnapshot.items as CartItem[]) map[item.product_id] = item
           setCart(map)
         }
+
+        // Pre-fill the checkout name field from the customer's WhatsApp
+        // profile name (captured when the session was created) — same
+        // once-only hydration pattern as the cart above, so it never
+        // overwrites something the customer already typed/edited.
+        if (!hydratedNameFromSession.current && data.customerName) {
+          hydratedNameFromSession.current = true
+          setCheckoutForm((prev) => (prev.customerName ? prev : { ...prev, customerName: data.customerName }))
+        }
       } catch (err) {
         console.error('Failed to resolve session', err)
         if (!cancelled) setSession({ status: 'invalid' })
@@ -163,12 +200,21 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
   // was itself opened via window.open(), which this tab wasn't) —
   // navigating to a wa.me link is what actually gets recognized and
   // handed back to the WhatsApp app.
+  const [showManualReturn, setShowManualReturn] = useState(false)
   useEffect(() => {
     if (view !== 'placed' || !waLink) return
-    const timer = setTimeout(() => {
+    const redirectTimer = setTimeout(() => {
       window.location.href = waLink
     }, 2500)
-    return () => clearTimeout(timer)
+    // Only reveal the manual fallback link well after the auto-redirect
+    // should already have fired — showing it immediately alongside
+    // "Returning you to WhatsApp…" reads as if the automatic part isn't
+    // trusted to work at all.
+    const fallbackTimer = setTimeout(() => setShowManualReturn(true), 5000)
+    return () => {
+      clearTimeout(redirectTimer)
+      clearTimeout(fallbackTimer)
+    }
   }, [view, waLink])
 
   function setQuantity(product: StorefrontProduct, quantity: number) {
@@ -204,7 +250,9 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     })
   }
 
-  const visibleProducts = activeCategoryId ? products.filter((p) => p.category_id === activeCategoryId) : products
+  const visibleProducts = products
+    .filter((p) => !activeCategoryId || p.category_id === activeCategoryId)
+    .filter((p) => !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
 
   if (view === 'cart') {
     return (
@@ -228,6 +276,8 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         settings={settings}
         total={cartTotal}
         formatMoney={formatMoney}
+        form={checkoutForm}
+        onFormChange={setCheckoutForm}
         onBack={() => setView('cart')}
         onPlaced={(orderNumber) => {
           setPlacedOrderNumber(orderNumber)
@@ -250,14 +300,16 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             We&apos;ve sent you a WhatsApp message with the details. The shop will confirm shortly.
           </p>
           {waLink ? (
-            <>
-              <p className="mt-4 text-xs text-ink-faint">Returning you to WhatsApp…</p>
-              <a href={waLink} className="btn-primary mt-2 w-full justify-center">
-                Return to WhatsApp
-              </a>
-            </>
+            <p className="mt-4 flex items-center justify-center gap-2 text-sm text-ink-muted">
+              <Loader2 size={14} className="animate-spin" /> Returning you to WhatsApp…
+            </p>
           ) : (
             <p className="mt-4 text-xs text-ink-faint">You can close this window now.</p>
+          )}
+          {showManualReturn && waLink && (
+            <a href={waLink} className="btn-secondary mt-3 w-full justify-center">
+              Tap here if you weren&apos;t redirected
+            </a>
           )}
         </div>
       </main>
@@ -304,25 +356,49 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         )}
       </header>
 
-      {categories.length > 0 && (
-        <div className="sticky top-0 z-10 bg-surface overflow-x-auto px-4 py-3 flex gap-2">
-          <button
-            className={activeCategoryId === null ? 'btn text-white bg-brand flex-shrink-0' : 'btn-secondary flex-shrink-0'}
-            onClick={() => setActiveCategoryId(null)}
-          >
-            All
-          </button>
-          {categories.map((c) => (
-            <button
-              key={c.id}
-              className={activeCategoryId === c.id ? 'btn text-white bg-brand flex-shrink-0' : 'btn-secondary flex-shrink-0'}
-              onClick={() => setActiveCategoryId(c.id)}
-            >
-              {c.name}
-            </button>
-          ))}
+      <div className="sticky top-0 z-10 bg-surface">
+        <div className="px-4 pt-3">
+          <div className="mx-auto max-w-2xl relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint pointer-events-none" />
+            <input
+              className="input pl-9 pr-9"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products…"
+              aria-label="Search products"
+            />
+            {searchQuery && (
+              <button
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-faint"
+                onClick={() => setSearchQuery('')}
+                aria-label="Clear search"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
-      )}
+
+        {categories.length > 0 && (
+          <div className="overflow-x-auto px-4 py-3 flex gap-2">
+            <button
+              className={activeCategoryId === null ? 'btn text-white bg-brand flex-shrink-0' : 'btn-secondary flex-shrink-0'}
+              onClick={() => setActiveCategoryId(null)}
+            >
+              All
+            </button>
+            {categories.map((c) => (
+              <button
+                key={c.id}
+                className={activeCategoryId === c.id ? 'btn text-white bg-brand flex-shrink-0' : 'btn-secondary flex-shrink-0'}
+                onClick={() => setActiveCategoryId(c.id)}
+              >
+                {c.name}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <div className="mx-auto max-w-2xl px-4 grid grid-cols-2 gap-3 mt-2">
         {catalogLoading ? (
@@ -330,7 +406,9 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             <Loader2 className="animate-spin text-ink-faint" size={28} />
           </div>
         ) : visibleProducts.length === 0 ? (
-          <p className="col-span-2 text-center py-12 text-sm text-ink-muted">Nothing here yet.</p>
+          <p className="col-span-2 text-center py-12 text-sm text-ink-muted">
+            {searchQuery ? `No products match "${searchQuery}".` : 'Nothing here yet.'}
+          </p>
         ) : (
           visibleProducts.map((product) => {
             const inCart = cart[product.id]

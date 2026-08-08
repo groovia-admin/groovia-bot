@@ -665,7 +665,10 @@ async function startCustomerOrderingSession(from, shop, name) {
     return;
   }
 
-  const created = await createOrderSession(shop.id, from);
+  // "there" is handleIncomingMessage's fallback when WhatsApp didn't
+  // supply a real contact profile name — never worth pre-filling the
+  // webview's name field with that literal placeholder.
+  const created = await createOrderSession(shop.id, from, { customerName: name === 'there' ? null : name });
 
   if (!created) {
     await sendWhatsAppMessage(from, '⚠️ Something went wrong starting your order. Please try again.');

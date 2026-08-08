@@ -34,7 +34,7 @@ function hashToken(token) {
  * couldn't be created. The token itself is never persisted — only its
  * hash is.
  */
-async function createSession(shopId, customerPhone, { cartSnapshot } = {}) {
+async function createSession(shopId, customerPhone, { cartSnapshot, customerName } = {}) {
   const supabase = getSupabase();
   if (!supabase) return null;
 
@@ -48,6 +48,7 @@ async function createSession(shopId, customerPhone, { cartSnapshot } = {}) {
       token_hash: tokenHash,
       shop_id: shopId,
       customer_phone: customerPhone,
+      customer_name: customerName || null,
       status: 'active',
       cart_snapshot: cartSnapshot || null,
       expires_at: expiresAt,
