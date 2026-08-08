@@ -4,10 +4,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { Search, ShoppingBag, Check, X, RefreshCw } from "lucide-react";
+import { Search, ShoppingBag, Check, X, RefreshCw, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import { useToast } from "@/components/ui/ToastProvider";
+import { toCsv, downloadCsv } from "@/lib/csv";
+import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
+import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
@@ -69,7 +72,15 @@ export default function OrdersClient({
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [now, setNow] = useState(() => new Date());
   const knownOrderIds = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)));
+
+  // Ticks every 30s so pending-order age badges age visibly without
+  // needing a real data refetch — one shared timer for the whole table.
+  useEffect(() => {
+    const tick = setInterval(() => setNow(new Date()), 30_000);
+    return () => clearInterval(tick);
+  }, []);
 
   // Server re-fetches (initial load, or a manual/auto refresh below) land
   // here as a new `initialOrders` prop — reconcile local state against it
@@ -100,6 +111,19 @@ export default function OrdersClient({
   function manualRefresh() {
     setRefreshing(true);
     router.refresh();
+  }
+
+  function exportCsv() {
+    const csv = toCsv(filtered, [
+      { key: "order_number", label: "Order #" },
+      { key: "status", label: "Status" },
+      { key: "customer_name", label: "Customer name" },
+      { key: "customer_phone", label: "Customer phone" },
+      { key: "pickup_slot_label", label: "Pickup slot" },
+      { key: "created_at", label: "Placed at" },
+      ...(showRevenue ? [{ key: "total_amount" as const, label: "Total" }] : []),
+    ]);
+    downloadCsv(`orders-${new Date().toISOString().slice(0, 10)}.csv`, csv);
   }
 
   const counts = useMemo(() => {
@@ -217,28 +241,53 @@ export default function OrdersClient({
           </div>
           <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
-        <button
-          type="button"
-          onClick={manualRefresh}
-          disabled={refreshing}
-          title="Refresh now"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "6px 10px",
-            borderRadius: 8,
-            border: "1px solid #E9EDEF",
-            background: "#FFFFFF",
-            color: "#667781",
-            fontSize: 12,
-            cursor: refreshing ? "default" : "pointer",
-            fontFamily: "inherit",
-          }}
-        >
-          <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
-          Updated {formatDistanceToNowStrict(lastRefreshedAt, { addSuffix: true })}
-        </button>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button
+            type="button"
+            onClick={exportCsv}
+            disabled={filtered.length === 0}
+            title="Export the orders currently shown to a CSV file"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #E9EDEF",
+              background: "#FFFFFF",
+              color: "#667781",
+              fontSize: 12,
+              cursor: filtered.length === 0 ? "default" : "pointer",
+              fontFamily: "inherit",
+              opacity: filtered.length === 0 ? 0.5 : 1,
+            }}
+          >
+            <Download size={13} />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            onClick={manualRefresh}
+            disabled={refreshing}
+            title="Refresh now"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "6px 10px",
+              borderRadius: 8,
+              border: "1px solid #E9EDEF",
+              background: "#FFFFFF",
+              color: "#667781",
+              fontSize: 12,
+              cursor: refreshing ? "default" : "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <RefreshCw size={13} style={refreshing ? { animation: "spin 0.8s linear infinite" } : undefined} />
+            Updated {formatDistanceToNowStrict(lastRefreshedAt, { addSuffix: true })}
+          </button>
+        </div>
         <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
       </div>
 
@@ -345,8 +394,9 @@ export default function OrdersClient({
                 filtered.map((o) => {
                   const [color, background] = STATUS_STYLE[o.status];
                   const busy = busyId === o.id;
+                  const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
                   return (
-                    <tr key={o.id}>
+                    <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 #C0392B" } : undefined}>
                       {canManage && (
                         <td style={S.td}>
                           {o.status === "pending" && (
@@ -363,7 +413,10 @@ export default function OrdersClient({
                         {o.customer_name || o.customer_phone || "—"}
                       </td>
                       <td style={S.td}>
-                        <span style={S.badge(color, background)}>{o.status}</span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          <span style={S.badge(color, background)}>{o.status}</span>
+                          {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
+                        </div>
                       </td>
                       <td style={{ ...S.td, whiteSpace: "nowrap" }}>
                         {o.pickup_slot_label ?? format(new Date(o.created_at), "MMM d, HH:mm")}

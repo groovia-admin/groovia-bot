@@ -3,6 +3,7 @@ import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
 import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
 import { startOfTodayUtc } from '@/lib/timezone'
+import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 
 export const dynamic = 'force-dynamic'
 
@@ -213,6 +214,17 @@ export default async function DashboardPage() {
                     >
                       {order.status}
                     </span>
+                    {order.status === 'pending' && (() => {
+                      const minutes = getOrderAgeMinutes(order.created_at)
+                      const level = getAgingLevel(minutes)
+                      if (level === 'normal') return null
+                      const { color, background } = AGING_COLOR[level]
+                      return (
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background, color }}>
+                          {formatAgeShort(minutes)}
+                        </span>
+                      )
+                    })()}
                     <div>
                       <p className="text-sm font-medium text-slate-800">#{order.order_number}</p>
                       <p className="text-xs text-slate-500">

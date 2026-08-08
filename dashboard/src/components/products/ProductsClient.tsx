@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, Pencil, EyeOff, Eye, Trash2 } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2, Download } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import { toCsv, downloadCsv } from "@/lib/csv";
 
 type Category = {
   id: string;
@@ -67,6 +68,32 @@ export default function ProductsClient({
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
+
+  function exportCsv() {
+    const rows = products.map((p) => ({
+      name: p.name,
+      category: categoryName(p),
+      unit: p.unit,
+      price: p.price,
+      cost_price: p.cost_price ?? "",
+      stock_quantity: p.stock_quantity,
+      low_stock_threshold: p.low_stock_threshold,
+      is_available: p.is_available ? "Yes" : "No",
+      sku: p.sku ?? "",
+    }));
+    const csv = toCsv(rows, [
+      { key: "name", label: "Product" },
+      { key: "category", label: "Category" },
+      { key: "unit", label: "Unit" },
+      { key: "price", label: "Price" },
+      { key: "cost_price", label: "Cost price" },
+      { key: "stock_quantity", label: "Stock" },
+      { key: "low_stock_threshold", label: "Low stock threshold" },
+      { key: "is_available", label: "Available" },
+      { key: "sku", label: "SKU" },
+    ]);
+    downloadCsv(`products-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  }
 
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault();
@@ -362,18 +389,30 @@ export default function ProductsClient({
       {/* Products */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111B21", margin: 0 }}>All products</h2>
-        {canManage && (
+        <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
-            style={{ ...S.btn("#25D366", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
-            disabled={activeCategories.length === 0}
-            onClick={() => setShowAddProduct((v) => !v)}
-            title={activeCategories.length === 0 ? "Add a category first" : undefined}
+            onClick={exportCsv}
+            disabled={products.length === 0}
+            title="Export all products to a CSV file"
+            style={{ ...S.btn("#F5F6F6", "#111B21"), opacity: products.length === 0 ? 0.5 : 1 }}
           >
-            <Plus size={15} />
-            Add product
+            <Download size={15} />
+            Export CSV
           </button>
-        )}
+          {canManage && (
+            <button
+              type="button"
+              style={{ ...S.btn("#25D366", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
+              disabled={activeCategories.length === 0}
+              onClick={() => setShowAddProduct((v) => !v)}
+              title={activeCategories.length === 0 ? "Add a category first" : undefined}
+            >
+              <Plus size={15} />
+              Add product
+            </button>
+          )}
+        </div>
       </div>
 
       {canManage && showAddProduct && (

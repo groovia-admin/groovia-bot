@@ -6,6 +6,7 @@ import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
 import OrderActions from '@/components/orders/OrderActions'
+import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 
 export const dynamic = 'force-dynamic'
 
@@ -75,7 +76,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             {details?.customer_phone_snapshot && details?.customer_name_snapshot ? ` · ${details.customer_phone_snapshot}` : ''}
           </p>
         </div>
-        <span style={S.badge(statusColor, statusBg)}>{order.status}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={S.badge(statusColor, statusBg)}>{order.status}</span>
+          {order.status === 'pending' && (() => {
+            const minutes = getOrderAgeMinutes(order.created_at)
+            const level = getAgingLevel(minutes)
+            const { color, background } = AGING_COLOR[level]
+            return <span style={S.badge(color, background)}>Waiting {formatAgeShort(minutes)}</span>
+          })()}
+        </div>
       </div>
 
       {isTerminalFail && (order.rejection_reason || order.cancellation_reason) && (
