@@ -6,6 +6,7 @@ const {
   resolveShopUserGlobal,
   findShopBySlug,
   findNearbyShops,
+  getShopDisplayPhone,
 } = require('./shopResolver');
 const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage, sendCtaUrlMessage } = require('./whatsappClient');
 const { notifyCustomer, notifyCustomerOfOrderEdit } = require('./customerNotifier');
@@ -751,6 +752,21 @@ async function handleSessionButtonReply(from, shopId, session, buttonId) {
 // of them touch handleCustomerMessage below, which stays exactly as it
 // was until the webview replaces it.
 
+// Renders the shop's address as up to two lines ("line_1, line_2" then
+// "city, state postal_code") for the welcome message — so a customer
+// sees this as a real, locatable shop rather than a bare webview link.
+// Any missing field is just omitted rather than leaving a stray comma
+// or blank line; returns '' if there's no address on file at all.
+function formatShopAddressLines(shop) {
+  const line1 = [shop.address_line_1, shop.address_line_2].filter(Boolean).join(', ');
+  const line2 = [
+    [shop.city, shop.state].filter(Boolean).join(', '),
+    shop.postal_code,
+  ].filter(Boolean).join(' ');
+
+  return [line1, line2].filter(Boolean).join('\n');
+}
+
 /**
  * Both new-session entry points below funnel through here: creates a
  * v2 order_sessions row and replies with the webview link. Fails
@@ -775,7 +791,19 @@ async function startCustomerOrderingSession(from, shop, name) {
   }
 
   const link = `${config.webviewBaseUrl}/shop/${shop.slug}?s=${created.token}`;
-  const text = `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\nTap below to browse and order (link expires in 30 min).`;
+
+  const addressLines = formatShopAddressLines(shop);
+  const displayPhone = await getShopDisplayPhone(shop.id);
+
+  const detailLines = [
+    addressLines ? `📍 ${addressLines.split('\n').join('\n')}` : null,
+    displayPhone ? `📞 ${displayPhone}` : null,
+  ].filter(Boolean).join('\n');
+
+  const text =
+    `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\n` +
+    (detailLines ? `${detailLines}\n\n` : '') +
+    `Tap below to browse and order (link expires in 30 min).`;
 
   await sendCtaUrlMessage(from, text, 'Order Now', link);
   logMessage(shop.id, from, 'outbound', 'system', 'interactive', text);
@@ -830,7 +858,7 @@ async function handleNearbyShopPick(from, shopId, name) {
 
   const { data: shop, error } = await supabase
     .from('shops')
-    .select('id, name, slug')
+    .select('id, name, slug, address_line_1, address_line_2, city, state, postal_code')
     .eq('id', shopId)
     .eq('is_active', true)
     .maybeSingle();
