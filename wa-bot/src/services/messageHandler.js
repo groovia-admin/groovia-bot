@@ -1071,25 +1071,19 @@ async function handleIncomingMessage(message, value) {
     }
   }
 
-  // Staff identity is resolved globally now, not derived from which
-  // WhatsApp number received the message — one shared number now
-  // serves multiple shops (v2 architecture), so phone_number_id no
-  // longer maps to a single shop the way it used to. Staff-ness always
-  // takes priority over everything below, even if this same phone
-  // happens to have an unrelated ordering session open at some other
-  // shop — a shop_user must never be routed into a customer flow.
-  const staffMatch = await resolveShopUserGlobal(from);
-
-  if (staffMatch) {
-    await handleStaffMessage(message, value, staffMatch);
-    return;
-  }
-
-  // ── New v2 entry points (additive) — ordering is moving to a
-  // customer webview, session-keyed rather than resolved from which
-  // number received the message. Neither of these touches the existing
-  // native-catalog flow in the fallback below, which stays exactly as
-  // it works today until the webview (Phase 5) replaces it.
+  // ── v2 entry points, checked BEFORE staff-priority ──────────────
+  // A QR scan ("SHOP-{slug}"), a shared location, or picking from the
+  // resulting nearby-shops list is an unambiguous, deliberate signal —
+  // "I want to order here as a customer" — unlike a bare text message,
+  // which genuinely could be a staff command. That distinction is what
+  // lets these three bypass staff-priority without reopening the
+  // "shop_user misrouted into a customer flow" problem staff-priority
+  // exists to prevent: a staff member for Shop A who scans Shop B's QR
+  // (or their own shop's, from the dashboard Settings page) clearly
+  // means to order as a customer right now, at that specific shop, not
+  // to issue a staff command that happens to look like one of these.
+  // Plain text/buttons from a staff phone still always resolve to staff
+  // below — only these three explicit shapes get this exception.
   if (type === 'text') {
     const slugMatch = /^SHOP-([a-z0-9-]+)$/i.exec(message.text?.body?.trim() || '');
     if (slugMatch) {
@@ -1109,6 +1103,23 @@ async function handleIncomingMessage(message, value) {
       await handleNearbyShopPick(from, nearbyMatch[1], name);
       return;
     }
+  }
+
+  // Staff identity is resolved globally now, not derived from which
+  // WhatsApp number received the message — one shared number now
+  // serves multiple shops (v2 architecture), so phone_number_id no
+  // longer maps to a single shop the way it used to. Staff-ness takes
+  // priority over everything below (plain text, other button/list taps,
+  // the same-number-shares-the-number fallback), even if this same
+  // phone happens to have an unrelated ordering session open at some
+  // other shop — a shop_user must never be routed into a customer flow
+  // from an ambiguous message. The three explicit entry points above
+  // are the deliberate exception to that rule, not a hole in it.
+  const staffMatch = await resolveShopUserGlobal(from);
+
+  if (staffMatch) {
+    await handleStaffMessage(message, value, staffMatch);
+    return;
   }
 
   // Fallback: a customer who didn't arrive via a QR scan or shared
