@@ -1,7 +1,7 @@
 const express = require('express');
 const config = require('../config');
 const logger = require('../utils/logger');
-const { notifyCustomer } = require('../services/customerNotifier');
+const { notifyCustomer, notifyCustomerOfOrderEdit } = require('../services/customerNotifier');
 const { syncShopCatalog } = require('../services/catalogSync');
 const { resendPendingOrderAlerts, sendOrderPlacedConfirmation, notifyStaffOfDashboardStatusChange } = require('../services/orderCreator');
 const { timingSafeEqualStrings } = require('../utils/timingSafeCompare');
@@ -122,6 +122,29 @@ router.post('/orders/:orderId/notify-staff', requireInternalSecret, async (req, 
   } catch (err) {
     logger.error({ err, orderId, status, shopId }, 'Internal notify-staff endpoint failed');
     return res.status(500).json({ error: 'Failed to notify staff' });
+  }
+});
+
+// POST /internal/orders/:orderId/notify-edit
+// Body: { shopId: string, diffLines: string[], newTotal: number }
+// Dashboard equivalent of the WhatsApp edit flow's "Done" diff summary —
+// staff editing an order's items from the dashboard should give the
+// customer the same "here's what changed" message the WhatsApp-side Edit
+// flow already sends, via the same notifyCustomerOfOrderEdit used there.
+router.post('/orders/:orderId/notify-edit', requireInternalSecret, async (req, res) => {
+  const { orderId } = req.params;
+  const { shopId, diffLines, newTotal } = req.body || {};
+
+  if (!orderId || !shopId || !Array.isArray(diffLines) || diffLines.length === 0 || newTotal === undefined) {
+    return res.status(400).json({ error: 'orderId, shopId, diffLines, and newTotal are required' });
+  }
+
+  try {
+    const sent = await notifyCustomerOfOrderEdit(orderId, shopId, diffLines, newTotal);
+    return res.status(sent ? 200 : 502).json({ success: sent });
+  } catch (err) {
+    logger.error({ err, orderId, shopId }, 'Internal notify-edit endpoint failed');
+    return res.status(500).json({ error: 'Failed to send edit notification' });
   }
 });
 
