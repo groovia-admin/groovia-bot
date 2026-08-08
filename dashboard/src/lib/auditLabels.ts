@@ -12,6 +12,7 @@ export const ACTION_LABEL: Record<string, string> = {
   "staff.updated": "Staff member updated",
   "staff.permissions_updated": "Staff permissions updated",
   "order.status_changed": "Order status changed",
+  "order.item_edited": "Order item edited",
   "shop.created": "Shop created",
   "shop.activated": "Shop activated",
   "shop.deactivated": "Shop deactivated",

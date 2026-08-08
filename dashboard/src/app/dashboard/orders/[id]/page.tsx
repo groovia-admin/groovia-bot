@@ -6,6 +6,7 @@ import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
 import OrderActions from '@/components/orders/OrderActions'
+import OrderItemsEditor from '@/components/orders/OrderItemsEditor'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 
 export const dynamic = 'force-dynamic'
@@ -141,34 +142,38 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
         </div>
       )}
 
-      <div style={{ ...S.card, padding: 0, overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={S.th}>Item</th>
-              <th style={S.th}>Qty</th>
-              {showRevenue && <th style={S.th}>Unit price</th>}
-              {showRevenue && <th style={{ ...S.th, textAlign: 'right' }}>Subtotal</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {items.length === 0 ? (
+      {order.status === 'pending' && viewerHasPermission(context, 'manage_orders') ? (
+        <OrderItemsEditor orderId={order.id} initialItems={items} showRevenue={showRevenue} />
+      ) : (
+        <div style={{ ...S.card, padding: 0, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
               <tr>
-                <td style={S.td} colSpan={showRevenue ? 4 : 2}>No items recorded.</td>
+                <th style={S.th}>Item</th>
+                <th style={S.th}>Qty</th>
+                {showRevenue && <th style={S.th}>Unit price</th>}
+                {showRevenue && <th style={{ ...S.th, textAlign: 'right' }}>Subtotal</th>}
               </tr>
-            ) : (
-              items.map((item) => (
-                <tr key={item.id}>
-                  <td style={{ ...S.td, color: '#111B21', fontWeight: 500 }}>{item.product_name_snapshot}</td>
-                  <td style={S.td}>{item.quantity} {item.unit_snapshot}</td>
-                  {showRevenue && <td style={S.td}>₹{Number(item.unit_price).toFixed(2)}</td>}
-                  {showRevenue && <td style={{ ...S.td, textAlign: 'right' }}>₹{Number(item.subtotal).toFixed(2)}</td>}
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr>
+                  <td style={S.td} colSpan={showRevenue ? 4 : 2}>No items recorded.</td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                items.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ ...S.td, color: '#111B21', fontWeight: 500 }}>{item.product_name_snapshot}</td>
+                    <td style={S.td}>{item.quantity} {item.unit_snapshot}</td>
+                    {showRevenue && <td style={S.td}>₹{Number(item.unit_price).toFixed(2)}</td>}
+                    {showRevenue && <td style={{ ...S.td, textAlign: 'right' }}>₹{Number(item.subtotal).toFixed(2)}</td>}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {showRevenue && (
         <div style={{ ...S.card, display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 320, marginLeft: 'auto' }}>
