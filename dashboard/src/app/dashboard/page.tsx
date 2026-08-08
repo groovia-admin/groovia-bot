@@ -3,6 +3,7 @@ import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
 import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
 import { startOfTodayUtc } from '@/lib/timezone'
+import PauseOrdersToggle from '@/components/settings/PauseOrdersToggle'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 
 export const dynamic = 'force-dynamic'
@@ -116,6 +117,7 @@ export default async function DashboardPage() {
     { count: totalCustomers },
     { data: recentOrders },
     { data: stockLevels },
+    { data: shopSettings },
   ] = await Promise.all([
     adminClient.from('orders').select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId).gte('created_at', todayStart),
@@ -134,6 +136,7 @@ export default async function DashboardPage() {
     // the same definition the Inventory and Products pages already use.
     adminClient.from('products').select('stock_quantity, low_stock_threshold')
       .eq('shop_id', shopId).eq('is_available', true),
+    adminClient.from('shop_settings').select('order_acceptance_enabled').eq('shop_id', shopId).maybeSingle(),
   ])
 
   const lowStockCount = (stockLevels ?? []).filter((p) => p.stock_quantity <= p.low_stock_threshold).length
@@ -150,13 +153,18 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-bold text-slate-900">
-          Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
-        </h1>
-        <p className="text-slate-500 text-sm mt-0.5">
-          {context.shopName ?? 'Your store'} — here's today at a glance
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-slate-900">
+            Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
+          </h1>
+          <p className="text-slate-500 text-sm mt-0.5">
+            {context.shopName ?? 'Your store'} — here's today at a glance
+          </p>
+        </div>
+        {context.role !== 'staff' && (
+          <PauseOrdersToggle initialEnabled={shopSettings?.order_acceptance_enabled ?? true} />
+        )}
       </div>
 
       {lowStockCount > 0 && (
