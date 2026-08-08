@@ -7,7 +7,7 @@ const {
   findShopBySlug,
   findNearbyShops,
 } = require('./shopResolver');
-const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage } = require('./whatsappClient');
+const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage, sendCtaUrlMessage } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 const { logMessage } = require('./conversationLogger');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
@@ -673,10 +673,10 @@ async function startCustomerOrderingSession(from, shop, name) {
   }
 
   const link = `${config.webviewBaseUrl}/shop/${shop.slug}?s=${created.token}`;
-  const text = `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\nOrder here (link expires in 30 min):\n${link}`;
+  const text = `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\nTap below to browse and order (link expires in 30 min).`;
 
-  await sendWhatsAppMessage(from, text);
-  logMessage(shop.id, from, 'outbound', 'system', 'text', text);
+  await sendCtaUrlMessage(from, text, 'Order Now', link);
+  logMessage(shop.id, from, 'outbound', 'system', 'interactive', text);
 }
 
 // Entry A: QR code pre-fills "SHOP-{slug}" as the message text.
