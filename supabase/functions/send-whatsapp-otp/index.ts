@@ -116,14 +116,23 @@ async function isKnownActiveNumber(phone: string): Promise<boolean> {
   return Array.isArray(rows) && rows.length > 0;
 }
 
-// ── WhatsApp send (Authentication template, copy-code button) ──
-// Copy-code button parameter confirmed against a live Graph API call:
-// the parameter type/field name is `coupon_code`, not `copy_code`.
+// ── WhatsApp send (Authentication template, URL button) ──
+// Confirmed against the live approved template definition
+// (GET /{waba-id}/message_templates?name=login_otp) — this is Meta's
+// current "login_code" library template, not the older copy-code-button
+// shape: the body takes TWO placeholders ({{1}} the code, {{2}} a support
+// contact shown in "contact us at {{2}}"), and the button is a URL button
+// (sub_type "url") whose {{1}} gets substituted with the code via a `text`
+// parameter — not a "copy_code" button with a `coupon_code` parameter.
+// {{2}} is validated by Meta as a phone number (max 20 chars) — an email
+// like the login page's admin@groovia.co.in address is rejected outright,
+// confirmed live: only a phone-formatted string is accepted here.
 async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolean; error?: string }> {
   const token = Deno.env.get('WHATSAPP_TOKEN');
   const phoneNumberId = Deno.env.get('WHATSAPP_PHONE_NUMBER_ID');
   const template = Deno.env.get('WA_OTP_TEMPLATE');
   const templateLang = Deno.env.get('WA_OTP_TEMPLATE_LANG') || 'en';
+  const supportContact = Deno.env.get('WA_OTP_SUPPORT_CONTACT') || '+917016191861';
 
   if (!token || !phoneNumberId || !template) {
     return { ok: false, error: 'WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, or WA_OTP_TEMPLATE not configured' };
@@ -143,12 +152,18 @@ async function sendWhatsAppOtp(phone: string, otp: string): Promise<{ ok: boolea
         name: template,
         language: { code: templateLang },
         components: [
-          { type: 'body', parameters: [{ type: 'text', text: otp }] },
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: otp },
+              { type: 'text', text: supportContact },
+            ],
+          },
           {
             type: 'button',
-            sub_type: 'copy_code',
+            sub_type: 'url',
             index: '0',
-            parameters: [{ type: 'coupon_code', coupon_code: otp }],
+            parameters: [{ type: 'text', text: otp }],
           },
         ],
       },
