@@ -750,8 +750,10 @@ async function handleNearbyShopPick(from, shopId, name) {
 // server-side by cancelOrderByCustomer (orderCreator.js) — never trust
 // that the button simply not being tapped past 5 minutes is enough,
 // since WhatsApp doesn't expire button messages on its own and a stale
-// tap must still be rejected.
-async function handleCustomerCancelRequest(shopId, from, orderId) {
+// tap must still be rejected. No shopId param — cancelOrderByCustomer
+// looks the order (and its shop_id) up itself from orderId alone, and
+// this is now called before any shop resolution happens at all.
+async function handleCustomerCancelRequest(from, orderId) {
   const { result, order } = await cancelOrderByCustomer(orderId, from);
 
   if (result === 'not_found') {
@@ -824,17 +826,9 @@ async function handleCustomerMessage(from, message, shopId, name) {
     return;
   }
 
-  // Checked regardless of an active session — by the time a customer
-  // can tap this button, createOrderFromSession has already deleted the
-  // cart session that produced the order, so there's nothing in
-  // `session` to gate this on.
-  if (message.type === 'interactive' && message.interactive?.type === 'button_reply') {
-    const cancelMatch = /^cancel_order_(.+)$/.exec(message.interactive.button_reply.id || '');
-    if (cancelMatch) {
-      await handleCustomerCancelRequest(shopId, from, cancelMatch[1]);
-      return;
-    }
-  }
+  // cancel_order_ taps are now handled in handleIncomingMessage, before
+  // this function is ever reached (see there for why) — nothing left to
+  // check for that here.
 
   // Pickup-slot selection is a list message (business-hours-derived,
   // can exceed the 3-button cap), everything else in this flow is still
@@ -1045,6 +1039,25 @@ async function handleIncomingMessage(message, value) {
 
   logger.info({ from, type, id: message.id, name }, '📩 Incoming message');
 
+  // Order-scoped, not shop-routing-scoped — a cancel_order_<id> button
+  // carries everything cancelOrderByCustomer needs (the order id; it
+  // looks up shop_id itself and validates the tapping phone against the
+  // order's own customer_phone_snapshot), so this is checked before any
+  // staff/shop resolution rather than being buried inside the old
+  // native-catalog customer handler below it used to live in. This is
+  // the same button both the native-catalog flow AND the v2 webview's
+  // order-placement confirmation send — it has to work regardless of
+  // which flow placed the order or who's tapping it (cancelOrderByCustomer's
+  // own phone check is what actually authorizes this, not where in the
+  // router it's reached from).
+  if (type === 'interactive' && message.interactive?.type === 'button_reply') {
+    const cancelMatch = /^cancel_order_(.+)$/.exec(message.interactive.button_reply.id || '');
+    if (cancelMatch) {
+      await handleCustomerCancelRequest(from, cancelMatch[1]);
+      return;
+    }
+  }
+
   // Staff identity is resolved globally now, not derived from which
   // WhatsApp number received the message — one shared number now
   // serves multiple shops (v2 architecture), so phone_number_id no
@@ -1085,24 +1098,29 @@ async function handleIncomingMessage(message, value) {
     }
   }
 
-  // ── Preserved fallback: today's behavior, unchanged. Resolves the
-  // shop from which WhatsApp number received the message, exactly as
-  // before Phase 2 — kept deliberately so current pilot customers (who
-  // haven't scanned a QR or shared location yet) keep seeing the
-  // native-catalog flow uninterrupted. Once shops genuinely share one
-  // number and this becomes ambiguous, this should be replaced with an
-  // explicit "share your location or scan a shop QR" prompt instead —
-  // not yet, since only 1-2 shops exist on the shared number today.
+  // Fallback: a customer who didn't arrive via a QR scan or shared
+  // location — still the common case, since most people just message
+  // the number directly — resolves to a shop the same way the pre-v2
+  // bot always did, but now starts a v2 webview session instead of
+  // routing into the old native-catalog flow (handleCustomerMessage,
+  // below — now unreachable from here, kept for now rather than deleted
+  // immediately; see the PR this shipped in for the cleanup list).
+  //
+  // Same ambiguity caveat Phase 2 originally flagged: this still
+  // assumes phone_number_id maps to exactly one shop. That breaks once
+  // a second shop genuinely shares the number — at that point this
+  // needs to become an explicit "share your location or scan a shop QR"
+  // prompt instead of guessing which shop a bare "Hi" was meant for.
   const phoneNumberId = value.metadata?.phone_number_id;
-  const shopId = await resolveShopByPhoneNumberId(phoneNumberId);
+  const shop = await resolveShopByPhoneNumberId(phoneNumberId);
 
-  if (!shopId) {
+  if (!shop) {
     logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
     await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
     return;
   }
 
-  await handleCustomerMessage(from, message, shopId, name);
+  await startCustomerOrderingSession(from, shop, name);
 }
 
 async function handleStatusUpdate(status) {
