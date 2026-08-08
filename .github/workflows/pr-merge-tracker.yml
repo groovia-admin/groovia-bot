@@ -71,29 +71,6 @@ jobs:
           echo "human=$human" >> "$GITHUB_OUTPUT"
           echo "merged_at_local=$(date -d "$MERGED_AT" '+%Y-%m-%d %H:%M UTC')" >> "$GITHUB_OUTPUT"
 
-      - name: Append to history log
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          PR_TITLE: ${{ github.event.pull_request.title }}
-          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
-          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
-          AREA: ${{ steps.area.outputs.area }}
-          DURATION: ${{ steps.duration.outputs.human }}
-          MERGED_AT_LOCAL: ${{ steps.duration.outputs.merged_at_local }}
-        run: |
-          FILE=.github/pr-merge-history.md
-          if [ ! -f "$FILE" ]; then
-            {
-              echo "# PR Merge History"
-              echo ""
-              echo "| PR | Title | Area | Author | Merged By | Merged At (UTC) | Time to Merge |"
-              echo "|----|-------|------|--------|-----------|------------------|----------------|"
-            } > "$FILE"
-          fi
-          # Escape pipe characters in the title so they don't break the markdown table
-          SAFE_TITLE=$(printf '%s' "$PR_TITLE" | sed 's/|/\\|/g')
-          echo "| #$PR_NUMBER | $SAFE_TITLE | $AREA | @$PR_AUTHOR | @$MERGED_BY | $MERGED_AT_LOCAL | $DURATION |" >> "$FILE"
-
       - name: Write run summary
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -115,25 +92,58 @@ jobs:
             echo "Full history: [.github/pr-merge-history.md](../../blob/main/.github/pr-merge-history.md)"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Commit history log
+      - name: Append, commit, and push history log
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          MERGED_BY: ${{ github.event.pull_request.merged_by.login }}
+          AREA: ${{ steps.area.outputs.area }}
+          DURATION: ${{ steps.duration.outputs.human }}
+          MERGED_AT_LOCAL: ${{ steps.duration.outputs.merged_at_local }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .github/pr-merge-history.md
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-            exit 0
-          fi
-          git commit -m "Log merge time for PR #${{ github.event.pull_request.number }} [skip ci]"
 
+          FILE=.github/pr-merge-history.md
+          SAFE_TITLE=$(printf '%s' "$PR_TITLE" | sed 's/|/\\|/g')
+          ROW="| #$PR_NUMBER | $SAFE_TITLE | $AREA | @$PR_AUTHOR | @$MERGED_BY | $MERGED_AT_LOCAL | $DURATION |"
+
+          # Several PRs can merge within the same minute, so several copies of this
+          # job race to push to main at once. Rather than rebase a committed patch
+          # (which can conflict when two jobs append at the exact same base line),
+          # each attempt starts fresh from the latest main, re-appends our row, and
+          # commits — that's naturally conflict-free since it's always a pure
+          # append at whatever the current end-of-file is.
           attempt=0
-          until git push origin HEAD:main; do
+          while true; do
+            git fetch origin main
+            git reset --hard origin/main
+
+            if [ ! -f "$FILE" ]; then
+              {
+                echo "# PR Merge History"
+                echo ""
+                echo "| PR | Title | Area | Author | Merged By | Merged At (UTC) | Time to Merge |"
+                echo "|----|-------|------|--------|-----------|------------------|----------------|"
+              } > "$FILE"
+            fi
+            echo "$ROW" >> "$FILE"
+
+            git add "$FILE"
+            git commit -m "Log merge time for PR #${PR_NUMBER} [skip ci]"
+
+            if git push origin HEAD:main; then
+              break
+            fi
+
             attempt=$((attempt + 1))
-            if [ "$attempt" -ge 5 ]; then
+            if [ "$attempt" -ge 20 ]; then
               echo "Failed to push after $attempt attempts"
               exit 1
             fi
-            git fetch origin main
-            git rebase origin/main
-            sleep $((RANDOM % 5 + 1))
+            # Backoff grows with attempt count so a burst of back-to-back merges
+            # (this raced under 5 concurrent merges before, exceeding the old
+            # fixed 5-attempt budget) spreads retries out instead of colliding again.
+            sleep $((attempt + RANDOM % 5 + 1))
           done
