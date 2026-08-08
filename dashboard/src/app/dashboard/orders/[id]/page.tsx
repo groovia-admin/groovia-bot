@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, FileText } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { viewerHasPermission } from '@/lib/auth/viewer-context'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -84,6 +84,17 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
             const { color, background } = AGING_COLOR[level]
             return <span style={S.badge(color, background)}>Waiting {formatAgeShort(minutes)}</span>
           })()}
+          {order.status === 'completed' && (
+            <a
+              href={`/api/shop/orders/${order.id}/invoice`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ ...S.btn('transparent', '#667781'), textDecoration: 'none' }}
+            >
+              <FileText size={15} />
+              Invoice
+            </a>
+          )}
         </div>
       </div>
 
