@@ -43,3 +43,4 @@
 | #76 | Phase 8 (v2 architecture): order reminders/auto-reject, store QR code… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-07 20:35 UTC | 0d 0h 0m |
 | #77 | Add one-time staff WhatsApp onboarding welcome message | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 02:07 UTC | 0d 0h 0m |
 | #78 | Align order_reminder to its final approved copy (clock time, not dura… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 02:41 UTC | 0d 0h 0m |
+| #79 | Fix dashboard Overview "Today's Orders" count using shop-local midnig… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 03:47 UTC | 0d 0h 0m |
