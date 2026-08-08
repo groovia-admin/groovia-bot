@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -10,6 +11,8 @@ import {
   Settings, Store, LogOut, MessageSquare, ClipboardList,
   ScrollText, ChevronDown, Bell, Boxes
 } from 'lucide-react'
+
+const PENDING_ORDERS_POLL_MS = 30_000
 
 interface SidebarProps {
   isSuperAdmin: boolean
@@ -74,12 +77,43 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   const pathname = usePathname()
   const router = useRouter()
   const supabase = createClient()
+  const [pendingCount, setPendingCount] = useState(0)
 
   const navItems = getNav(isSuperAdmin, shopUser?.role ?? '')
   const displayName = shopUser?.full_name ?? userPhone
   const shopName = shopUser?.shops?.name ?? 'GrooVia Platform'
   const shopLogoUrl = shopUser?.shops?.logo_url ?? null
   const roleLabel = isSuperAdmin ? 'Super Admin' : shopUser?.role ?? ''
+
+  // Polls the same cheap count-only endpoint OrderAlertListener uses, so the
+  // "Orders" nav badge reflects the real pending count instead of the
+  // hardcoded dot it used to show — updates on its own poll cycle, and also
+  // gets an immediate nudge whenever OrderAlertListener detects a new order
+  // (see the groovia:pending-orders-changed listener below).
+  useEffect(() => {
+    if (isSuperAdmin) return
+    let cancelled = false
+
+    async function poll() {
+      try {
+        const res = await fetch('/api/shop/orders/pending-summary')
+        if (!res.ok || cancelled) return
+        const data = await res.json()
+        if (!cancelled) setPendingCount(data.count ?? 0)
+      } catch {
+        // Best-effort — next poll picks it up.
+      }
+    }
+
+    poll()
+    const interval = setInterval(poll, PENDING_ORDERS_POLL_MS)
+    window.addEventListener('groovia:pending-orders-changed', poll)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      window.removeEventListener('groovia:pending-orders-changed', poll)
+    }
+  }, [isSuperAdmin])
 
   async function handleSignOut() {
     // Logged before signOut() runs, not after — signOut() clears the
@@ -137,9 +171,9 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
                 style={active ? undefined : { color: item.color }}
               />
               {item.label}
-              {item.label === 'Orders' && (
-                <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none">
-                  •
+              {item.label === 'Orders' && pendingCount > 0 && (
+                <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
+                  {pendingCount > 99 ? '99+' : pendingCount}
                 </span>
               )}
             </Link>

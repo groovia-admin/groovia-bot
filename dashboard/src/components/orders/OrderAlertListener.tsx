@@ -90,11 +90,19 @@ export default function OrderAlertListener() {
           toast(orderNumber ? `New order — #${orderNumber}` : "New order received");
 
           if (typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
-            new Notification("New GrooVia order", {
+            const notification = new Notification("New GrooVia order", {
               body: orderNumber ? `Order #${orderNumber} is waiting for you.` : "A new order is waiting for you.",
               tag: "groovia-new-order",
             });
+            // Browsers otherwise leave this up to the OS (anywhere from a
+            // few seconds to indefinite) — force it shut after 3s so it
+            // matches the in-app toast's lifetime instead of lingering.
+            setTimeout(() => notification.close(), 3000);
           }
+
+          // Nudges the sidebar's Orders badge to refetch its count right
+          // away rather than waiting for its own independent poll cycle.
+          window.dispatchEvent(new Event("groovia:pending-orders-changed"));
 
           // Only the Orders page holds live order state to refresh —
           // everywhere else the toast alone is enough, a background

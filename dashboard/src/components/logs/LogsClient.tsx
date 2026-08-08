@@ -278,7 +278,7 @@ export default function LogsClient({
                         style={{ cursor: hasDetails ? "pointer" : "default" }}
                       >
                         <td style={{ ...S.td, whiteSpace: "nowrap", color: "#667781" }}>
-                          {format(new Date(row.created_at), "MMM d, HH:mm")}
+                          {format(new Date(row.created_at), "MMM d, HH:mm:ss")}
                         </td>
                         <td style={S.td}>
                           <span style={S.badge(color, background)}>{actorName}</span>

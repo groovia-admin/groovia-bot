@@ -69,6 +69,14 @@ export default function ProductsClient({
 
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
 
+  const productCountByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of products) {
+      map.set(p.category_id, (map.get(p.category_id) ?? 0) + 1);
+    }
+    return map;
+  }, [products]);
+
   function exportCsv() {
     const rows = products.map((p) => ({
       name: p.name,
@@ -149,11 +157,16 @@ export default function ProductsClient({
   }
 
   async function handleDeleteCategory(category: Category) {
-    if (
-      !window.confirm(
-        `Delete "${category.name}"? Products in this category will be untagged, not deleted.`
-      )
-    ) {
+    const linkedCount = productCountByCategory.get(category.id) ?? 0;
+    if (linkedCount > 0) {
+      toast(
+        `Move or delete the ${linkedCount} product${linkedCount > 1 ? "s" : ""} in "${category.name}" before deleting it.`,
+        "error"
+      );
+      return;
+    }
+
+    if (!window.confirm(`Delete "${category.name}"?`)) {
       return;
     }
 
@@ -359,27 +372,35 @@ export default function ProductsClient({
                     {category.name}
                   </span>
                 )}
-                {canManage && (
-                  <button
-                    type="button"
-                    disabled={deletingCategoryId === category.id}
-                    onClick={() => handleDeleteCategory(category)}
-                    title="Delete category"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      padding: "2px 8px 2px 2px",
-                      background: "transparent",
-                      border: "none",
-                      color: "#C0392B",
-                      cursor: "pointer",
-                      opacity: deletingCategoryId === category.id ? 0.5 : 1,
-                    }}
-                  >
-                    <Trash2 size={12} />
-                  </button>
-                )}
+                {canManage && (() => {
+                  const linkedCount = productCountByCategory.get(category.id) ?? 0;
+                  const blocked = linkedCount > 0;
+                  return (
+                    <button
+                      type="button"
+                      disabled={deletingCategoryId === category.id}
+                      onClick={() => handleDeleteCategory(category)}
+                      title={
+                        blocked
+                          ? `${linkedCount} product${linkedCount > 1 ? "s" : ""} still in this category — move or delete them first`
+                          : "Delete category"
+                      }
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "2px 8px 2px 2px",
+                        background: "transparent",
+                        border: "none",
+                        color: blocked ? "#8696A0" : "#C0392B",
+                        cursor: deletingCategoryId === category.id ? "default" : "pointer",
+                        opacity: deletingCategoryId === category.id ? 0.5 : 1,
+                      }}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  );
+                })()}
               </div>
             ))}
           </div>
