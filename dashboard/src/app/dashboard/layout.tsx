@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/ui/ToastProvider'
+import OrderAlertListener from '@/components/orders/OrderAlertListener'
 
 type ShopUserForSidebar = {
   role: string
@@ -40,6 +41,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
       <main className="flex-1 overflow-y-auto">
         <ToastProvider>
+          {!isSuperAdmin && <OrderAlertListener />}
           <div className="p-6 lg:p-8">
             {children}
           </div>
