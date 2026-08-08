@@ -126,7 +126,7 @@ async function resolveShopUserGlobal(from) {
 
   const { data, error } = await supabase
     .from('shop_users')
-    .select('id, shop_id, role, full_name')
+    .select('id, shop_id, role, full_name, whatsapp_welcomed_at')
     .eq('phone_number', normalized)
     .eq('is_active', true)
     .limit(1)
@@ -139,7 +139,13 @@ async function resolveShopUserGlobal(from) {
 
   if (!data) return null;
 
-  return { id: data.id, shopId: data.shop_id, role: data.role, fullName: data.full_name };
+  return {
+    id: data.id,
+    shopId: data.shop_id,
+    role: data.role,
+    fullName: data.full_name,
+    whatsappWelcomedAt: data.whatsapp_welcomed_at,
+  };
 }
 
 /**

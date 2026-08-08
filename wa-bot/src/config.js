@@ -36,4 +36,11 @@ module.exports = {
   // building yet. Session-link generation checks for this being unset
   // and fails clearly instead.
   webviewBaseUrl: process.env.WEBVIEW_BASE_URL || null,
+  // Deliberately NOT in requiredEnv, same reasoning as webviewBaseUrl —
+  // the staff welcome message (messageHandler.js) still sends fine
+  // without it, just with a generic line instead of a real link. Same
+  // value as the dashboard's own NEXT_PUBLIC_SITE_URL env var, copied
+  // here because wa-bot and the dashboard are separate deployments with
+  // no shared config.
+  dashboardUrl: process.env.DASHBOARD_URL || null,
 };
