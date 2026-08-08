@@ -274,11 +274,13 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         token={token}
         timezone={shop.timezone}
         settings={settings}
+        items={cartItems}
         total={cartTotal}
         formatMoney={formatMoney}
         form={checkoutForm}
         onFormChange={setCheckoutForm}
         onBack={() => setView('cart')}
+        onAddItems={() => setView('browse')}
         onPlaced={(orderNumber) => {
           setPlacedOrderNumber(orderNumber)
           setCart({})
