@@ -23,6 +23,7 @@ type Props = {
   shop: Shop
   settings: StorefrontSettings
   token: string | null
+  whatsappNumber: string | null
 }
 
 // Deliberately doesn't distinguish "no token" from "token was invalid" in
@@ -35,7 +36,7 @@ type SessionState =
   | { status: 'invalid' }
   | { status: 'active'; customerPhone: string }
 
-export function StorefrontApp({ shop, settings, token }: Props) {
+export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) {
   const [session, setSession] = useState<SessionState>(token ? { status: 'loading' } : { status: 'none' })
   const [categories, setCategories] = useState<StorefrontCategory[]>([])
   const [products, setProducts] = useState<StorefrontProduct[]>([])
@@ -147,6 +148,29 @@ export function StorefrontApp({ shop, settings, token }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart, session.status, token])
 
+  const waLink = useMemo(() => {
+    if (!whatsappNumber) return null
+    const digits = whatsappNumber.replace(/\D/g, '')
+    return digits ? `https://wa.me/${digits}` : null
+  }, [whatsappNumber])
+
+  // This webview only ever exists as a WhatsApp in-app-browser tab —
+  // there's nothing else for the customer to do here once an order is
+  // placed, so it hands control back to the chat on its own rather than
+  // leaving them stuck looking at a static confirmation screen.
+  // window.close() alone isn't reliable across WhatsApp's in-app browser
+  // implementations (browsers generally only honor it on a window that
+  // was itself opened via window.open(), which this tab wasn't) —
+  // navigating to a wa.me link is what actually gets recognized and
+  // handed back to the WhatsApp app.
+  useEffect(() => {
+    if (view !== 'placed' || !waLink) return
+    const timer = setTimeout(() => {
+      window.location.href = waLink
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [view, waLink])
+
   function setQuantity(product: StorefrontProduct, quantity: number) {
     setCart((prev) => {
       const next = { ...prev }
@@ -225,6 +249,16 @@ export function StorefrontApp({ shop, settings, token }: Props) {
           <p className="mt-2 text-sm text-ink-muted">
             We&apos;ve sent you a WhatsApp message with the details. The shop will confirm shortly.
           </p>
+          {waLink ? (
+            <>
+              <p className="mt-4 text-xs text-ink-faint">Returning you to WhatsApp…</p>
+              <a href={waLink} className="btn-primary mt-2 w-full justify-center">
+                Return to WhatsApp
+              </a>
+            </>
+          ) : (
+            <p className="mt-4 text-xs text-ink-faint">You can close this window now.</p>
+          )}
         </div>
       </main>
     )

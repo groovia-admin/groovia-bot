@@ -264,7 +264,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   // Best-effort: ask wa-bot to send the same "order placed, cancel
   // within 5 min" WhatsApp message the native-catalog flow sends inline.
   // Never fails the request itself — the order already exists in
-  // Supabase regardless of whether this ping goes out.
+  // Supabase regardless of whether this ping goes out. Both branches log
+  // clearly rather than going silent — a missing env var here used to
+  // mean the customer just never got the message or the cancel button,
+  // with nothing in any log to say why.
   const waBotUrl = process.env.WA_BOT_INTERNAL_URL
   const internalSecret = process.env.INTERNAL_API_SECRET
   if (waBotUrl && internalSecret) {
@@ -272,7 +275,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
       body: JSON.stringify({ shopId: shop.id }),
-    }).catch((err) => console.error('Failed to notify wa-bot of new webview order:', err))
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          console.error('wa-bot rejected the order-placement confirmation:', res.status, await res.text().catch(() => ''))
+        }
+      })
+      .catch((err) => console.error('Failed to reach wa-bot for the order-placement confirmation:', err))
+  } else {
+    console.error(
+      'WA_BOT_INTERNAL_URL / INTERNAL_API_SECRET not configured — skipping the customer order-placement WhatsApp message and cancel button entirely for order',
+      order.id
+    )
   }
 
   return NextResponse.json({ success: true, orderNumber: order.order_number })
