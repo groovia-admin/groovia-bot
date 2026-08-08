@@ -1,8 +1,9 @@
 const logger = require('../utils/logger');
 const { getSupabase } = require('./shopResolver');
 const { getTemplate, fmtMoney } = require('./templates');
-const { sendWhatsAppTemplate, sendWhatsAppMessage } = require('./whatsappClient');
+const { sendWhatsAppTemplate, sendWhatsAppMessage, uploadWhatsAppMedia, sendWhatsAppDocument } = require('./whatsappClient');
 const { logMessage } = require('./conversationLogger');
+const { generateInvoicePdfBuffer } = require('./invoiceGenerator');
 
 // Meta's template UI often defaults to "English (US)" (en_US) rather
 // than the neutral "English" (en) templates.js declares — picking the
@@ -130,11 +131,12 @@ async function notifyCustomer(orderId, status, shopId) {
   const { data: order, error } = await supabase
     .from('orders')
     .select(
-      `order_number, total_amount, pickup_slot_label, preferred_pickup_time,
+      `order_number, total_amount, subtotal, tax_amount, discount_amount, completed_at,
+       pickup_slot_label, preferred_pickup_time,
        rejection_reason, cancellation_reason, order_type, delivery_fee,
-       shops ( name, currency_code ),
+       shops ( name, currency_code, address_line_1, address_line_2, city, state, postal_code ),
        order_customer_details ( customer_name_snapshot, customer_phone_snapshot, delivery_address_snapshot ),
-       order_items ( product_name_snapshot, unit_snapshot, quantity, subtotal )`
+       order_items ( product_name_snapshot, unit_snapshot, quantity, unit_price, subtotal )`
     )
     .eq('id', orderId)
     .eq('shop_id', shopId)
@@ -204,7 +206,108 @@ async function notifyCustomer(orderId, status, shopId) {
     }
   }
 
+  // PDF invoice — completion only, and only to the customer. Reflects
+  // order_items as they stand right now, i.e. after any staff edits
+  // (quantity reductions, removed items), since this fires at the
+  // completion transition rather than at order-creation time. Deliberately
+  // NOT wired into notifyStaffOfDashboardStatusChange (orderCreator.js) —
+  // the shop owner/staff already know what they marked complete; this is
+  // a customer-facing document, matching the explicit "not in shop owner
+  // WhatsApp" requirement.
+  if (sent && status === 'completed') {
+    await sendCompletionInvoice(orderId, shopId, phone);
+  }
+
   return sent;
 }
 
-module.exports = { notifyCustomer };
+/**
+ * Loads everything generateInvoicePdfBuffer needs and renders it —
+ * shared by the auto-send-on-completion path below and the dashboard's
+ * on-demand "view invoice" route (internal.js), so both always reflect
+ * the exact same order_items snapshot rather than two independently
+ * maintained queries drifting apart. Always reads the *current*
+ * order_items, i.e. after any staff edits — there's no separate
+ * "final items" snapshot table, the live order_items row is that
+ * snapshot once the order reaches 'completed'.
+ */
+async function generateOrderInvoicePdf(orderId, shopId) {
+  const supabase = getSupabase();
+  if (!supabase) return null;
+
+  const { data: order, error } = await supabase
+    .from('orders')
+    .select(
+      `order_number, total_amount, subtotal, tax_amount, discount_amount, completed_at,
+       shops ( name, currency_code, address_line_1, address_line_2, city, state, postal_code ),
+       order_customer_details ( customer_name_snapshot ),
+       order_items ( product_name_snapshot, unit_snapshot, quantity, unit_price, subtotal )`
+    )
+    .eq('id', orderId)
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  if (error || !order) {
+    logger.error({ error, orderId, shopId }, 'Failed to load order for invoice');
+    return null;
+  }
+
+  const { data: connection } = await supabase
+    .from('whatsapp_connections')
+    .select('display_phone_number')
+    .eq('shop_id', shopId)
+    .maybeSingle();
+
+  const shop = Array.isArray(order.shops) ? order.shops[0] : order.shops;
+  const details = Array.isArray(order.order_customer_details)
+    ? order.order_customer_details[0]
+    : order.order_customer_details;
+
+  const buffer = await generateInvoicePdfBuffer({
+    shop: { ...shop, displayPhone: connection?.display_phone_number || null },
+    order: { ...order, customerName: details?.customer_name_snapshot || null },
+    items: order.order_items || [],
+    currencyCode: shop?.currency_code,
+  });
+
+  return { buffer, orderNumber: order.order_number };
+}
+
+/**
+ * Generates the invoice PDF and sends it via WhatsApp's Media API
+ * (upload -> get media id -> send as a document message) rather than
+ * hosting it at a public URL — no new storage bucket needed, consistent
+ * with how the rest of this file avoids building document infrastructure
+ * beyond what's actually asked for. Best-effort and not retried, same as
+ * the receipt above: a failure here must never surface to the caller,
+ * since the order's own status change already succeeded.
+ */
+async function sendCompletionInvoice(orderId, shopId, phone) {
+  try {
+    const result = await generateOrderInvoicePdf(orderId, shopId);
+    if (!result) {
+      logger.warn({ orderId }, 'Invoice generation failed — skipping invoice send (best-effort)');
+      return;
+    }
+
+    const { buffer: pdfBuffer, orderNumber } = result;
+    const filename = `Invoice-${orderNumber}.pdf`;
+    const mediaId = await uploadWhatsAppMedia(pdfBuffer, filename, 'application/pdf');
+
+    if (!mediaId) {
+      logger.warn({ orderId }, 'Invoice media upload failed — skipping invoice send (best-effort)');
+      return;
+    }
+
+    const invoiceSent = await sendWhatsAppDocument(phone, mediaId, filename, `🧾 Invoice for your order`);
+    if (invoiceSent) {
+      logMessage(shopId, phone, 'outbound', 'system', 'document', `Invoice PDF for order ${orderId}`);
+    } else {
+      logger.warn({ orderId }, 'Failed to send invoice PDF (best-effort, not retried)');
+    }
+  } catch (err) {
+    logger.error({ err, orderId }, 'Invoice generation/send threw (best-effort)');
+  }
+}
+
+module.exports = { notifyCustomer, generateOrderInvoicePdf };
