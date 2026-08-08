@@ -66,3 +66,19 @@ export type SubmitOrderBody = {
 }
 
 export type SubmitOrderResult = { success: true; orderNumber: string } | { success: false; error: string }
+
+// Lifted up to StorefrontApp (not local to CheckoutView) specifically
+// so it survives navigating away from checkout and back — a customer
+// going back to browse to add a forgotten item used to lose everything
+// they'd already filled in.
+export type CheckoutFormState = {
+  orderType: 'pickup' | 'delivery'
+  customerName: string
+  pickupSlotId: string | null
+  addressLine1: string
+  addressLine2: string
+  landmark: string
+  city: string
+  postalCode: string
+  paymentMethod: string
+}
