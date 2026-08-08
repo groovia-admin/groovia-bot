@@ -961,13 +961,7 @@ async function handleStaffMessage(message, value, staffMatch) {
   // dashboard link), and the actual edit action was lost, never
   // retried. Falling through means both happen: the welcome, then
   // whatever they actually sent gets processed normally right after.
-  //
-  // Skipped for role='owner' — same reasoning as getActiveStaffPhones
-  // (shopResolver.js): the owner's only expected WhatsApp message is the
-  // dashboard login OTP, sent through a completely separate mechanism.
-  // Reactive commands from an owner who chooses to text one anyway still
-  // work fine below; this only skips the unprompted welcome push.
-  if (!staffMatch.whatsappWelcomedAt && staffMatch.role !== 'owner') {
+  if (!staffMatch.whatsappWelcomedAt) {
     await sendStaffWelcomeMessage(from, shopId, staffMatch.id);
   }
 
