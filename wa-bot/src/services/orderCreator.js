@@ -382,17 +382,36 @@ async function processDueNewOrderAlerts() {
   }
 
   for (const order of orders || []) {
-    await notifyStaffForOrder(order);
-
-    const { error: markError } = await supabase
+    // Claim atomically FIRST, then send — not the other way around.
+    // Sending before marking left a real race: two overlapping ticks
+    // (a slow-running previous invocation still in flight when the next
+    // 60s timer fires, or more than one wa-bot replica polling the same
+    // table) could both pass the "not yet sent" check above and both
+    // call notifyStaffForOrder before either got here to mark it,
+    // sending the same alert twice — confirmed in production via two
+    // notification_deliveries rows for the same order 585ms apart, both
+    // delivered. The old comment here ("avoid a double-send if two poll
+    // ticks ever overlap") was wrong: this update only ever prevented a
+    // double-*mark*, not a double-*send*, since the send already
+    // happened above it unconditionally. Only whichever tick's atomic
+    // update actually matches a row (still null at the moment it runs)
+    // may proceed to notify.
+    const { data: claimed, error: markError } = await supabase
       .from('orders')
       .update({ shop_alert_sent_at: new Date().toISOString() })
       .eq('id', order.id)
-      .is('shop_alert_sent_at', null); // avoid a double-send if two poll ticks ever overlap
+      .is('shop_alert_sent_at', null)
+      .select('id')
+      .maybeSingle();
 
     if (markError) {
       logger.error({ error: markError, orderId: order.id }, 'Failed to mark shop_alert_sent_at');
+      continue;
     }
+
+    if (!claimed) continue; // another tick already claimed and sent this order's alert
+
+    await notifyStaffForOrder(order);
   }
 }
 

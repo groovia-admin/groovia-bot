@@ -62,6 +62,28 @@ async function loadActiveStaffPhones(supabase, shopId) {
 }
 
 async function sendReminder(supabase, order, timezone) {
+  // Claim atomically FIRST, then send — same fix, same reasoning, as
+  // processDueNewOrderAlerts in orderCreator.js (which had a confirmed
+  // production double-send from this exact send-then-mark ordering: two
+  // overlapping ticks/replicas both pass the eligibility check above
+  // before either reaches its own mark). The optimistic-concurrency
+  // guard (.eq('reminder_count', ...)) only prevents double-*counting*
+  // if it runs after the send; run first, it prevents double-*sending*.
+  const { data: claimed, error: claimError } = await supabase
+    .from('orders')
+    .update({ reminder_count: order.reminder_count + 1, last_reminder_at: new Date().toISOString() })
+    .eq('id', order.id)
+    .eq('reminder_count', order.reminder_count)
+    .select('id')
+    .maybeSingle();
+
+  if (claimError) {
+    logger.error({ error: claimError, orderId: order.id }, 'Failed to record reminder send');
+    return;
+  }
+
+  if (!claimed) return; // another tick already claimed and sent this reminder
+
   const waitingSince = formatTime(new Date(order.shop_alert_sent_at), timezone);
 
   const components = [
@@ -92,21 +114,6 @@ async function sendReminder(supabase, order, timezone) {
       sendWhatsAppTemplate(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)
     )
   );
-
-  // Optimistic-concurrency guard (.eq('reminder_count', ...)) rather
-  // than a blind increment — if two poll ticks ever overlapped on the
-  // same order, only the first one's update actually matches and takes
-  // effect, so the count can't drift ahead by more than one per real
-  // reminder sent.
-  const { error } = await supabase
-    .from('orders')
-    .update({ reminder_count: order.reminder_count + 1, last_reminder_at: new Date().toISOString() })
-    .eq('id', order.id)
-    .eq('reminder_count', order.reminder_count);
-
-  if (error) {
-    logger.error({ error, orderId: order.id }, 'Failed to record reminder send');
-  }
 }
 
 async function autoRejectOrder(supabase, order) {
