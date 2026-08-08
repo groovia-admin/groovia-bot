@@ -6,19 +6,23 @@ const { notifyCustomer } = require('./customerNotifier');
 // Registered separately from templates.js's ORDER_TEMPLATES registry —
 // that one is keyed by orders.status for customer-facing notifications;
 // this is staff-facing, same category as orderCreator.js's own
-// NEW_ORDER_ALERT_TEMPLATE. Submitted to Meta as:
+// NEW_ORDER_ALERT_TEMPLATE. Final submitted text:
 //   Category: Utility, Name: order_reminder, Language: en_US
-//   Body: "⏰ Reminder: Order {{1}} has been waiting {{2}} for your
-//          response. Please Accept or Reject soon."
-//   {{1}} = order number (e.g. "ORD-4F2A9C1B"), {{2}} = human-readable
-//   wait time (e.g. "15 minutes")
+//   Body:
+//     "⏰ Reminder:
+//
+//      Order *{{1}}* has been waiting since *{{2}}* for your response.
+//
+//      Please *Accept* or *Reject* soon.
+//
+//      Thank you😊"
+//   {{1}} = order number (e.g. "ORD-4F2A9C1B"), {{2}} = the clock time
+//   the shop was first alerted (e.g. "2:30 PM", in the shop's own
+//   timezone) — NOT a duration; the wording is "waiting since", not
+//   "waiting for".
 //   Buttons: 2 quick-reply — "✅ Accept" / "❌ Reject" (no Edit, unlike
 //   new_order_alert's 3 — still reachable from the original alert
 //   message already in the staff's chat, keeps this a quick nudge).
-// Not yet approved as of this commit — nothing here sends successfully
-// until it is (same situation new_order_alert was in before its own
-// approval). Correct this comment + the components below if the
-// actually-approved text ends up differing at all.
 const ORDER_REMINDER_TEMPLATE = { name: 'order_reminder', language: 'en_US' };
 
 // Remind at most this many times before giving up and leaving the order
@@ -28,10 +32,17 @@ const ORDER_REMINDER_TEMPLATE = { name: 'order_reminder', language: 'en_US' };
 const MAX_REMINDERS = 3;
 const REMINDER_INTERVAL_MINUTES = 10;
 
-function formatDuration(minutes) {
-  if (minutes < 60) return `${Math.round(minutes)} minute${Math.round(minutes) === 1 ? '' : 's'}`;
-  const hours = Math.round(minutes / 60);
-  return `${hours} hour${hours === 1 ? '' : 's'}`;
+// "2:30 PM" style — the template says "waiting since {{2}}", a clock
+// time, not a duration. Shop's own timezone, same pattern already used
+// for hourly pickup slots (messageHandler.js) — a bare server-local
+// time would be meaningless to staff.
+function formatTime(date, timezone) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone || 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
 }
 
 async function loadActiveStaffPhones(supabase, shopId) {
@@ -50,15 +61,15 @@ async function loadActiveStaffPhones(supabase, shopId) {
   return (data || []).map((s) => s.phone_number);
 }
 
-async function sendReminder(supabase, order) {
-  const minutesWaiting = (Date.now() - new Date(order.shop_alert_sent_at).getTime()) / 60000;
+async function sendReminder(supabase, order, timezone) {
+  const waitingSince = formatTime(new Date(order.shop_alert_sent_at), timezone);
 
   const components = [
     {
       type: 'body',
       parameters: [
         { type: 'text', text: order.order_number },
-        { type: 'text', text: formatDuration(minutesWaiting) },
+        { type: 'text', text: waitingSince },
       ],
     },
     {
@@ -155,17 +166,23 @@ async function processDueReminders() {
   if (!orders || orders.length === 0) return;
 
   const shopIds = [...new Set(orders.map((o) => o.shop_id))];
-  const { data: settingsRows, error: settingsError } = await supabase
-    .from('shop_settings')
-    .select('shop_id, reminder_enabled, auto_reject_after_minutes')
-    .in('shop_id', shopIds);
+  const [{ data: settingsRows, error: settingsError }, { data: shopRows, error: shopsError }] = await Promise.all([
+    supabase.from('shop_settings').select('shop_id, reminder_enabled, auto_reject_after_minutes').in('shop_id', shopIds),
+    supabase.from('shops').select('id, timezone').in('id', shopIds),
+  ]);
 
   if (settingsError) {
     logger.error({ error: settingsError }, 'Failed to load shop settings for reminder check');
     return;
   }
 
+  if (shopsError) {
+    logger.error({ error: shopsError }, 'Failed to load shop timezones for reminder check');
+    return;
+  }
+
   const settingsByShop = new Map((settingsRows || []).map((s) => [s.shop_id, s]));
+  const timezoneByShop = new Map((shopRows || []).map((s) => [s.id, s.timezone]));
   const now = Date.now();
 
   for (const order of orders) {
@@ -186,7 +203,7 @@ async function processDueReminders() {
     const minutesSinceLastAction = (now - lastActionAt) / 60000;
 
     if (minutesSinceLastAction >= REMINDER_INTERVAL_MINUTES) {
-      await sendReminder(supabase, order);
+      await sendReminder(supabase, order, timezoneByShop.get(order.shop_id));
     }
   }
 }
