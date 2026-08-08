@@ -51,3 +51,4 @@
 | #85 | Auto-return to WhatsApp after order placement, surface silent interna… | dashboard | @groovia-admin | @groovia-admin | 2026-08-08 05:42 UTC | 0d 0h 0m |
 | #86 | Webview UX fixes: search, persisted checkout state, name pre-fill, ca… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 06:15 UTC | 0d 0h 0m |
 | #88 | Bot checkout additem and concurrency visibility | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 08:40 UTC | 0d 0h 0m |
+| #89 | Let staff order as a customer via QR scan or location share | wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 08:45 UTC | 0d 0h 0m |
