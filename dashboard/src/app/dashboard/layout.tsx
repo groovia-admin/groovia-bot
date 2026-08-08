@@ -4,6 +4,8 @@ import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/ui/ToastProvider'
 import NotificationBell from '@/components/notifications/NotificationBell'
+import GlobalSearch from '@/components/search/GlobalSearch'
+import OrderAlertListener from '@/components/orders/OrderAlertListener'
 
 type ShopUserForSidebar = {
   role: string
@@ -41,9 +43,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
       <main className="flex-1 overflow-y-auto">
         <ToastProvider>
-          {context.kind === 'shop_user' && (context.role === 'owner' || context.role === 'manager') && (
-            <div style={{ padding: '14px 24px 0', display: 'flex', justifyContent: 'flex-end' }}>
-              <NotificationBell />
+          {!isSuperAdmin && <OrderAlertListener />}
+          {!isSuperAdmin && (
+            <div style={{ padding: '14px 24px 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
+              <GlobalSearch />
+              {context.kind === 'shop_user' && (context.role === 'owner' || context.role === 'manager') && (
+                <NotificationBell />
+              )}
             </div>
           )}
           <div className="p-6 lg:p-8">

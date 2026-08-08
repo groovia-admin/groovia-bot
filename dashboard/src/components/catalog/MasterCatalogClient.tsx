@@ -1,19 +1,20 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Plus, Search, ChevronDown, ChevronRight,
-  Package, Store, Check, X, Clock,
-  ToggleLeft, ToggleRight, Tag
+  Plus, Search, Package, Store, Check, X, Clock, Tag, Pencil,
+  ChevronRight, ImageOff,
 } from 'lucide-react'
 import clsx from 'clsx'
+import CartLoader from '@/components/ui/CartLoader'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface MasterCategory {
   id: string
   name: string
   slug: string
+  image_url: string | null
   display_order: number
   is_active: boolean
   master_products?: MasterProduct[]
@@ -25,6 +26,7 @@ interface MasterProduct {
   name: string
   brand: string | null
   unit: string
+  image_url: string | null
   base_price: number | null
   is_active: boolean
 }
@@ -56,29 +58,64 @@ interface ProductRequest {
 
 type Tab = 'catalog' | 'enable' | 'requests'
 
+function Thumb({ src, alt, size = 36 }: { src: string | null; alt: string; size?: number }) {
+  if (src) {
+    return (
+      <img
+        src={src}
+        alt={alt}
+        style={{ width: size, height: size, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid #E9EDEF' }}
+      />
+    )
+  }
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: 8, flexShrink: 0,
+        background: '#F0F2F5', border: '1px solid #E9EDEF',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      <ImageOff size={size * 0.4} color="#8696A0" />
+    </div>
+  )
+}
+
 export default function MasterCatalogClient() {
   const supabase = createClient()
 
-  const [activeTab, setActiveTab]           = useState<Tab>('catalog')
-  const [categories, setCategories]         = useState<MasterCategory[]>([])
-  const [shops, setShops]                   = useState<Shop[]>([])
-  const [enablements, setEnablements]       = useState<ShopCategoryEnablement[]>([])
-  const [requests, setRequests]             = useState<ProductRequest[]>([])
-  const [expandedCat, setExpandedCat]       = useState<string | null>(null)
-  const [selectedShop, setSelectedShop]     = useState<string>('')
-  const [loading, setLoading]               = useState(true)
-  const [toast, setToast]                   = useState('')
-  const [search, setSearch]                 = useState('')
+  const [activeTab, setActiveTab] = useState<Tab>('catalog')
+  const [categories, setCategories] = useState<MasterCategory[]>([])
+  const [shops, setShops] = useState<Shop[]>([])
+  const [enablements, setEnablements] = useState<ShopCategoryEnablement[]>([]) // ALL shops, loaded once
+  const [requests, setRequests] = useState<ProductRequest[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState('')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Add product/category modal
-  const [showAddProduct, setShowAddProduct] = useState<string | null>(null) // category id
+  // Catalog tab
+  const [catalogSearch, setCatalogSearch] = useState('')
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null)
+
+  // Enable-for-shops tab
+  const [selectedShopIds, setSelectedShopIds] = useState<Set<string>>(new Set())
+  const [shopSearch, setShopSearch] = useState('')
+  const [bulkBusyCategoryId, setBulkBusyCategoryId] = useState<string | null>(null)
+
+  // Requests tab
+  const [requestShopFilter, setRequestShopFilter] = useState<string>('all')
+
+  // Modals
   const [showAddCategory, setShowAddCategory] = useState(false)
+  const [editingCategory, setEditingCategory] = useState<MasterCategory | null>(null)
+  const [showAddProduct, setShowAddProduct] = useState(false)
+  const [editingProduct, setEditingProduct] = useState<MasterProduct | null>(null)
   const [showApproveGlobal, setShowApproveGlobal] = useState<ProductRequest | null>(null)
   const [approveCategoryId, setApproveCategoryId] = useState('')
-  const [productForm, setProductForm]       = useState({ name: '', brand: '', unit: '', base_price: '' })
-  const [categoryForm, setCategoryForm]     = useState({ name: '', slug: '' })
-  const [saving, setSaving]                 = useState(false)
+  const [saving, setSaving] = useState(false)
+
+  const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', image_url: '' })
+  const [productForm, setProductForm] = useState({ name: '', brand: '', unit: '', base_price: '', image_url: '' })
 
   function showToast(msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -93,135 +130,125 @@ export default function MasterCatalogClient() {
 
   async function loadAll() {
     setLoading(true)
-    const [catsRes, shopsRes, requestsRes] = await Promise.all([
-      supabase
-        .from('master_categories')
-        .select('*, master_products(*)')
-        .order('display_order'),
-      supabase
-        .from('shops')
-        .select('id, name, city, is_active')
-        .order('name'),
-      supabase
-        .from('product_requests')
-        .select('*, shops(name)')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false })
+    const [catsRes, shopsRes, requestsRes, enablementsRes] = await Promise.all([
+      supabase.from('master_categories').select('*, master_products(*)').order('display_order'),
+      supabase.from('shops').select('id, name, city, is_active').order('name'),
+      supabase.from('product_requests').select('*, shops(name)').eq('status', 'pending').order('created_at', { ascending: false }),
+      // Loaded for every shop up front (small table) rather than per-selected-shop —
+      // the bulk enable/disable and per-category coverage counts both need to see
+      // every shop's enablement state at once, not just one shop at a time.
+      supabase.from('shop_master_categories').select('shop_id, master_category_id'),
     ])
 
-    if (catsRes.data)     setCategories(catsRes.data as MasterCategory[])
-    if (shopsRes.data)    setShops(shopsRes.data as Shop[])
+    if (catsRes.data) {
+      setCategories(catsRes.data as MasterCategory[])
+      if (!selectedCategoryId && catsRes.data.length > 0) setSelectedCategoryId(catsRes.data[0].id)
+    }
+    if (shopsRes.data) setShops(shopsRes.data as Shop[])
     if (requestsRes.data) setRequests(requestsRes.data as ProductRequest[])
+    if (enablementsRes.data) setEnablements(enablementsRes.data)
     setLoading(false)
   }
 
-  async function loadEnablements(shopId: string) {
-    const { data } = await supabase
-      .from('shop_master_categories')
-      .select('shop_id, master_category_id')
-      .eq('shop_id', shopId)
-    if (data) setEnablements(data)
+  // ── Category enablement (bulk, across selected shops) ─────────────────────
+  function enabledShopCount(categoryId: string) {
+    return enablements.filter((e) => e.master_category_id === categoryId).length
   }
 
-  // ── Category enablement ────────────────────────────────────────────────────
-  function isCategoryEnabled(catId: string) {
-    return enablements.some(e => e.master_category_id === catId)
+  function toggleShopSelection(shopId: string) {
+    setSelectedShopIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(shopId)) next.delete(shopId)
+      else next.add(shopId)
+      return next
+    })
   }
 
-  async function toggleCategoryForShop(catId: string) {
-    if (!selectedShop) return
-    const isEnabled = isCategoryEnabled(catId)
+  async function bulkToggleCategory(catId: string, enable: boolean) {
+    if (selectedShopIds.size === 0) {
+      showToast('Select at least one shop first')
+      return
+    }
+    setBulkBusyCategoryId(catId)
 
-    if (isEnabled) {
-      // Disable — remove row
+    const targetShopIds = Array.from(selectedShopIds)
+
+    if (!enable) {
       const { error } = await supabase
         .from('shop_master_categories')
         .delete()
-        .eq('shop_id', selectedShop)
         .eq('master_category_id', catId)
+        .in('shop_id', targetShopIds)
 
-      if (error) { showToast(`Error: ${error.message}`); return }
-      setEnablements(prev => prev.filter(e => e.master_category_id !== catId))
-      showToast('Category disabled for shop')
-    } else {
-      // Enable — insert row
-      const { error } = await supabase
-        .from('shop_master_categories')
-        .insert({ shop_id: selectedShop, master_category_id: catId })
+      if (error) {
+        showToast(`Error: ${error.message}`)
+      } else {
+        setEnablements((prev) => prev.filter((e) => !(e.master_category_id === catId && targetShopIds.includes(e.shop_id))))
+        showToast(`Category disabled for ${targetShopIds.length} shop${targetShopIds.length > 1 ? 's' : ''}`)
+      }
+      setBulkBusyCategoryId(null)
+      return
+    }
 
-      if (error) { showToast(`Error: ${error.message}`); return }
-      setEnablements(prev => [...prev, { shop_id: selectedShop, master_category_id: catId }])
+    const rows = targetShopIds.map((shopId) => ({ shop_id: shopId, master_category_id: catId }))
+    const { error } = await supabase.from('shop_master_categories').upsert(rows, { onConflict: 'shop_id,master_category_id', ignoreDuplicates: true })
 
-      // Auto-create shop_master_products rows for all products in this category
-      const cat = categories.find(c => c.id === catId)
-      if (cat?.master_products?.length) {
-        const rows = cat.master_products.map(p => ({
-          shop_id: selectedShop,
+    if (error) {
+      showToast(`Error: ${error.message}`)
+      setBulkBusyCategoryId(null)
+      return
+    }
+
+    setEnablements((prev) => {
+      const existingKeys = new Set(prev.map((e) => `${e.shop_id}:${e.master_category_id}`))
+      const additions = rows.filter((r) => !existingKeys.has(`${r.shop_id}:${r.master_category_id}`))
+      return [...prev, ...additions]
+    })
+
+    const cat = categories.find((c) => c.id === catId)
+    if (cat?.master_products?.length) {
+      const productRows = targetShopIds.flatMap((shopId) =>
+        (cat.master_products ?? []).map((p) => ({
+          shop_id: shopId,
           master_product_id: p.id,
           stock_quantity: 0,
           is_available: true,
           is_enabled: true,
         }))
-        // upsert in case some already exist
-        await supabase.from('shop_master_products').upsert(rows, { onConflict: 'shop_id,master_product_id', ignoreDuplicates: true })
-      }
+      )
+      await supabase.from('shop_master_products').upsert(productRows, { onConflict: 'shop_id,master_product_id', ignoreDuplicates: true })
+    }
 
-      // shop_master_products above isn't read by the shop's own Products
-      // page or the WhatsApp bot — mirror the products into the shop's
-      // actual categories/products tables so "enabled" is actually visible
-      // to the shop owner, not just recorded here.
-      try {
-        const syncResponse = await fetch(`/api/admin/shops/${selectedShop}/sync-master-category`, {
+    // Mirror into each shop's real catalog — same per-shop sync endpoint the
+    // single-shop flow already used, just called once per selected shop.
+    const syncResults = await Promise.all(
+      targetShopIds.map((shopId) =>
+        fetch(`/api/admin/shops/${shopId}/sync-master-category`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ masterCategoryId: catId }),
-        })
-        const syncData = await syncResponse.json()
-        if (!syncResponse.ok) {
-          showToast(`Category enabled, but syncing products to the shop failed: ${syncData.error}`)
-        } else {
-          showToast(`Category enabled — ${syncData.productsCreated} product(s) added to the shop's catalog`)
-        }
-      } catch {
-        showToast('Category enabled, but syncing products to the shop failed')
-      }
-    }
+        }).then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      )
+    )
+    const totalCreated = syncResults.reduce((sum, r) => sum + (r.ok ? r.data.productsCreated ?? 0 : 0), 0)
+    const failures = syncResults.filter((r) => !r.ok).length
+
+    showToast(
+      failures > 0
+        ? `Enabled for ${targetShopIds.length} shop(s), but syncing failed for ${failures} of them`
+        : `Enabled for ${targetShopIds.length} shop(s) — ${totalCreated} product(s) added across their catalogs`
+    )
+    setBulkBusyCategoryId(null)
   }
 
-  // ── Add master product ─────────────────────────────────────────────────────
-  async function handleAddProduct(e: React.FormEvent) {
-    e.preventDefault()
-    if (!showAddProduct) return
-    setSaving(true)
-
-    const { data, error } = await supabase
-      .from('master_products')
-      .insert({
-        master_category_id: showAddProduct,
-        name:       productForm.name,
-        brand:      productForm.brand || null,
-        unit:       productForm.unit,
-        base_price: productForm.base_price ? parseFloat(productForm.base_price) : null,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      showToast(`Error: ${error.message}`)
-    } else {
-      setCategories(prev => prev.map(c =>
-        c.id === showAddProduct
-          ? { ...c, master_products: [...(c.master_products ?? []), data as MasterProduct] }
-          : c
-      ))
-      setShowAddProduct(null)
-      setProductForm({ name: '', brand: '', unit: '', base_price: '' })
-      showToast('Product added to master catalog')
-    }
-    setSaving(false)
+  // ── Category CRUD ───────────────────────────────────────────────────────────
+  async function toggleCategoryActive(cat: MasterCategory) {
+    const { error } = await supabase.from('master_categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
+    if (error) { showToast(`Error: ${error.message}`); return }
+    setCategories((prev) => prev.map((c) => (c.id === cat.id ? { ...c, is_active: !c.is_active } : c)))
+    showToast(cat.is_active ? 'Category deactivated' : 'Category activated')
   }
 
-  // ── Add master category ────────────────────────────────────────────────────
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -229,8 +256,9 @@ export default function MasterCatalogClient() {
     const { data, error } = await supabase
       .from('master_categories')
       .insert({
-        name:          categoryForm.name,
-        slug:          categoryForm.slug,
+        name: categoryForm.name,
+        slug: categoryForm.slug,
+        image_url: categoryForm.image_url || null,
         display_order: categories.length + 1,
       })
       .select()
@@ -239,10 +267,108 @@ export default function MasterCatalogClient() {
     if (error) {
       showToast(`Error: ${error.message}`)
     } else {
-      setCategories(prev => [...prev, { ...(data as MasterCategory), master_products: [] }])
+      setCategories((prev) => [...prev, { ...(data as MasterCategory), master_products: [] }])
+      setSelectedCategoryId(data.id)
       setShowAddCategory(false)
-      setCategoryForm({ name: '', slug: '' })
+      setCategoryForm({ name: '', slug: '', image_url: '' })
       showToast('Category created')
+    }
+    setSaving(false)
+  }
+
+  async function handleEditCategory(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingCategory) return
+    setSaving(true)
+
+    const { error } = await supabase
+      .from('master_categories')
+      .update({ name: categoryForm.name, slug: categoryForm.slug, image_url: categoryForm.image_url || null })
+      .eq('id', editingCategory.id)
+
+    if (error) {
+      showToast(`Error: ${error.message}`)
+    } else {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === editingCategory.id ? { ...c, name: categoryForm.name, slug: categoryForm.slug, image_url: categoryForm.image_url || null } : c))
+      )
+      setEditingCategory(null)
+      showToast('Category updated')
+    }
+    setSaving(false)
+  }
+
+  // ── Product CRUD ─────────────────────────────────────────────────────────────
+  async function toggleProductActive(product: MasterProduct) {
+    const { error } = await supabase.from('master_products').update({ is_active: !product.is_active }).eq('id', product.id)
+    if (error) { showToast(`Error: ${error.message}`); return }
+    setCategories((prev) =>
+      prev.map((c) =>
+        c.id === product.master_category_id
+          ? { ...c, master_products: c.master_products?.map((p) => (p.id === product.id ? { ...p, is_active: !p.is_active } : p)) }
+          : c
+      )
+    )
+  }
+
+  async function handleAddProduct(e: React.FormEvent) {
+    e.preventDefault()
+    if (!selectedCategoryId) return
+    setSaving(true)
+
+    const { data, error } = await supabase
+      .from('master_products')
+      .insert({
+        master_category_id: selectedCategoryId,
+        name: productForm.name,
+        brand: productForm.brand || null,
+        unit: productForm.unit,
+        image_url: productForm.image_url || null,
+        base_price: productForm.base_price ? parseFloat(productForm.base_price) : null,
+      })
+      .select()
+      .single()
+
+    if (error) {
+      showToast(`Error: ${error.message}`)
+    } else {
+      setCategories((prev) =>
+        prev.map((c) => (c.id === selectedCategoryId ? { ...c, master_products: [...(c.master_products ?? []), data as MasterProduct] } : c))
+      )
+      setShowAddProduct(false)
+      setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' })
+      showToast('Product added to master catalog')
+    }
+    setSaving(false)
+  }
+
+  async function handleEditProduct(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingProduct) return
+    setSaving(true)
+
+    const changes = {
+      name: productForm.name,
+      brand: productForm.brand || null,
+      unit: productForm.unit,
+      image_url: productForm.image_url || null,
+      base_price: productForm.base_price ? parseFloat(productForm.base_price) : null,
+    }
+
+    const { error } = await supabase.from('master_products').update(changes).eq('id', editingProduct.id)
+
+    if (error) {
+      showToast(`Error: ${error.message}`)
+    } else {
+      setCategories((prev) =>
+        prev.map((c) =>
+          c.id === editingProduct.master_category_id
+            ? { ...c, master_products: c.master_products?.map((p) => (p.id === editingProduct.id ? { ...p, ...changes } : p)) }
+            : c
+        )
+      )
+      setEditingProduct(null)
+      showToast('Product updated')
     }
     setSaving(false)
   }
@@ -254,105 +380,80 @@ export default function MasterCatalogClient() {
 
       const { data: newProduct, error: productError } = await supabase
         .from('master_products')
-        .insert({
-          master_category_id: categoryId,
-          name:           req.name,
-          brand:          req.brand,
-          unit:           req.unit,
-          base_price:     req.suggested_price,
-        })
+        .insert({ master_category_id: categoryId, name: req.name, brand: req.brand, unit: req.unit, base_price: req.suggested_price })
         .select()
         .single()
 
       if (productError) { showToast(`Error: ${productError.message}`); return }
 
       await supabase.from('product_requests').update({
-        status:            'approved_global',
+        status: 'approved_global',
         master_product_id: newProduct.id,
-        reviewed_at:       new Date().toISOString(),
+        reviewed_at: new Date().toISOString(),
       }).eq('id', req.id)
 
-      setCategories(prev => prev.map(c =>
-        c.id === categoryId
-          ? { ...c, master_products: [...(c.master_products ?? []), newProduct as MasterProduct] }
-          : c
-      ))
+      setCategories((prev) =>
+        prev.map((c) => (c.id === categoryId ? { ...c, master_products: [...(c.master_products ?? []), newProduct as MasterProduct] } : c))
+      )
       setShowApproveGlobal(null)
-
     } else if (decision === 'approved_local') {
-      // Add directly to shop's products table
       const { data: shopProduct, error: shopError } = await supabase
         .from('products')
-        .insert({
-          shop_id:    req.shop_id,
-          name:       req.name,
-          unit:       req.unit,
-          price:      req.suggested_price ?? 0,
-          stock_quantity: 0,
-        })
+        .insert({ shop_id: req.shop_id, name: req.name, unit: req.unit, price: req.suggested_price ?? 0, stock_quantity: 0 })
         .select()
         .single()
 
       if (shopError) { showToast(`Error: ${shopError.message}`); return }
 
       await supabase.from('product_requests').update({
-        status:         'approved_local',
+        status: 'approved_local',
         shop_product_id: shopProduct.id,
-        reviewed_at:    new Date().toISOString(),
-      }).eq('id', req.id)
-
-    } else {
-      await supabase.from('product_requests').update({
-        status:      'rejected',
         reviewed_at: new Date().toISOString(),
       }).eq('id', req.id)
+    } else {
+      await supabase.from('product_requests').update({ status: 'rejected', reviewed_at: new Date().toISOString() }).eq('id', req.id)
     }
 
-    setRequests(prev => prev.filter(r => r.id !== req.id))
+    setRequests((prev) => prev.filter((r) => r.id !== req.id))
     showToast(decision === 'rejected' ? 'Request rejected' : 'Request approved')
   }
 
-  const filteredCats = categories.filter(c =>
-    !search ||
-    c.name.toLowerCase().includes(search.toLowerCase()) ||
-    c.master_products?.some(p => p.name.toLowerCase().includes(search.toLowerCase()))
-  )
+  const filteredCategories = categories.filter((c) => !catalogSearch || c.name.toLowerCase().includes(catalogSearch.toLowerCase()))
+  const selectedCategory = categories.find((c) => c.id === selectedCategoryId) ?? null
+  const filteredShopsForEnable = shops.filter((s) => !shopSearch || s.name.toLowerCase().includes(shopSearch.toLowerCase()))
+  const filteredRequests = requestShopFilter === 'all' ? requests : requests.filter((r) => r.shop_id === requestShopFilter)
+  const requestShopOptions = Array.from(new Map(requests.map((r) => [r.shop_id, r.shops?.name ?? 'Unknown shop'])).entries())
 
-  if (loading) return (
-    <div className="flex items-center justify-center h-64 text-slate-500">Loading catalog...</div>
-  )
+  if (loading) return <CartLoader label="Loading master catalog…" />
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-900">Master Catalog</h1>
-          <p className="text-slate-500 text-sm mt-0.5">
-            {categories.length} categories · {categories.reduce((n, c) => n + (c.master_products?.length ?? 0), 0)} products
+          <h1 className="font-display text-2xl font-bold text-ink">Master Catalog</h1>
+          <p className="text-ink-muted text-sm mt-0.5">
+            {categories.length} categories · {categories.reduce((n, c) => n + (c.master_products?.length ?? 0), 0)} products · {shops.length} shops
           </p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowAddCategory(true)} className="btn-secondary">
-            <Tag className="w-4 h-4" /> Add Category
-          </button>
-        </div>
+        <button onClick={() => { setCategoryForm({ name: '', slug: '', image_url: '' }); setShowAddCategory(true) }} className="btn-secondary">
+          <Tag className="w-4 h-4" /> Add Category
+        </button>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#F0F2F5' }}>
         {([
-          { id: 'catalog',  label: 'Master Catalog', icon: Package },
-          { id: 'enable',   label: 'Enable for Shops', icon: Store },
+          { id: 'catalog', label: 'Master Catalog', icon: Package },
+          { id: 'enable', label: 'Enable for Shops', icon: Store },
           { id: 'requests', label: `Requests ${requests.length > 0 ? `(${requests.length})` : ''}`, icon: Clock },
-        ] as { id: Tab; label: string; icon: any }[]).map(tab => (
+        ] as { id: Tab; label: string; icon: typeof Package }[]).map((tab) => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
               'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
-              activeTab === tab.id
-                ? 'text-[#128C7E]' : 'text-slate-500 hover:text-slate-700'
+              activeTab === tab.id ? 'text-[#128C7E]' : 'text-ink-muted hover:text-ink'
             )}
             style={activeTab === tab.id ? { background: '#FFFFFF', border: '1px solid #E9EDEF', boxShadow: '0 1px 3px rgba(17,27,33,0.08)' } : {}}
           >
@@ -362,216 +463,266 @@ export default function MasterCatalogClient() {
         ))}
       </div>
 
-      {/* ── Tab: Master Catalog ──────────────────────────────────────────────── */}
+      {/* ── Tab: Master Catalog — sidebar + panel ──────────────────────────── */}
       {activeTab === 'catalog' && (
-        <div className="space-y-3">
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search products or categories..."
-              className="input pl-9"
-            />
-          </div>
-
-          {filteredCats.map(cat => (
-            <div key={cat.id} className="card p-0 overflow-hidden">
-              {/* Category header */}
-              <button
-                onClick={() => setExpandedCat(expandedCat === cat.id ? null : cat.id)}
-                className="w-full flex items-center justify-between p-4 hover:bg-slate-700/20 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  {expandedCat === cat.id
-                    ? <ChevronDown className="w-4 h-4 text-slate-500" />
-                    : <ChevronRight className="w-4 h-4 text-slate-500" />}
-                  <span className="font-semibold text-slate-900">{cat.name}</span>
-                  <span className="text-xs text-slate-500 px-2 py-0.5 rounded-full"
-                    style={{ background: '#F0F2F5' }}>
-                    {cat.master_products?.length ?? 0} items
-                  </span>
-                </div>
-                <button
-                  onClick={e => { e.stopPropagation(); setShowAddProduct(cat.id) }}
-                  className="btn-secondary btn-sm flex items-center gap-1 text-xs"
-                >
-                  <Plus className="w-3 h-3" /> Add product
-                </button>
-              </button>
-
-              {/* Products list */}
-              {expandedCat === cat.id && (
-                <div style={{ borderTop: '1px solid #E9EDEF' }}>
-                  {!cat.master_products?.length ? (
-                    <div className="p-6 text-center text-slate-500 text-sm">
-                      No products yet.{' '}
-                      <button onClick={() => setShowAddProduct(cat.id)} className="text-[#128C7E] hover:underline">
-                        Add the first one
-                      </button>
-                    </div>
-                  ) : (
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Product</th>
-                          <th>Brand</th>
-                          <th>Unit</th>
-                          <th>Base Price</th>
-                          <th>Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {cat.master_products
-                          .filter(p => !search || p.name.toLowerCase().includes(search.toLowerCase()))
-                          .map(product => (
-                            <tr key={product.id}>
-                              <td className="text-slate-900 font-medium">{product.name}</td>
-                              <td>{product.brand ?? <span className="text-slate-600">—</span>}</td>
-                              <td>{product.unit}</td>
-                              <td>{product.base_price ? `₹${product.base_price}` : <span className="text-slate-600">—</span>}</td>
-                              <td>
-                                <span className={clsx('status-badge border text-xs',
-                                  product.is_active
-                                    ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-                                    : 'text-slate-500 bg-slate-400/10 border-slate-400/20'
-                                )}>
-                                  {product.is_active ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+        <div className="grid gap-4" style={{ gridTemplateColumns: '280px 1fr', alignItems: 'start' }}>
+          {/* Sidebar */}
+          <div className="card p-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', maxHeight: 640 }}>
+            <div style={{ padding: 12, borderBottom: '1px solid #E9EDEF' }}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
+                <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search categories…" className="input pl-9" />
+              </div>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {filteredCategories.length === 0 ? (
+                <p className="text-ink-muted text-sm p-4">No categories match.</p>
+              ) : (
+                filteredCategories.map((cat) => {
+                  const selected = cat.id === selectedCategoryId
+                  return (
+                    <button
+                      key={cat.id}
+                      onClick={() => setSelectedCategoryId(cat.id)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                        background: selected ? '#DCF8C6' : 'transparent', border: 'none', borderBottom: '1px solid #F0F2F5',
+                        cursor: 'pointer', textAlign: 'left',
+                      }}
+                    >
+                      <Thumb src={cat.image_url} alt={cat.name} size={30} />
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: selected ? '#128C7E' : '#111B21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cat.name}
+                          </span>
+                          {!cat.is_active && (
+                            <span style={{ fontSize: 9, fontWeight: 700, color: '#8696A0', background: '#F0F2F5', padding: '1px 5px', borderRadius: 999 }}>OFF</span>
+                          )}
+                        </div>
+                        <span style={{ fontSize: 11, color: '#8696A0' }}>{cat.master_products?.length ?? 0} items · in {enabledShopCount(cat.id)} shop{enabledShopCount(cat.id) === 1 ? '' : 's'}</span>
+                      </div>
+                      <ChevronRight size={14} color="#8696A0" style={{ flexShrink: 0 }} />
+                    </button>
+                  )
+                })
               )}
             </div>
-          ))}
+          </div>
+
+          {/* Main panel */}
+          {!selectedCategory ? (
+            <div className="card text-center py-16 text-ink-muted">Select a category, or add one to get started.</div>
+          ) : (
+            <div className="space-y-3">
+              <div className="card flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Thumb src={selectedCategory.image_url} alt={selectedCategory.name} size={44} />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="font-semibold text-ink text-lg">{selectedCategory.name}</h2>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: selectedCategory.is_active ? '#DCF8C6' : '#F0F2F5', color: selectedCategory.is_active ? '#128C7E' : '#667781' }}
+                      >
+                        {selectedCategory.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-muted mt-0.5">{selectedCategory.master_products?.length ?? 0} products · /{selectedCategory.slug}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => { setCategoryForm({ name: selectedCategory.name, slug: selectedCategory.slug, image_url: selectedCategory.image_url ?? '' }); setEditingCategory(selectedCategory) }}
+                    className="btn-secondary btn-sm"
+                  >
+                    <Pencil className="w-3.5 h-3.5" /> Edit
+                  </button>
+                  <button onClick={() => toggleCategoryActive(selectedCategory)} className="btn-secondary btn-sm">
+                    {selectedCategory.is_active ? 'Deactivate' : 'Activate'}
+                  </button>
+                  <button
+                    onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }}
+                    className="btn-primary btn-sm"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Add product
+                  </button>
+                </div>
+              </div>
+
+              <div className="card p-0 overflow-hidden">
+                {!selectedCategory.master_products?.length ? (
+                  <div className="p-6 text-center text-ink-muted text-sm">
+                    No products yet.{' '}
+                    <button onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }} className="text-[#128C7E] hover:underline">
+                      Add the first one
+                    </button>
+                  </div>
+                ) : (
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Product</th>
+                        <th>Brand</th>
+                        <th>Unit</th>
+                        <th>Base Price</th>
+                        <th>Status</th>
+                        <th />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedCategory.master_products.map((product) => (
+                        <tr key={product.id}>
+                          <td>
+                            <div className="flex items-center gap-2.5">
+                              <Thumb src={product.image_url} alt={product.name} size={30} />
+                              <span className="text-ink font-medium">{product.name}</span>
+                            </div>
+                          </td>
+                          <td>{product.brand ?? <span className="text-ink-faint">—</span>}</td>
+                          <td>{product.unit}</td>
+                          <td>{product.base_price ? `₹${product.base_price}` : <span className="text-ink-faint">—</span>}</td>
+                          <td>
+                            <button
+                              onClick={() => toggleProductActive(product)}
+                              className={clsx('status-badge border text-xs', product.is_active ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-ink-muted bg-surface border-surface-border')}
+                              style={{ cursor: 'pointer' }}
+                            >
+                              {product.is_active ? 'Active' : 'Inactive'}
+                            </button>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button
+                              onClick={() => { setProductForm({ name: product.name, brand: product.brand ?? '', unit: product.unit, base_price: product.base_price?.toString() ?? '', image_url: product.image_url ?? '' }); setEditingProduct(product) }}
+                              className="btn-ghost btn-sm"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* ── Tab: Enable for Shops ────────────────────────────────────────────── */}
+      {/* ── Tab: Enable for Shops — multi-select + bulk toggle ───────────────── */}
       {activeTab === 'enable' && (
-        <div className="space-y-5">
-          {/* Shop selector */}
-          <div className="card">
-            <label className="block text-xs font-medium text-slate-500 mb-2">Select a shop to manage its catalog</label>
-            <select
-              value={selectedShop}
-              onChange={e => { setSelectedShop(e.target.value); if (e.target.value) loadEnablements(e.target.value) }}
-              className="input"
-            >
-              <option value="">Choose a shop...</option>
-              {shops.map(shop => (
-                <option key={shop.id} value={shop.id}>
-                  {shop.name}{shop.city ? ` — ${shop.city}` : ''}
-                  {!shop.is_active ? ' (inactive)' : ''}
-                </option>
+        <div className="grid gap-4" style={{ gridTemplateColumns: '280px 1fr', alignItems: 'start' }}>
+          <div className="card p-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', maxHeight: 640 }}>
+            <div style={{ padding: 12, borderBottom: '1px solid #E9EDEF', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
+                <input value={shopSearch} onChange={(e) => setShopSearch(e.target.value)} placeholder="Search shops…" className="input pl-9" />
+              </div>
+              <div className="flex items-center justify-between text-xs text-ink-muted">
+                <span>{selectedShopIds.size} selected</span>
+                <div className="flex gap-2">
+                  <button className="text-[#128C7E] hover:underline" onClick={() => setSelectedShopIds(new Set(filteredShopsForEnable.map((s) => s.id)))}>All</button>
+                  <button className="text-[#128C7E] hover:underline" onClick={() => setSelectedShopIds(new Set())}>None</button>
+                </div>
+              </div>
+            </div>
+            <div style={{ overflowY: 'auto', flex: 1 }}>
+              {filteredShopsForEnable.map((shop) => (
+                <label key={shop.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: '1px solid #F0F2F5', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={selectedShopIds.has(shop.id)} onChange={() => toggleShopSelection(shop.id)} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13, color: '#111B21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {shop.name}{!shop.is_active && <span style={{ color: '#8696A0' }}> (inactive)</span>}
+                    </div>
+                    {shop.city && <div style={{ fontSize: 11, color: '#8696A0' }}>{shop.city}</div>}
+                  </div>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
 
-          {selectedShop && (
-            <>
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-slate-500">
-                  Toggle categories to enable/disable all products in that category for this shop.
-                </p>
-                <span className="text-xs text-slate-500">
-                  {enablements.length} of {categories.length} categories enabled
-                </span>
-              </div>
-
-              <div className="space-y-2">
-                {categories.map(cat => {
-                  const enabled = isCategoryEnabled(cat.id)
-                  return (
-                    <div
-                      key={cat.id}
-                      className={clsx('card flex items-center justify-between transition-all',
-                        enabled ? 'border-emerald-500/30' : ''
-                      )}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className={clsx('w-2 h-2 rounded-full', enabled ? 'bg-emerald-400' : 'bg-slate-600')} />
-                        <div>
-                          <p className="font-medium text-slate-900 text-sm">{cat.name}</p>
-                          <p className="text-xs text-slate-500">{cat.master_products?.length ?? 0} products</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        {enabled && (
-                          <span className="text-xs text-emerald-700">
-                            {cat.master_products?.length ?? 0} items added to shop
-                          </span>
-                        )}
-                        <button
-                          onClick={() => toggleCategoryForShop(cat.id)}
-                          className={clsx('flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all',
-                            enabled
-                              ? 'text-red-400 hover:bg-red-400/10'
-                              : 'text-emerald-700 hover:bg-emerald-50'
-                          )}
-                        >
-                          {enabled
-                            ? <><X className="w-3.5 h-3.5" /> Disable</>
-                            : <><Check className="w-3.5 h-3.5" /> Enable</>}
-                        </button>
-                      </div>
+          <div className="space-y-2">
+            <p className="text-sm text-ink-muted">
+              {selectedShopIds.size === 0
+                ? 'Select one or more shops on the left, then enable/disable categories for all of them at once.'
+                : `Changes below apply to ${selectedShopIds.size} selected shop${selectedShopIds.size > 1 ? 's' : ''}.`}
+            </p>
+            {categories.map((cat) => {
+              const coverage = enabledShopCount(cat.id)
+              const busy = bulkBusyCategoryId === cat.id
+              return (
+                <div key={cat.id} className="card flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Thumb src={cat.image_url} alt={cat.name} size={34} />
+                    <div>
+                      <p className="font-medium text-ink text-sm">{cat.name}</p>
+                      <p className="text-xs text-ink-muted">{cat.master_products?.length ?? 0} products · enabled in {coverage} of {shops.length} shops</p>
                     </div>
-                  )
-                })}
-              </div>
-            </>
-          )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={busy || selectedShopIds.size === 0}
+                      onClick={() => bulkToggleCategory(cat.id, true)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                      style={{ color: '#128C7E', background: 'rgba(37,211,102,0.1)' }}
+                    >
+                      <Check className="w-3.5 h-3.5" /> Enable
+                    </button>
+                    <button
+                      disabled={busy || selectedShopIds.size === 0}
+                      onClick={() => bulkToggleCategory(cat.id, false)}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                      style={{ color: '#C0392B', background: 'rgba(192,57,43,0.08)' }}
+                    >
+                      <X className="w-3.5 h-3.5" /> Disable
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
       {/* ── Tab: Product Requests ────────────────────────────────────────────── */}
       {activeTab === 'requests' && (
         <div className="space-y-3">
-          {requests.length === 0 ? (
-            <div className="card text-center py-12 text-slate-500">
+          {requestShopOptions.length > 1 && (
+            <select value={requestShopFilter} onChange={(e) => setRequestShopFilter(e.target.value)} className="input" style={{ maxWidth: 260 }}>
+              <option value="all">All shops</option>
+              {requestShopOptions.map(([shopId, name]) => (
+                <option key={shopId} value={shopId}>{name}</option>
+              ))}
+            </select>
+          )}
+          {filteredRequests.length === 0 ? (
+            <div className="card text-center py-12 text-ink-muted">
               No pending product requests. Shopkeepers can request products from their dashboard.
             </div>
-          ) : requests.map(req => (
+          ) : filteredRequests.map((req) => (
             <div key={req.id} className="card">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="font-semibold text-slate-900">{req.name}</p>
-                    {req.brand && <span className="text-xs text-slate-500">{req.brand}</span>}
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F0F2F5', color: '#667781' }}>
-                      {req.unit}
-                    </span>
+                    <p className="font-semibold text-ink">{req.name}</p>
+                    {req.brand && <span className="text-xs text-ink-muted">{req.brand}</span>}
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F0F2F5', color: '#667781' }}>{req.unit}</span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    From: <span className="text-slate-700">{req.shops?.name}</span>
+                  <p className="text-xs text-ink-muted">
+                    From: <span className="text-ink">{req.shops?.name}</span>
                     {req.suggested_price && <> · Suggested ₹{req.suggested_price}</>}
-                    {req.reason && <> · "{req.reason}"</>}
+                    {req.reason && <> · &quot;{req.reason}&quot;</>}
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button
-                    onClick={() => handleRequest(req, 'approved_global')}
-                    className="btn-secondary text-xs flex items-center gap-1"
-                    title="Add to master catalog (available to all shops)"
-                  >
+                  <button onClick={() => handleRequest(req, 'approved_global')} className="btn-secondary text-xs flex items-center gap-1" title="Add to master catalog (available to all shops)">
                     <Package className="w-3 h-3" /> Add to Master
                   </button>
-                  <button
-                    onClick={() => handleRequest(req, 'approved_local')}
-                    className="btn-secondary text-xs flex items-center gap-1"
-                    title="Approve only for this shop"
-                  >
+                  <button onClick={() => handleRequest(req, 'approved_local')} className="btn-secondary text-xs flex items-center gap-1" title="Approve only for this shop">
                     <Store className="w-3 h-3" /> Shop Only
                   </button>
-                  <button
-                    onClick={() => handleRequest(req, 'rejected')}
-                    className="btn-ghost text-xs text-red-400 flex items-center gap-1"
-                  >
+                  <button onClick={() => handleRequest(req, 'rejected')} className="btn-ghost text-xs flex items-center gap-1" style={{ color: '#C0392B' }}>
                     <X className="w-3 h-3" /> Reject
                   </button>
                 </div>
@@ -581,47 +732,81 @@ export default function MasterCatalogClient() {
         </div>
       )}
 
-      {/* ── Add Product Modal ──────────────────────────────────────────────── */}
-      {showAddProduct && (
+      {/* ── Add/Edit Category Modal ───────────────────────────────────────────── */}
+      {(showAddCategory || editingCategory) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowAddProduct(null)} />
-          <div className="relative rounded-2xl w-full max-w-md shadow-2xl"
-            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowAddCategory(false); setEditingCategory(null) }} />
+          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
             <div className="p-6">
-              <h2 className="font-display font-bold text-slate-900 text-lg mb-1">Add Master Product</h2>
-              <p className="text-slate-500 text-sm mb-5">
-                Adding to: <span className="text-slate-900">{categories.find(c => c.id === showAddProduct)?.name}</span>
-              </p>
-              <form onSubmit={handleAddProduct} className="space-y-4">
+              <h2 className="font-display font-bold text-ink text-lg mb-5">{editingCategory ? 'Edit Category' : 'Add Category'}</h2>
+              <form onSubmit={editingCategory ? handleEditCategory : handleAddCategory} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Product name *</label>
-                  <input value={productForm.name} onChange={e => setProductForm(f => ({ ...f, name: e.target.value }))}
-                    placeholder="Amul Butter" required className="input" />
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Category name *</label>
+                  <input
+                    value={categoryForm.name}
+                    onChange={(e) => {
+                      const name = e.target.value
+                      const slug = editingCategory ? categoryForm.slug : name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+                      setCategoryForm((f) => ({ ...f, name, slug }))
+                    }}
+                    placeholder="Dairy & Eggs" required className="input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Slug *</label>
+                  <input value={categoryForm.slug} onChange={(e) => setCategoryForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))} placeholder="dairy" required className="input" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Image URL (optional)</label>
+                  <input value={categoryForm.image_url} onChange={(e) => setCategoryForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" className="input" />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button type="button" onClick={() => { setShowAddCategory(false); setEditingCategory(null) }} className="btn-secondary flex-1 justify-center">Cancel</button>
+                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving…' : editingCategory ? 'Save' : 'Create'}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add/Edit Product Modal ───────────────────────────────────────────── */}
+      {(showAddProduct || editingProduct) && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowAddProduct(false); setEditingProduct(null) }} />
+          <div className="relative rounded-2xl w-full max-w-md shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+            <div className="p-6">
+              <h2 className="font-display font-bold text-ink text-lg mb-1">{editingProduct ? 'Edit Product' : 'Add Master Product'}</h2>
+              <p className="text-ink-muted text-sm mb-5">
+                {editingProduct ? 'Editing' : 'Adding to'}: <span className="text-ink">{editingProduct ? categories.find((c) => c.id === editingProduct.master_category_id)?.name : selectedCategory?.name}</span>
+              </p>
+              <form onSubmit={editingProduct ? handleEditProduct : handleAddProduct} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Product name *</label>
+                  <input value={productForm.name} onChange={(e) => setProductForm((f) => ({ ...f, name: e.target.value }))} placeholder="Amul Butter" required className="input" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Brand</label>
-                    <input value={productForm.brand} onChange={e => setProductForm(f => ({ ...f, brand: e.target.value }))}
-                      placeholder="Amul" className="input" />
+                    <label className="block text-xs font-medium text-ink-muted mb-1.5">Brand</label>
+                    <input value={productForm.brand} onChange={(e) => setProductForm((f) => ({ ...f, brand: e.target.value }))} placeholder="Amul" className="input" />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">Unit *</label>
-                    <input value={productForm.unit} onChange={e => setProductForm(f => ({ ...f, unit: e.target.value }))}
-                      placeholder="100g / 1L / piece" required className="input" />
+                    <label className="block text-xs font-medium text-ink-muted mb-1.5">Unit *</label>
+                    <input value={productForm.unit} onChange={(e) => setProductForm((f) => ({ ...f, unit: e.target.value }))} placeholder="100g / 1L / piece" required className="input" />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Base price (₹)</label>
-                  <input type="number" value={productForm.base_price}
-                    onChange={e => setProductForm(f => ({ ...f, base_price: e.target.value }))}
-                    placeholder="52" className="input" />
-                  <p className="text-xs text-slate-600 mt-1">Shopkeepers can override this price</p>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Base price (₹)</label>
+                  <input type="number" value={productForm.base_price} onChange={(e) => setProductForm((f) => ({ ...f, base_price: e.target.value }))} placeholder="52" className="input" />
+                  <p className="text-xs text-ink-faint mt-1">Shopkeepers can override this price</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Image URL (optional)</label>
+                  <input value={productForm.image_url} onChange={(e) => setProductForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" className="input" />
                 </div>
                 <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setShowAddProduct(null)} className="btn-secondary flex-1 justify-center">Cancel</button>
-                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
-                    {saving ? 'Adding...' : 'Add Product'}
-                  </button>
+                  <button type="button" onClick={() => { setShowAddProduct(false); setEditingProduct(null) }} className="btn-secondary flex-1 justify-center">Cancel</button>
+                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving…' : editingProduct ? 'Save' : 'Add Product'}</button>
                 </div>
               </form>
             </div>
@@ -633,22 +818,18 @@ export default function MasterCatalogClient() {
       {showApproveGlobal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => { setShowApproveGlobal(null); setApproveCategoryId('') }} />
-          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl"
-            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
             <div className="p-6">
-              <h2 className="font-display font-bold text-slate-900 text-lg mb-1">Add to Master Catalog</h2>
-              <p className="text-slate-500 text-sm mb-5">
-                Adding <span className="text-slate-900">{showApproveGlobal.name}</span> — pick which category it belongs to.
+              <h2 className="font-display font-bold text-ink text-lg mb-1">Add to Master Catalog</h2>
+              <p className="text-ink-muted text-sm mb-5">
+                Adding <span className="text-ink">{showApproveGlobal.name}</span> — pick which category it belongs to.
               </p>
-              <form
-                onSubmit={e => { e.preventDefault(); if (approveCategoryId) handleRequest(showApproveGlobal, 'approved_global', approveCategoryId) }}
-                className="space-y-4"
-              >
+              <form onSubmit={(e) => { e.preventDefault(); if (approveCategoryId) handleRequest(showApproveGlobal, 'approved_global', approveCategoryId) }} className="space-y-4">
                 <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Master category *</label>
-                  <select value={approveCategoryId} onChange={e => setApproveCategoryId(e.target.value)} required className="input">
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Master category *</label>
+                  <select value={approveCategoryId} onChange={(e) => setApproveCategoryId(e.target.value)} required className="input">
                     <option value="">Choose a category...</option>
-                    {categories.map(cat => (
+                    {categories.map((cat) => (
                       <option key={cat.id} value={cat.id}>{cat.name}</option>
                     ))}
                   </select>
@@ -663,49 +844,10 @@ export default function MasterCatalogClient() {
         </div>
       )}
 
-      {/* ── Add Category Modal ──────────────────────────────────────────────── */}
-      {showAddCategory && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60" onClick={() => setShowAddCategory(false)} />
-          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl"
-            style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
-            <div className="p-6">
-              <h2 className="font-display font-bold text-slate-900 text-lg mb-5">Add Category</h2>
-              <form onSubmit={handleAddCategory} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Category name *</label>
-                  <input
-                    value={categoryForm.name}
-                    onChange={e => {
-                      const name = e.target.value
-                      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-                      setCategoryForm({ name, slug })
-                    }}
-                    placeholder="Dairy & Eggs" required className="input" />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 mb-1.5">Slug *</label>
-                  <input value={categoryForm.slug}
-                    onChange={e => setCategoryForm(f => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') }))}
-                    placeholder="dairy" required className="input" />
-                </div>
-                <div className="flex gap-3 pt-2">
-                  <button type="button" onClick={() => setShowAddCategory(false)} className="btn-secondary flex-1 justify-center">Cancel</button>
-                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
-                    {saving ? 'Creating...' : 'Create'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-slate-800 flex items-center gap-2"
-          style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
-          <Check className="w-4 h-4 text-emerald-700" />
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-ink flex items-center gap-2" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <Check className="w-4 h-4" style={{ color: '#128C7E' }} />
           {toast}
         </div>
       )}
