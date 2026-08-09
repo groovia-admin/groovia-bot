@@ -674,8 +674,19 @@ async function cancelOrderByCustomer(orderId, phone) {
     ? order.order_customer_details[0]
     : order.order_customer_details;
 
+  // Both sides normalized before comparing — customer_phone_snapshot is
+  // written as the raw bare-digit webhook `from` value (confirmed
+  // against real rows: "919998494699", no "+"), while `phone` here goes
+  // through normalizeWhatsappFrom first, which returns "+91XXXXXXXXXX".
+  // Comparing the normalized value against the raw snapshot directly (as
+  // this used to) meant the two literally could never match — every
+  // customer cancel attempt fell through to "not_found" regardless of
+  // whether it was actually their order or how much time had passed,
+  // masking the already-correct window_expired/already_processed
+  // handling entirely.
   const normalizedPhone = normalizeWhatsappFrom(phone);
-  if (!details?.customer_phone_snapshot || details.customer_phone_snapshot !== normalizedPhone) {
+  const normalizedSnapshot = normalizeWhatsappFrom(details?.customer_phone_snapshot);
+  if (!normalizedSnapshot || normalizedSnapshot !== normalizedPhone) {
     return { result: 'not_found' };
   }
 
