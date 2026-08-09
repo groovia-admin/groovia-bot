@@ -1,13 +1,26 @@
 const logger = require('../utils/logger');
 const { getSupabase, getActiveStaffPhones } = require('./shopResolver');
-const { sendWhatsAppTemplate } = require('./whatsappClient');
+const { sendWhatsAppTemplateWithFallback } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 
 // Registered separately from templates.js's ORDER_TEMPLATES registry —
 // that one is keyed by orders.status for customer-facing notifications;
 // this is staff-facing, same category as orderCreator.js's own
-// NEW_ORDER_ALERT_TEMPLATE. Final submitted text:
-//   Category: Utility, Name: order_reminder, Language: en_US
+// NEW_ORDER_ALERT_TEMPLATE.
+//
+// Approved in Meta as "appointment_reminder", NOT "order_reminder" —
+// Meta's Utility template library has no generic "order reminder"
+// preset, so this was submitted under their "Appointment Reminder"
+// library category name while keeping fully custom, order-specific
+// body content (confirmed against the actual approved body text, which
+// matches exactly what's documented below and what this file already
+// sends — a name mismatch, not a content/param one). This was the real
+// cause of the #132001 "template name does not exist" errors seen in
+// production; sendWhatsAppTemplateWithFallback below (added at the same
+// time, before the name mismatch was known) stays regardless — it's
+// the same en/en_US resilience every other template send already has,
+// worth keeping even though it wasn't what was actually broken here.
+//   Category: Utility, Language: en_US
 //   Body:
 //     "⏰ Reminder:
 //
@@ -23,7 +36,7 @@ const { notifyCustomer } = require('./customerNotifier');
 //   Buttons: 2 quick-reply — "✅ Accept" / "❌ Reject" (no Edit, unlike
 //   new_order_alert's 3 — still reachable from the original alert
 //   message already in the staff's chat, keeps this a quick nudge).
-const ORDER_REMINDER_TEMPLATE = { name: 'order_reminder', language: 'en_US' };
+const ORDER_REMINDER_TEMPLATE = { name: 'appointment_reminder', language: 'en_US' };
 
 // Remind at most this many times before giving up and leaving the order
 // to auto-reject (if configured) or just sit — an ignored order
@@ -95,7 +108,7 @@ async function sendReminder(supabase, order, timezone) {
   const phones = await getActiveStaffPhones(order.shop_id);
   await Promise.all(
     phones.map((phone) =>
-      sendWhatsAppTemplate(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)
+      sendWhatsAppTemplateWithFallback(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)
     )
   );
 }

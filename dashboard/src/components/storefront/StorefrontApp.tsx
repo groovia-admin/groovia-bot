@@ -76,6 +76,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
   })
   const hydratedCartFromSession = useRef(false)
   const hydratedNameFromSession = useRef(false)
+  const hydratedAddressFromSession = useRef(false)
 
   const formatMoney = useCallback(
     (amount: number) =>
@@ -148,6 +149,34 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         if (!hydratedNameFromSession.current && data.customerName) {
           hydratedNameFromSession.current = true
           setCheckoutForm((prev) => (prev.customerName ? prev : { ...prev, customerName: data.customerName }))
+        }
+
+        // Pre-fill delivery address from the customer's last saved one —
+        // without this, a returning customer had to retype their full
+        // address on every single order. Same once-only pattern, and
+        // only fills fields still at their default (empty) value, so it
+        // can never clobber anything already typed this session.
+        if (!hydratedAddressFromSession.current && data.deliveryAddress) {
+          hydratedAddressFromSession.current = true
+          const addr = data.deliveryAddress as {
+            address_line_1: string
+            address_line_2: string | null
+            landmark: string | null
+            city: string | null
+            postal_code: string | null
+          }
+          setCheckoutForm((prev) =>
+            prev.addressLine1
+              ? prev
+              : {
+                  ...prev,
+                  addressLine1: addr.address_line_1 || '',
+                  addressLine2: addr.address_line_2 || '',
+                  landmark: addr.landmark || '',
+                  city: addr.city || '',
+                  postalCode: addr.postal_code || '',
+                }
+          )
         }
       } catch (err) {
         console.error('Failed to resolve session', err)
