@@ -133,16 +133,16 @@ export default function ProductDetailClient({
       <button
         type="button"
         onClick={() => router.push("/dashboard/products")}
-        style={{ ...S.btn("transparent", "#667781"), padding: 0, width: "fit-content" }}
+        style={{ ...S.btn("transparent", "var(--ink-muted)"), padding: 0, width: "fit-content" }}
       >
         <ArrowLeft size={15} />
         Back to products
       </button>
 
-      <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>{canManage ? "Edit product" : "View product"}</h1>
+      <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>{canManage ? "Edit product" : "View product"}</h1>
 
       {!canManage && (
-        <div style={{ color: "#667781", background: "#F0F2F5", border: "1px solid #E9EDEF", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
+        <div style={{ color: "var(--ink-muted)", background: "var(--surface)", border: "1px solid var(--surface-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13 }}>
           You don&apos;t have permission to edit products. Ask the shop owner to grant it.
         </div>
       )}
@@ -150,9 +150,9 @@ export default function ProductDetailClient({
       {error && (
         <div
           style={{
-            color: "#C0392B",
-            background: "#FDECEA",
-            border: "1px solid #F5C6C2",
+            color: "var(--error)",
+            background: "var(--error-light)",
+            border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -165,9 +165,9 @@ export default function ProductDetailClient({
       {saved && !error && (
         <div
           style={{
-            color: "#128C7E",
-            background: "#DCF8C6",
-            border: "1px solid #B9EFA4",
+            color: "var(--brand-dark)",
+            background: "var(--brand-light)",
+            border: "1px solid rgba(0,104,95,0.35)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -269,7 +269,7 @@ export default function ProductDetailClient({
               <img
                 src={form.image_url}
                 alt=""
-                style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid #E9EDEF" }}
+                style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid var(--surface-border)" }}
               />
             ) : (
               <div
@@ -277,7 +277,7 @@ export default function ProductDetailClient({
                   width: 56,
                   height: 56,
                   borderRadius: 8,
-                  border: "1px dashed #E9EDEF",
+                  border: "1px dashed var(--surface-border)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -300,7 +300,7 @@ export default function ProductDetailClient({
               type="button"
               disabled={uploading}
               onClick={() => fileInputRef.current?.click()}
-              style={{ ...S.btn("#F5F6F6", "#111B21"), opacity: uploading ? 0.5 : 1 }}
+              style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), opacity: uploading ? 0.5 : 1 }}
             >
               <Upload size={14} />
               {uploading ? "Uploading…" : form.image_url ? "Replace image" : "Upload image"}
@@ -319,7 +319,7 @@ export default function ProductDetailClient({
           <input style={S.input} value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
         </div>
 
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "#111B21" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink)" }}>
           <input
             type="checkbox"
             checked={form.is_available}
@@ -328,7 +328,7 @@ export default function ProductDetailClient({
           Available for sale
         </label>
 
-        <button type="submit" disabled={saving} style={{ ...S.btn("#25D366", "#fff"), opacity: saving ? 0.5 : 1, width: "fit-content" }}>
+        <button type="submit" disabled={saving} style={{ ...S.btn("var(--brand)", "#fff"), opacity: saving ? 0.5 : 1, width: "fit-content" }}>
           {saving ? "Saving…" : "Save changes"}
         </button>
         </fieldset>

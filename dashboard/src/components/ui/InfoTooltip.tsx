@@ -30,9 +30,9 @@ export default function InfoTooltip({
           width: 22,
           height: 22,
           borderRadius: "50%",
-          border: "1px solid #E9EDEF",
+          border: "1px solid var(--surface-border)",
           background: "#FFFFFF",
-          color: "#8696A0",
+          color: "var(--ink-faint)",
           cursor: "pointer",
           padding: 0,
         }}
@@ -49,9 +49,9 @@ export default function InfoTooltip({
             zIndex: 30,
             minWidth: 240,
             background: "#FFFFFF",
-            border: "1px solid #E9EDEF",
+            border: "1px solid var(--surface-border)",
             borderRadius: 10,
-            boxShadow: "0 4px 16px rgba(17,27,33,0.12)",
+            boxShadow: "0 4px 16px rgba(11,28,48,0.12)",
             padding: "10px 12px",
             display: "flex",
             flexDirection: "column",
@@ -62,8 +62,8 @@ export default function InfoTooltip({
             <div key={item.label} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12 }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, flexShrink: 0, marginTop: 3 }} />
               <div>
-                <span style={{ color: "#111B21", fontWeight: 600 }}>{item.label}</span>
-                {item.hint && <span style={{ color: "#667781" }}> — {item.hint}</span>}
+                <span style={{ color: "var(--ink)", fontWeight: 600 }}>{item.label}</span>
+                {item.hint && <span style={{ color: "var(--ink-muted)" }}> — {item.hint}</span>}
               </div>
             </div>
           ))}

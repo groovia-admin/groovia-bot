@@ -26,7 +26,7 @@ export function formatAgeShort(minutes: number): string {
 }
 
 export const AGING_COLOR: Record<AgingLevel, { color: string; background: string }> = {
-  normal: { color: "#667781", background: "#F0F2F5" },
+  normal: { color: "var(--ink-muted)", background: "var(--surface)" },
   warning: { color: "#B7791F", background: "rgba(245,158,11,0.12)" },
-  urgent: { color: "#C0392B", background: "rgba(192,57,43,0.12)" },
+  urgent: { color: "var(--error)", background: "rgba(186,26,26,0.12)" },
 };

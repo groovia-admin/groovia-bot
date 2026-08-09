@@ -13,8 +13,8 @@ const STATUS_STYLE: Record<string, [string, string]> = {
   preparing: ['#6D28D9', 'rgba(139,92,246,0.12)'],
   ready: ['#0F9D6B', 'rgba(16,185,129,0.12)'],
   completed: ['#4B5563', 'rgba(107,114,128,0.12)'],
-  rejected: ['#C0392B', 'rgba(239,68,68,0.12)'],
-  cancelled: ['#C0392B', 'rgba(239,68,68,0.12)'],
+  rejected: ['var(--error)', 'rgba(239,68,68,0.12)'],
+  cancelled: ['var(--error)', 'rgba(239,68,68,0.12)'],
 }
 
 export default async function CustomerDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -22,7 +22,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { id } = await params
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const showRevenue = context.role === 'owner'
@@ -57,27 +57,27 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 760 }}>
-      <Link href="/dashboard/customers" style={{ ...S.btn('transparent', '#667781'), padding: 0, width: 'fit-content' }}>
+      <Link href="/dashboard/customers" style={{ ...S.btn('transparent', 'var(--ink-muted)'), padding: 0, width: 'fit-content' }}>
         <ArrowLeft size={15} />
         Back to customers
       </Link>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111B21', margin: 0 }}>{customer.full_name || 'Unnamed customer'}</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>{customer.full_name || 'Unnamed customer'}</h1>
           <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#667781' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--ink-muted)' }}>
               <Phone size={13} /> {customer.phone}
             </span>
             {customer.email && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: '#667781' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--ink-muted)' }}>
                 <Mail size={13} /> {customer.email}
               </span>
             )}
           </div>
         </div>
         {customer.outstanding_credit > 0 && showRevenue && (
-          <span style={S.badge('#C0392B', 'rgba(192,57,43,0.1)')}>
+          <span style={S.badge('var(--error)', 'rgba(186,26,26,0.1)')}>
             <CreditCard size={12} /> ₹{Number(customer.outstanding_credit).toFixed(0)} owed
           </span>
         )}
@@ -85,25 +85,25 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: '#667781' }}>Total orders</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: '#111B21', marginTop: 4 }}>{customer.total_orders}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Total orders</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>{customer.total_orders}</div>
         </div>
         {showRevenue && (
           <div style={S.card}>
-            <div style={{ fontSize: 12, color: '#667781' }}>Total spent</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: '#111B21', marginTop: 4 }}>₹{Number(customer.total_spent).toFixed(0)}</div>
+            <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Total spent</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>₹{Number(customer.total_spent).toFixed(0)}</div>
           </div>
         )}
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: '#667781' }}>Customer since</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#111B21', marginTop: 6 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Customer since</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginTop: 6 }}>
             {new Date(customer.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
         </div>
       </div>
 
       <div style={{ ...S.card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid #E9EDEF', fontSize: 13, fontWeight: 700, color: '#111B21' }}>Order history</div>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--surface-border)', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>Order history</div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -123,8 +123,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 const [color, background] = STATUS_STYLE[o.status] ?? STATUS_STYLE.pending
                 return (
                   <tr key={o.id}>
-                    <td style={{ ...S.td, color: '#111B21', fontWeight: 500 }}>
-                      <Link href={`/dashboard/orders/${o.id}`} style={{ color: '#128C7E', textDecoration: 'none' }}>
+                    <td style={{ ...S.td, color: 'var(--ink)', fontWeight: 500 }}>
+                      <Link href={`/dashboard/orders/${o.id}`} style={{ color: 'var(--brand-dark)', textDecoration: 'none' }}>
                         #{o.order_number}
                       </Link>
                     </td>
@@ -134,7 +134,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                     <td style={{ ...S.td, whiteSpace: 'nowrap' }}>
                       {new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                     </td>
-                    {showRevenue && <td style={{ ...S.td, textAlign: 'right', color: '#111B21', fontWeight: 600 }}>₹{Number(o.total_amount).toFixed(0)}</td>}
+                    {showRevenue && <td style={{ ...S.td, textAlign: 'right', color: 'var(--ink)', fontWeight: 600 }}>₹{Number(o.total_amount).toFixed(0)}</td>}
                   </tr>
                 )
               })

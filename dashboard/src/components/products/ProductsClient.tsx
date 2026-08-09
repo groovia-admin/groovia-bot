@@ -284,16 +284,16 @@ export default function ProductsClient({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Products</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Products</h1>
             <InfoTooltip
               items={[
-                { color: "#128C7E", label: "Available", hint: "shown to customers on WhatsApp" },
-                { color: "#667781", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
+                { color: "var(--brand-dark)", label: "Available", hint: "shown to customers on WhatsApp" },
+                { color: "var(--ink-muted)", label: "Unavailable", hint: "hidden from customers, toggle to restore" },
                 { color: "#D97706", label: "Low stock", hint: "at or below its restock threshold" },
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
             Manage your catalog and inventory.
           </p>
         </div>
@@ -302,9 +302,9 @@ export default function ProductsClient({
       {error && (
         <div
           style={{
-            color: "#C0392B",
-            background: "#FDECEA",
-            border: "1px solid #F5C6C2",
+            color: "var(--error)",
+            background: "var(--error-light)",
+            border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -317,9 +317,9 @@ export default function ProductsClient({
       {/* Categories */}
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111B21", margin: 0 }}>Categories</h2>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>Categories</h2>
           {canManage && (
-            <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAddCategory((v) => !v)}>
+            <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAddCategory((v) => !v)}>
               <Plus size={14} />
               Add category
             </button>
@@ -335,7 +335,7 @@ export default function ProductsClient({
                 onChange={(e) => setCategoryName_(e.target.value)}
                 placeholder="Category name (e.g. Dairy, Snacks)"
               />
-              <button type="submit" disabled={savingCategory || !categoryName_.trim()} style={{ ...S.btn("#25D366", "#fff"), opacity: savingCategory || !categoryName_.trim() ? 0.5 : 1, whiteSpace: "nowrap" }}>
+              <button type="submit" disabled={savingCategory || !categoryName_.trim()} style={{ ...S.btn("var(--brand)", "#fff"), opacity: savingCategory || !categoryName_.trim() ? 0.5 : 1, whiteSpace: "nowrap" }}>
                 {savingCategory ? "Adding…" : "Add"}
               </button>
             </div>
@@ -343,7 +343,7 @@ export default function ProductsClient({
         )}
 
         {categories.length === 0 ? (
-          <p style={{ fontSize: 13, color: "#667781", margin: 0 }}>No categories yet. Add one to start adding products.</p>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: 0 }}>No categories yet. Add one to start adding products.</p>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {categories.map((category) => (
@@ -354,21 +354,21 @@ export default function ProductsClient({
                   alignItems: "center",
                   gap: 2,
                   borderRadius: 999,
-                  background: category.is_active ? "#DCF8C6" : "#F0F2F5",
-                  border: `1px solid ${category.is_active ? "#128C7E" : "#667781"}33`,
+                  background: category.is_active ? "var(--brand-light)" : "var(--surface)",
+                  border: `1px solid ${category.is_active ? "var(--brand-dark)" : "var(--ink-muted)"}33`,
                 }}
               >
                 {canManage ? (
                   <button
                     type="button"
                     onClick={() => toggleCategoryActive(category)}
-                    style={{ ...S.badge(category.is_active ? "#128C7E" : "#667781", "transparent"), border: "none" }}
+                    style={{ ...S.badge(category.is_active ? "var(--brand-dark)" : "var(--ink-muted)", "transparent"), border: "none" }}
                     title={category.is_active ? "Click to deactivate" : "Click to activate"}
                   >
                     {category.name}
                   </button>
                 ) : (
-                  <span style={{ ...S.badge(category.is_active ? "#128C7E" : "#667781", "transparent"), border: "none" }}>
+                  <span style={{ ...S.badge(category.is_active ? "var(--brand-dark)" : "var(--ink-muted)", "transparent"), border: "none" }}>
                     {category.name}
                   </span>
                 )}
@@ -392,7 +392,7 @@ export default function ProductsClient({
                         padding: "2px 8px 2px 2px",
                         background: "transparent",
                         border: "none",
-                        color: blocked ? "#8696A0" : "#C0392B",
+                        color: blocked ? "var(--ink-faint)" : "var(--error)",
                         cursor: deletingCategoryId === category.id ? "default" : "pointer",
                         opacity: deletingCategoryId === category.id ? 0.5 : 1,
                       }}
@@ -409,14 +409,14 @@ export default function ProductsClient({
 
       {/* Products */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: "#111B21", margin: 0 }}>All products</h2>
+        <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
             onClick={exportCsv}
             disabled={products.length === 0}
             title="Export all products to a CSV file"
-            style={{ ...S.btn("#F5F6F6", "#111B21"), opacity: products.length === 0 ? 0.5 : 1 }}
+            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), opacity: products.length === 0 ? 0.5 : 1 }}
           >
             <Download size={15} />
             Export CSV
@@ -424,7 +424,7 @@ export default function ProductsClient({
           {canManage && (
             <button
               type="button"
-              style={{ ...S.btn("#25D366", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
+              style={{ ...S.btn("var(--brand)", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
               disabled={activeCategories.length === 0}
               onClick={() => setShowAddProduct((v) => !v)}
               title={activeCategories.length === 0 ? "Add a category first" : undefined}
@@ -508,12 +508,12 @@ export default function ProductsClient({
               />
             </div>
           </div>
-          <p style={{ fontSize: 11, color: "#667781", margin: 0 }}>* Required</p>
+          <p style={{ fontSize: 11, color: "var(--ink-muted)", margin: 0 }}>* Required</p>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="submit" disabled={savingProduct} style={{ ...S.btn("#25D366", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
+            <button type="submit" disabled={savingProduct} style={{ ...S.btn("var(--brand)", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
               {savingProduct ? "Adding…" : "Add product"}
             </button>
-            <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAddProduct(false)}>
+            <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAddProduct(false)}>
               Cancel
             </button>
           </div>
@@ -549,14 +549,14 @@ export default function ProductsClient({
                   const busy = busyId === product.id;
                   return (
                     <tr key={product.id}>
-                      <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>{product.name}</td>
+                      <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{product.name}</td>
                       <td style={S.td}>{categoryName(product)}</td>
                       <td style={S.td}>{product.unit}</td>
                       <td style={S.td}>₹{Number(product.price).toFixed(2)}</td>
                       <td style={S.td}>{product.cost_price != null ? `₹${Number(product.cost_price).toFixed(2)}` : "—"}</td>
                       <td style={S.td}>
                         {product.cost_price != null && Number(product.price) > 0 ? (
-                          <span style={{ color: "#128C7E" }}>
+                          <span style={{ color: "var(--brand-dark)" }}>
                             {Math.round(((Number(product.price) - Number(product.cost_price)) / Number(product.price)) * 100)}%
                           </span>
                         ) : (
@@ -571,8 +571,8 @@ export default function ProductsClient({
                       <td style={S.td}>
                         <span
                           style={S.badge(
-                            product.is_available ? "#128C7E" : "#667781",
-                            product.is_available ? "#DCF8C6" : "#F0F2F5",
+                            product.is_available ? "var(--brand-dark)" : "var(--ink-muted)",
+                            product.is_available ? "var(--brand-light)" : "var(--surface)",
                           )}
                         >
                           {product.is_available ? "Available" : "Unavailable"}
@@ -583,7 +583,7 @@ export default function ProductsClient({
                           <Link
                             href={`/dashboard/products/${product.id}`}
                             title={canManage ? "Edit product" : "View product"}
-                            style={{ ...S.btn("#F5F6F6", "#111B21"), padding: "6px 10px", textDecoration: "none" }}
+                            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px", textDecoration: "none" }}
                           >
                             <Pencil size={13} />
                           </Link>

@@ -23,7 +23,7 @@ export default function ProductImage({ src, alt }: { src: string | null; alt: st
         <div
           className="absolute inset-0"
           style={{
-            background: 'linear-gradient(90deg, #F0F2F5 25%, #E9EDEF 37%, #F0F2F5 63%)',
+            background: 'linear-gradient(90deg, var(--surface) 25%, var(--surface-border) 37%, var(--surface) 63%)',
             backgroundSize: '400% 100%',
             animation: 'productImageShimmer 1.4s ease infinite',
           }}

@@ -27,12 +27,12 @@ export const ACTION_LABEL: Record<string, string> = {
 };
 
 export const ACTOR_BADGE: Record<ActorType, [string, string]> = {
-  super_admin: ["#128C7E", "#DCF8C6"],
+  super_admin: ["var(--brand-dark)", "var(--brand-light)"],
   owner: ["#8B5CF6", "rgba(139,92,246,0.1)"],
   manager: ["#0EA5E9", "rgba(14,165,233,0.1)"],
-  staff: ["#667781", "#F0F2F5"],
+  staff: ["var(--ink-muted)", "var(--surface)"],
   system: ["#B7791F", "rgba(183,121,31,0.1)"],
-  whatsapp: ["#25D366", "#DCF8C6"],
+  whatsapp: ["var(--brand)", "var(--brand-light)"],
   ai: ["#DB2777", "rgba(219,39,119,0.1)"],
 };
 

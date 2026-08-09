@@ -54,30 +54,30 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Customers</h1>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Customers</h1>
           <InfoTooltip
             items={[
-              { color: "#128C7E", label: "Active", hint: "has placed at least one order" },
-              { color: "#C0392B", label: "Outstanding credit", hint: "owed to you — khata/pay-later balance" },
+              { color: "var(--brand-dark)", label: "Active", hint: "has placed at least one order" },
+              { color: "var(--error)", label: "Outstanding credit", hint: "owed to you — khata/pay-later balance" },
             ]}
           />
         </div>
-        <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
+        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: "#667781" }}>Total customers</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#111B21", marginTop: 4 }}>{initialCustomers.length}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Total customers</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{initialCustomers.length}</div>
         </div>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: "#667781" }}>Repeat customers</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "#111B21", marginTop: 4 }}>{repeatCustomers}</div>
+          <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Repeat customers</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{repeatCustomers}</div>
         </div>
         {showRevenue && (
           <div style={S.card}>
-            <div style={{ fontSize: 12, color: "#667781" }}>Outstanding credit</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: totalOutstandingCredit > 0 ? "#C0392B" : "#111B21", marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Outstanding credit</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: totalOutstandingCredit > 0 ? "var(--error)" : "var(--ink)", marginTop: 4 }}>
               ₹{totalOutstandingCredit.toFixed(0)}
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
 
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
-          <Search size={14} color="#8696A0" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, phone, or email…" style={{ ...S.input, paddingLeft: 30 }} />
         </div>
         <select value={sortKey} onChange={(e) => setSortKey(e.target.value as SortKey)} style={{ ...S.input, width: "auto" }}>
@@ -96,7 +96,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
           <option value="credit">Sort: Outstanding credit</option>
         </select>
         {showRevenue && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#111B21", cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink)", cursor: "pointer" }}>
             <input type="checkbox" checked={creditOnly} onChange={(e) => setCreditOnly(e.target.checked)} />
             Has outstanding credit only
           </label>
@@ -120,7 +120,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
               {filtered.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={showRevenue ? 6 : 4}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
                       <Users size={14} />
                       {initialCustomers.length === 0 ? "No customers yet." : "No customers match your search."}
                     </div>
@@ -129,22 +129,22 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
               ) : (
                 filtered.map((c) => (
                   <tr key={c.id}>
-                    <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
-                      <Link href={`/dashboard/customers/${c.id}`} style={{ color: "#111B21", textDecoration: "none" }}>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>
+                      <Link href={`/dashboard/customers/${c.id}`} style={{ color: "var(--ink)", textDecoration: "none" }}>
                         {c.full_name || "Unnamed customer"}
                       </Link>
                     </td>
                     <td style={S.td}>{c.phone}</td>
                     <td style={S.td}>{c.total_orders}</td>
-                    {showRevenue && <td style={{ ...S.td, color: "#111B21", fontWeight: 600 }}>₹{Number(c.total_spent).toFixed(0)}</td>}
+                    {showRevenue && <td style={{ ...S.td, color: "var(--ink)", fontWeight: 600 }}>₹{Number(c.total_spent).toFixed(0)}</td>}
                     {showRevenue && (
                       <td style={S.td}>
                         {c.outstanding_credit > 0 ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "#C0392B", fontWeight: 600 }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 4, color: "var(--error)", fontWeight: 600 }}>
                             <CreditCard size={12} /> ₹{Number(c.outstanding_credit).toFixed(0)}
                           </span>
                         ) : (
-                          <span style={{ color: "#8696A0" }}>—</span>
+                          <span style={{ color: "var(--ink-faint)" }}>—</span>
                         )}
                       </td>
                     )}

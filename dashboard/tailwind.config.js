@@ -8,23 +8,30 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // WhatsApp-derived light theme: chat-list gray-white background,
-        // white cards, WhatsApp's own border/text grays.
+        // Teal brand theme — same token structure as the old WhatsApp-
+        // derived palette (surface/brand/ink), just recolored, so every
+        // existing `bg-surface-card`, `text-ink-muted`, etc. class keeps
+        // working unchanged.
         surface: {
-          DEFAULT: '#F0F2F5',
+          DEFAULT: '#F8F9FF',
           card:    '#FFFFFF',
-          hover:   '#F5F6F6',
-          border:  '#E9EDEF',
+          hover:   '#EFF4FF',
+          border:  '#BCC9C6',
         },
         brand: {
-          DEFAULT: '#25D366',
-          light:   '#DCF8C6',
-          dark:    '#128C7E',
+          DEFAULT: '#00685F',
+          light:   '#89F5E7',
+          dark:    '#005049',
         },
         ink: {
-          DEFAULT: '#111B21',
-          muted:   '#667781',
-          faint:   '#8696A0',
+          DEFAULT: '#0B1C30',
+          muted:   '#3D4947',
+          faint:   '#6D7A77',
+        },
+        error: {
+          DEFAULT: '#BA1A1A',
+          light:   '#FFDAD6',
+          dark:    '#93000A',
         },
         status: {
           pending:   '#f59e0b',

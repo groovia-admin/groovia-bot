@@ -13,8 +13,8 @@ const STATUS_COLOR: Record<string, string> = {
   preparing: '#6D28D9',
   ready: '#0F9D6B',
   completed: '#4B5563',
-  rejected: '#C0392B',
-  cancelled: '#C0392B',
+  rejected: 'var(--error)',
+  cancelled: 'var(--error)',
 }
 
 function daysAgoIso(days: number): string {
@@ -27,7 +27,7 @@ export default async function AnalyticsPage() {
   const context = await requireRole(['owner', 'manager'])
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const showRevenue = context.role === 'owner'
@@ -155,33 +155,33 @@ export default async function AnalyticsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111B21', margin: 0 }}>Analytics</h1>
-        <p style={{ fontSize: 13, color: '#667781', marginTop: 4 }}>Last {PERIOD_DAYS} days, vs the {PERIOD_DAYS} days before that.</p>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Analytics</h1>
+        <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>Last {PERIOD_DAYS} days, vs the {PERIOD_DAYS} days before that.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
         <StatCard icon={ShoppingBag} label="Orders" value={String(allOrders.length)} prevValue={prevAllOrders.length} />
         <StatCard icon={Package} label="Completed" value={String(fulfilledOrders.length)} prevValue={prevFulfilledOrders.length} />
-        <StatCard icon={XCircle} label="Rejected / cancelled" value={String(failedOrders.length)} prevValue={prevFailedOrders.length} accent="#C0392B" invertDelta />
-        {showRevenue && <StatCard icon={TrendingUp} label="Revenue" value={`₹${totalRevenue.toFixed(0)}`} prevValue={prevTotalRevenue} rawValue={totalRevenue} accent="#128C7E" />}
+        <StatCard icon={XCircle} label="Rejected / cancelled" value={String(failedOrders.length)} prevValue={prevFailedOrders.length} accent="var(--error)" invertDelta />
+        {showRevenue && <StatCard icon={TrendingUp} label="Revenue" value={`₹${totalRevenue.toFixed(0)}`} prevValue={prevTotalRevenue} rawValue={totalRevenue} accent="var(--brand-dark)" />}
         {showRevenue && <StatCard icon={TrendingUp} label="Avg order value" value={`₹${avgOrderValue.toFixed(0)}`} prevValue={prevAvgOrderValue} rawValue={avgOrderValue} />}
         {showRevenue && grossMargin !== null && (
           <StatCard
             icon={PiggyBank}
             label="Gross margin"
             value={`₹${grossMargin.toFixed(0)}${marginPct !== null ? ` (${marginPct.toFixed(0)}%)` : ''}`}
-            accent="#128C7E"
+            accent="var(--brand-dark)"
             hint="At today's cost prices — order items don't snapshot cost at time of sale"
           />
         )}
       </div>
 
       <div style={S.card}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#111B21', marginBottom: 14 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
           {showRevenue ? 'Revenue' : 'Orders'} — last {PERIOD_DAYS} days
         </div>
         {allOrders.length === 0 ? (
-          <p style={{ fontSize: 13, color: '#667781', margin: 0 }}>No orders in this period yet.</p>
+          <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No orders in this period yet.</p>
         ) : (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
             {trend.map((d) => {
@@ -195,7 +195,7 @@ export default async function AnalyticsPage() {
                   style={{
                     flex: 1,
                     height: `${pct}%`,
-                    background: value > 0 ? '#25D366' : '#E9EDEF',
+                    background: value > 0 ? 'var(--brand)' : 'var(--surface-border)',
                     borderRadius: '3px 3px 0 0',
                     minWidth: 2,
                   }}
@@ -208,20 +208,20 @@ export default async function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111B21', marginBottom: 14 }}>Orders by status</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Orders by status</div>
           {allOrders.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#667781', margin: 0 }}>No orders yet.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No orders yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {Object.entries(statusCounts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([status, count]) => (
                   <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 80, fontSize: 12, color: '#667781', textTransform: 'capitalize' }}>{status}</div>
-                    <div style={{ flex: 1, background: '#F0F2F5', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                      <div style={{ width: `${(count / maxStatusCount) * 100}%`, height: '100%', background: STATUS_COLOR[status] ?? '#8696A0' }} />
+                    <div style={{ width: 80, fontSize: 12, color: 'var(--ink-muted)', textTransform: 'capitalize' }}>{status}</div>
+                    <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                      <div style={{ width: `${(count / maxStatusCount) * 100}%`, height: '100%', background: STATUS_COLOR[status] ?? 'var(--ink-faint)' }} />
                     </div>
-                    <div style={{ width: 24, fontSize: 12, color: '#111B21', fontWeight: 600, textAlign: 'right' }}>{count}</div>
+                    <div style={{ width: 24, fontSize: 12, color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>{count}</div>
                   </div>
                 ))}
             </div>
@@ -229,22 +229,22 @@ export default async function AnalyticsPage() {
         </div>
 
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111B21', marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
             Top products {showRevenue ? '(by revenue)' : '(by quantity)'}
           </div>
           {topProducts.length === 0 ? (
-            <p style={{ fontSize: 13, color: '#667781', margin: 0 }}>No completed orders yet.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No completed orders yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {topProducts.map((p) => {
                 const value = showRevenue ? p.revenue : p.qty;
                 return (
                   <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 100, fontSize: 12, color: '#667781', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                    <div style={{ flex: 1, background: '#F0F2F5', borderRadius: 4, height: 8, overflow: 'hidden' }}>
-                      <div style={{ width: `${(value / maxProductValue) * 100}%`, height: '100%', background: '#128C7E' }} />
+                    <div style={{ width: 100, fontSize: 12, color: 'var(--ink-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                    <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
+                      <div style={{ width: `${(value / maxProductValue) * 100}%`, height: '100%', background: 'var(--brand-dark)' }} />
                     </div>
-                    <div style={{ width: 50, fontSize: 12, color: '#111B21', fontWeight: 600, textAlign: 'right' }}>
+                    <div style={{ width: 50, fontSize: 12, color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>
                       {showRevenue ? `₹${p.revenue.toFixed(0)}` : p.qty}
                     </div>
                   </div>
@@ -289,19 +289,19 @@ function StatCard({
   return (
     <div style={S.card} title={hint}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontSize: 12, color: '#667781' }}>{label}</span>
-        <Icon size={15} color={accent ?? '#8696A0'} />
+        <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{label}</span>
+        <Icon size={15} color={accent ?? 'var(--ink-faint)'} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: accent ?? '#111B21' }}>{value}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: accent ?? 'var(--ink)' }}>{value}</div>
         {hasComparison && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: noChange || delta === null ? '#8696A0' : isGood ? '#128C7E' : '#C0392B' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: noChange || delta === null ? 'var(--ink-faint)' : isGood ? 'var(--brand-dark)' : 'var(--error)' }}>
             {noChange || delta === null ? <Minus size={11} /> : delta > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {noChange ? '—' : delta === null ? 'new' : `${Math.abs(delta).toFixed(0)}%`}
           </span>
         )}
       </div>
-      {hasComparison && <div style={{ fontSize: 10, color: '#8696A0', marginTop: 2 }}>vs {prevValue} last period</div>}
+      {hasComparison && <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 2 }}>vs {prevValue} last period</div>}
     </div>
   )
 }

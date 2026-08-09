@@ -31,9 +31,9 @@ const ROLE_LABEL: Record<StaffRole, string> = {
 };
 
 const ROLE_BADGE: Record<StaffRole, [string, string]> = {
-  owner: ["#128C7E", "#DCF8C6"],
+  owner: ["var(--brand-dark)", "var(--brand-light)"],
   manager: ["#8B5CF6", "rgba(139,92,246,0.1)"],
-  staff: ["#667781", "#F0F2F5"],
+  staff: ["var(--ink-muted)", "var(--surface)"],
 };
 
 export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[] }) {
@@ -120,19 +120,19 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Staff</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Staff</h1>
             <InfoTooltip
               items={[
-                { color: "#128C7E", label: "Active", hint: "can sign in and use the dashboard" },
-                { color: "#667781", label: "Inactive", hint: "access revoked, click Reactivate to restore" },
+                { color: "var(--brand-dark)", label: "Active", hint: "can sign in and use the dashboard" },
+                { color: "var(--ink-muted)", label: "Inactive", hint: "access revoked, click Reactivate to restore" },
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
             Manage who can access this shop and what they can do.
           </p>
         </div>
-        <button type="button" style={S.btn("#25D366", "#fff")} onClick={() => setShowAdd((v) => !v)}>
+        <button type="button" style={S.btn("var(--brand)", "#fff")} onClick={() => setShowAdd((v) => !v)}>
           <Plus size={15} />
           Add staff
         </button>
@@ -141,9 +141,9 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       {error && (
         <div
           style={{
-            color: "#C0392B",
-            background: "#FDECEA",
-            border: "1px solid #F5C6C2",
+            color: "var(--error)",
+            background: "var(--error-light)",
+            border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -174,10 +174,10 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                     alignItems: "center",
                     padding: "0 12px",
                     borderRadius: "8px 0 0 8px",
-                    border: "1px solid #E9EDEF",
+                    border: "1px solid var(--surface-border)",
                     borderRight: "none",
-                    background: "#F0F2F5",
-                    color: "#667781",
+                    background: "var(--surface)",
+                    color: "var(--ink-muted)",
                     fontSize: 13,
                   }}
                 >
@@ -205,10 +205,10 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
             </div>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button type="submit" disabled={!canSubmit || saving} style={{ ...S.btn("#25D366", "#fff"), opacity: !canSubmit || saving ? 0.5 : 1 }}>
+            <button type="submit" disabled={!canSubmit || saving} style={{ ...S.btn("var(--brand)", "#fff"), opacity: !canSubmit || saving ? 0.5 : 1 }}>
               {saving ? "Adding…" : "Add staff member"}
             </button>
-            <button type="button" style={S.btn("#F5F6F6", "#111B21")} onClick={() => setShowAdd(false)}>
+            <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAdd(false)}>
               Cancel
             </button>
           </div>
@@ -241,7 +241,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                   const busy = busyId === row.id;
                   return (
                     <tr key={row.id}>
-                      <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>{row.full_name}</td>
+                      <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{row.full_name}</td>
                       <td style={S.td}>{row.phone_number ?? "—"}</td>
                       <td style={S.td}>
                         {row.role === "owner" ? (
@@ -270,7 +270,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                         {row.role === "staff" ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             {(Object.keys(PERMISSION_LABEL) as StaffPermission[]).map((perm) => (
-                              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#111B21", cursor: busy ? "default" : "pointer" }}>
+                              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink)", cursor: busy ? "default" : "pointer" }}>
                                 <input
                                   type="checkbox"
                                   disabled={busy}
@@ -282,14 +282,14 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                             ))}
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: "#8696A0" }}>Full access</span>
+                          <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Full access</span>
                         )}
                       </td>
                       <td style={S.td}>
                         <span
                           style={S.badge(
-                            row.is_active ? "#128C7E" : "#667781",
-                            row.is_active ? "#DCF8C6" : "#F0F2F5",
+                            row.is_active ? "var(--brand-dark)" : "var(--ink-muted)",
+                            row.is_active ? "var(--brand-light)" : "var(--surface)",
                           )}
                         >
                           {row.is_active ? "Active" : "Inactive"}

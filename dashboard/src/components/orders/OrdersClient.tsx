@@ -39,8 +39,8 @@ const STATUS_STYLE: Record<OrderStatus, [string, string]> = {
   preparing: ["#6D28D9", "rgba(139,92,246,0.12)"],
   ready: ["#0F9D6B", "rgba(16,185,129,0.12)"],
   completed: ["#4B5563", "rgba(107,114,128,0.12)"],
-  rejected: ["#C0392B", "rgba(239,68,68,0.12)"],
-  cancelled: ["#C0392B", "rgba(239,68,68,0.12)"],
+  rejected: ["var(--error)", "rgba(239,68,68,0.12)"],
+  cancelled: ["var(--error)", "rgba(239,68,68,0.12)"],
 };
 
 const STATUS_TABS: { value: OrderStatus | "all"; label: string }[] = [
@@ -231,7 +231,7 @@ export default function OrdersClient({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>Orders</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Orders</h1>
             <InfoTooltip
               items={[
                 { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
@@ -239,11 +239,11 @@ export default function OrdersClient({
                 { color: "#6D28D9", label: "Preparing", hint: "being packed" },
                 { color: "#0F9D6B", label: "Ready", hint: "ready for pickup/delivery" },
                 { color: "#4B5563", label: "Completed", hint: "handed over to customer" },
-                { color: "#C0392B", label: "Rejected / Cancelled", hint: "order did not go through" },
+                { color: "var(--error)", label: "Rejected / Cancelled", hint: "order did not go through" },
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -257,9 +257,9 @@ export default function OrdersClient({
               gap: 6,
               padding: "6px 10px",
               borderRadius: 8,
-              border: "1px solid #E9EDEF",
+              border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
-              color: "#667781",
+              color: "var(--ink-muted)",
               fontSize: 12,
               cursor: filtered.length === 0 ? "default" : "pointer",
               fontFamily: "inherit",
@@ -280,9 +280,9 @@ export default function OrdersClient({
               gap: 6,
               padding: "6px 10px",
               borderRadius: 8,
-              border: "1px solid #E9EDEF",
+              border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
-              color: "#667781",
+              color: "var(--ink-muted)",
               fontSize: 12,
               cursor: refreshing ? "default" : "pointer",
               fontFamily: "inherit",
@@ -297,7 +297,7 @@ export default function OrdersClient({
 
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ position: "relative", maxWidth: 340 }}>
-          <Search size={14} color="#8696A0" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -322,9 +322,9 @@ export default function OrdersClient({
                   fontWeight: 600,
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  border: "1px solid " + (active ? "#25D366" : "#E9EDEF"),
-                  background: active ? "#DCF8C6" : "#FFFFFF",
-                  color: active ? "#128C7E" : "#667781",
+                  border: "1px solid " + (active ? "var(--brand)" : "var(--surface-border)"),
+                  background: active ? "var(--brand-light)" : "#FFFFFF",
+                  color: active ? "var(--brand-dark)" : "var(--ink-muted)",
                 }}
               >
                 {tab.label} {count > 0 && <span style={{ opacity: 0.7 }}>({count})</span>}
@@ -342,23 +342,23 @@ export default function OrdersClient({
             gap: 12,
             padding: "10px 14px",
             borderRadius: 10,
-            background: "#DCF8C6",
-            border: "1px solid #B9EFA4",
+            background: "var(--brand-light)",
+            border: "1px solid rgba(0,104,95,0.35)",
           }}
         >
-          <span style={{ fontSize: 13, color: "#128C7E", fontWeight: 600 }}>
+          <span style={{ fontSize: 13, color: "var(--brand-dark)", fontWeight: 600 }}>
             {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
           </span>
           <button
             type="button"
             onClick={bulkAccept}
             disabled={bulkBusy}
-            style={{ ...S.btn("#25D366", "#fff"), padding: "6px 12px", opacity: bulkBusy ? 0.5 : 1 }}
+            style={{ ...S.btn("var(--brand)", "#fff"), padding: "6px 12px", opacity: bulkBusy ? 0.5 : 1 }}
           >
             <Check size={13} />
             {bulkBusy ? "Accepting…" : "Accept selected"}
           </button>
-          <button type="button" onClick={() => setSelectedIds(new Set())} style={{ ...S.btn("transparent", "#667781"), padding: "6px 10px" }}>
+          <button type="button" onClick={() => setSelectedIds(new Set())} style={{ ...S.btn("transparent", "var(--ink-muted)"), padding: "6px 10px" }}>
             Clear
           </button>
         </div>
@@ -389,7 +389,7 @@ export default function OrdersClient({
               {filtered.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={(showRevenue ? 7 : 6) + (canManage ? 1 : 0)}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
                       <ShoppingBag size={14} />
                       {orders.length === 0 ? "No orders yet." : "No orders match your search."}
                     </div>
@@ -401,7 +401,7 @@ export default function OrdersClient({
                   const busy = busyId === o.id;
                   const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
                   return (
-                    <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 #C0392B" } : undefined}>
+                    <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 var(--error)" } : undefined}>
                       {canManage && (
                         <td style={S.td}>
                           {o.status === "pending" && (
@@ -409,24 +409,24 @@ export default function OrdersClient({
                           )}
                         </td>
                       )}
-                      <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>
-                        <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#128C7E", textDecoration: "none" }}>
+                      <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>
+                        <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--brand-dark)", textDecoration: "none" }}>
                           #{o.order_number}
                         </Link>
                       </td>
                       <td style={S.td}>
                         {o.customer_name ? (
                           <div>
-                            <div style={{ color: "#111B21" }}>{o.customer_name}</div>
+                            <div style={{ color: "var(--ink)" }}>{o.customer_name}</div>
                             {o.customer_phone && (
-                              <div style={{ fontSize: 12, color: "#667781", marginTop: 1 }}>{o.customer_phone}</div>
+                              <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 1 }}>{o.customer_phone}</div>
                             )}
                           </div>
                         ) : (
                           o.customer_phone || "—"
                         )}
                       </td>
-                      <td style={{ ...S.td, textAlign: "right", color: "#667781" }}>{o.item_count}</td>
+                      <td style={{ ...S.td, textAlign: "right", color: "var(--ink-muted)" }}>{o.item_count}</td>
                       <td style={S.td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           <span style={S.badge(color, background)}>{o.status}</span>
@@ -437,7 +437,7 @@ export default function OrdersClient({
                         {o.pickup_slot_label ?? format(new Date(o.created_at), "MMM d, HH:mm")}
                       </td>
                       {showRevenue && (
-                        <td style={{ ...S.td, textAlign: "right", color: "#111B21", fontWeight: 600 }}>
+                        <td style={{ ...S.td, textAlign: "right", color: "var(--ink)", fontWeight: 600 }}>
                           ₹{Number(o.total_amount).toFixed(2)}
                         </td>
                       )}
@@ -449,20 +449,20 @@ export default function OrdersClient({
                               disabled={busy}
                               title="Accept order"
                               onClick={() => quickAccept(o.id)}
-                              style={{ ...S.btn("#25D366", "#fff"), padding: "6px 10px", opacity: busy ? 0.5 : 1 }}
+                              style={{ ...S.btn("var(--brand)", "#fff"), padding: "6px 10px", opacity: busy ? 0.5 : 1 }}
                             >
                               <Check size={13} />
                             </button>
                             <Link
                               href={`/dashboard/orders/${o.id}`}
                               title="Reject order"
-                              style={{ ...S.btn("rgba(239,68,68,0.12)", "#C0392B"), padding: "6px 10px", textDecoration: "none" }}
+                              style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "6px 10px", textDecoration: "none" }}
                             >
                               <X size={13} />
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "#667781", fontSize: 12, textDecoration: "none" }}>
+                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: 12, textDecoration: "none" }}>
                             View
                           </Link>
                         )}

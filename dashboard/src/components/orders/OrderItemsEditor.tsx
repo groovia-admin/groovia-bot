@@ -77,7 +77,7 @@ export default function OrderItemsEditor({
 
   return (
     <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px 0", fontSize: 12, color: "#667781" }}>
+      <div style={{ padding: "12px 16px 0", fontSize: 12, color: "var(--ink-muted)" }}>
         Order still pending — adjust quantity or remove an item if something's unavailable. The customer is notified of any change.
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -95,7 +95,7 @@ export default function OrderItemsEditor({
             const busy = busyId === item.id;
             return (
               <tr key={item.id}>
-                <td style={{ ...S.td, color: "#111B21", fontWeight: 500 }}>{item.product_name_snapshot}</td>
+                <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{item.product_name_snapshot}</td>
                 <td style={S.td}>
                   <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                     <button
@@ -104,7 +104,7 @@ export default function OrderItemsEditor({
                       onClick={() => updateQuantity(item, item.quantity - 1)}
                       title="Decrease quantity"
                       style={{
-                        ...S.btn("#F5F6F6", "#111B21"),
+                        ...S.btn("var(--surface-hover)", "var(--ink)"),
                         padding: "3px 7px",
                         opacity: busy || item.quantity <= 1 ? 0.4 : 1,
                       }}
@@ -119,7 +119,7 @@ export default function OrderItemsEditor({
                       disabled={busy}
                       onClick={() => updateQuantity(item, item.quantity + 1)}
                       title="Increase quantity"
-                      style={{ ...S.btn("#F5F6F6", "#111B21"), padding: "3px 7px", opacity: busy ? 0.4 : 1 }}
+                      style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "3px 7px", opacity: busy ? 0.4 : 1 }}
                     >
                       <Plus size={12} />
                     </button>
@@ -133,7 +133,7 @@ export default function OrderItemsEditor({
                     disabled={busy}
                     onClick={() => removeItem(item)}
                     title="Remove item"
-                    style={{ ...S.btn("rgba(239,68,68,0.12)", "#C0392B"), padding: "5px 8px", opacity: busy ? 0.4 : 1 }}
+                    style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "5px 8px", opacity: busy ? 0.4 : 1 }}
                   >
                     <Trash2 size={12} />
                   </button>

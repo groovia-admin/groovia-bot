@@ -53,8 +53,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               borderRadius: 10,
               fontSize: 13,
               fontWeight: 600,
-              color: t.type === "success" ? "#f0fdf4" : "#fef2f2",
-              background: t.type === "success" ? "#16a34a" : "#dc2626",
+              color: "#ffffff",
+              background: t.type === "success" ? "var(--brand)" : "var(--error)",
               boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
               maxWidth: 320,
             }}

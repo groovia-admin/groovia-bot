@@ -10,20 +10,20 @@ type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" 
 
 const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; icon: React.ElementType; bg: string; color: string; needsReason?: boolean }[]> = {
   pending: [
-    { status: "accepted", label: "Accept order", icon: Check, bg: "#25D366", color: "#fff" },
-    { status: "rejected", label: "Reject order", icon: X, bg: "rgba(239,68,68,0.12)", color: "#C0392B", needsReason: true },
+    { status: "accepted", label: "Accept order", icon: Check, bg: "var(--brand)", color: "#fff" },
+    { status: "rejected", label: "Reject order", icon: X, bg: "rgba(239,68,68,0.12)", color: "var(--error)", needsReason: true },
   ],
   accepted: [
-    { status: "preparing", label: "Start preparing", icon: ChefHat, bg: "#25D366", color: "#fff" },
-    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "#C0392B", needsReason: true },
+    { status: "preparing", label: "Start preparing", icon: ChefHat, bg: "var(--brand)", color: "#fff" },
+    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "var(--error)", needsReason: true },
   ],
   preparing: [
-    { status: "ready", label: "Mark ready", icon: PackageCheck, bg: "#25D366", color: "#fff" },
-    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "#C0392B", needsReason: true },
+    { status: "ready", label: "Mark ready", icon: PackageCheck, bg: "var(--brand)", color: "#fff" },
+    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "var(--error)", needsReason: true },
   ],
   ready: [
-    { status: "completed", label: "Mark completed", icon: CircleCheckBig, bg: "#25D366", color: "#fff" },
-    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "#C0392B", needsReason: true },
+    { status: "completed", label: "Mark completed", icon: CircleCheckBig, bg: "var(--brand)", color: "#fff" },
+    { status: "cancelled", label: "Cancel order", icon: Ban, bg: "rgba(239,68,68,0.12)", color: "var(--error)", needsReason: true },
   ],
   completed: [],
   rejected: [],
@@ -70,7 +70,7 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
 
   return (
     <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#111B21" }}>Update order</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Update order</div>
 
       {pendingReasonFor ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -89,7 +89,7 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
               type="button"
               disabled={busy || !reason.trim()}
               onClick={() => applyStatus(pendingReasonFor, reason.trim())}
-              style={{ ...S.btn("#C0392B", "#fff"), opacity: busy || !reason.trim() ? 0.5 : 1 }}
+              style={{ ...S.btn("var(--error)", "#fff"), opacity: busy || !reason.trim() ? 0.5 : 1 }}
             >
               Confirm {pendingReasonFor}
             </button>
@@ -99,7 +99,7 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
                 setPendingReasonFor(null);
                 setReason("");
               }}
-              style={S.btn("#F5F6F6", "#111B21")}
+              style={S.btn("var(--surface-hover)", "var(--ink)")}
             >
               Cancel
             </button>
