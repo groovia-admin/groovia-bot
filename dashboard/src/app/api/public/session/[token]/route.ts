@@ -61,12 +61,56 @@ export async function GET(
     console.error('Failed to slide session expiry:', slideError)
   }
 
+  // A returning customer's most recent delivery address, so checkout
+  // doesn't ask them to retype it on every order — mirrors the
+  // customerName pre-fill just below it. order_sessions has no
+  // customer_id (a session exists before any order/customer row does),
+  // so this goes through the same shop_id+phone lookup order/route.ts
+  // already uses to find-or-create the customer. No customer row yet
+  // (first-ever session) or no saved address yet (first-ever delivery
+  // order) both just mean nothing to pre-fill — not an error.
+  let deliveryAddress: {
+    address_line_1: string
+    address_line_2: string | null
+    landmark: string | null
+    city: string | null
+    postal_code: string | null
+  } | null = null
+
+  const { data: customer } = await adminClient
+    .from('customers')
+    .select('id')
+    .eq('shop_id', session.shop_id)
+    .eq('phone', session.customer_phone)
+    .maybeSingle()
+
+  if (customer) {
+    // Deliberately NOT ordered by is_default first: order/route.ts sets
+    // is_default only on a customer's very first-ever saved address and
+    // never revisits it afterward, while every later delivery order
+    // unconditionally inserts another new row rather than reusing one —
+    // confirmed against real data where a customer's actual most recent
+    // address was a different (non-default) row than an earlier one
+    // still flagged default. created_at DESC is what actually reflects
+    // "what they used last," which is what pre-filling should mean here.
+    const { data: address } = await adminClient
+      .from('customer_addresses')
+      .select('address_line_1, address_line_2, landmark, city, postal_code')
+      .eq('customer_id', customer.id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (address) deliveryAddress = address
+  }
+
   return NextResponse.json(
     {
       shopId: session.shop_id,
       customerPhone: session.customer_phone,
       customerName: session.customer_name,
       cartSnapshot: session.cart_snapshot,
+      deliveryAddress,
       expiresAt: newExpiresAt,
     },
     { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
