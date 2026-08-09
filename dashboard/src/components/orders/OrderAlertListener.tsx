@@ -149,13 +149,13 @@ export default function OrderAlertListener() {
         gap: 6,
         padding: "8px 12px",
         borderRadius: 999,
-        border: "1px solid #E9EDEF",
+        border: "1px solid var(--surface-border)",
         background: "#FFFFFF",
-        color: "#667781",
+        color: "var(--ink-muted)",
         fontSize: 12,
         fontWeight: 600,
         cursor: "pointer",
-        boxShadow: "0 2px 8px rgba(17,27,33,0.08)",
+        boxShadow: "0 2px 8px rgba(11,28,48,0.08)",
       }}
     >
       {permission === "denied" ? <BellOff size={13} /> : <Bell size={13} />}

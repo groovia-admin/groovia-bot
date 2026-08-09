@@ -16,8 +16,8 @@ const STATUS_COLOR: Record<string, string> = {
   preparing: "#6D28D9",
   ready: "#0F9D6B",
   completed: "#4B5563",
-  rejected: "#C0392B",
-  cancelled: "#C0392B",
+  rejected: "var(--error)",
+  cancelled: "var(--error)",
 };
 
 export default function GlobalSearch() {
@@ -130,9 +130,9 @@ export default function GlobalSearch() {
           gap: 8,
           padding: "7px 10px",
           borderRadius: 8,
-          border: "1px solid #E9EDEF",
+          border: "1px solid var(--surface-border)",
           background: "#FFFFFF",
-          color: "#8696A0",
+          color: "var(--ink-faint)",
           fontSize: 13,
           cursor: "pointer",
           fontFamily: "inherit",
@@ -142,7 +142,7 @@ export default function GlobalSearch() {
       >
         <Search size={14} />
         <span style={{ flex: 1, textAlign: "left" }}>Search…</span>
-        <span style={{ fontSize: 11, border: "1px solid #E9EDEF", borderRadius: 4, padding: "1px 5px", color: "#8696A0" }}>Ctrl K</span>
+        <span style={{ fontSize: 11, border: "1px solid var(--surface-border)", borderRadius: 4, padding: "1px 5px", color: "var(--ink-faint)" }}>Ctrl K</span>
       </button>
 
       {open && (
@@ -150,13 +150,13 @@ export default function GlobalSearch() {
           style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "flex-start", justifyContent: "center", paddingTop: "12vh" }}
           onClick={() => setOpen(false)}
         >
-          <div style={{ position: "absolute", inset: 0, background: "rgba(17,27,33,0.4)" }} />
+          <div style={{ position: "absolute", inset: 0, background: "rgba(11,28,48,0.4)" }} />
           <div
             onClick={(e) => e.stopPropagation()}
             style={{ position: "relative", width: "100%", maxWidth: 560, background: "#FFFFFF", borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.25)", overflow: "hidden" }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid #E9EDEF" }}>
-              <Search size={16} color="#8696A0" />
+            <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: "1px solid var(--surface-border)" }}>
+              <Search size={16} color="var(--ink-faint)" />
               <input
                 ref={inputRef}
                 value={query}
@@ -166,17 +166,17 @@ export default function GlobalSearch() {
                 }}
                 onKeyDown={onKeyDown}
                 placeholder="Search orders, products, customers…"
-                style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "#111B21", fontFamily: "inherit" }}
+                style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "var(--ink)", fontFamily: "inherit" }}
               />
             </div>
 
             <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
               {query.trim().length < 2 ? (
-                <div style={{ padding: 24, fontSize: 13, color: "#8696A0", textAlign: "center" }}>Type at least 2 characters to search.</div>
+                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Type at least 2 characters to search.</div>
               ) : loading ? (
-                <div style={{ padding: 24, fontSize: 13, color: "#8696A0", textAlign: "center" }}>Searching…</div>
+                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Searching…</div>
               ) : flatResults.length === 0 ? (
-                <div style={{ padding: 24, fontSize: 13, color: "#8696A0", textAlign: "center" }}>No matches for &quot;{query}&quot;.</div>
+                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>No matches for &quot;{query}&quot;.</div>
               ) : (
                 flatResults.map((r, i) => (
                   <button
@@ -189,19 +189,19 @@ export default function GlobalSearch() {
                       alignItems: "center",
                       gap: 12,
                       padding: "10px 16px",
-                      background: i === activeIndex ? "#F0F2F5" : "transparent",
+                      background: i === activeIndex ? "var(--surface)" : "transparent",
                       border: "none",
                       cursor: "pointer",
                       textAlign: "left",
                       fontFamily: "inherit",
                     }}
                   >
-                    <r.icon size={15} color="#667781" style={{ flexShrink: 0 }} />
+                    <r.icon size={15} color="var(--ink-muted)" style={{ flexShrink: 0 }} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#111B21", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {r.primary}
                       </div>
-                      <div style={{ fontSize: 12, color: "#667781", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.secondary}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.secondary}</div>
                     </div>
                     {r.key.startsWith("order-") && (
                       <span
@@ -210,11 +210,11 @@ export default function GlobalSearch() {
                           height: 7,
                           borderRadius: "50%",
                           flexShrink: 0,
-                          background: STATUS_COLOR[results.orders.find((o) => `order-${o.id}` === r.key)?.status ?? ""] ?? "#8696A0",
+                          background: STATUS_COLOR[results.orders.find((o) => `order-${o.id}` === r.key)?.status ?? ""] ?? "var(--ink-faint)",
                         }}
                       />
                     )}
-                    {i === activeIndex && <CornerDownLeft size={13} color="#8696A0" style={{ flexShrink: 0 }} />}
+                    {i === activeIndex && <CornerDownLeft size={13} color="var(--ink-faint)" style={{ flexShrink: 0 }} />}
                   </button>
                 ))
               )}

@@ -64,7 +64,7 @@ function Thumb({ src, alt, size = 36 }: { src: string | null; alt: string; size?
       <img
         src={src}
         alt={alt}
-        style={{ width: size, height: size, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid #E9EDEF' }}
+        style={{ width: size, height: size, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--surface-border)' }}
       />
     )
   }
@@ -72,11 +72,11 @@ function Thumb({ src, alt, size = 36 }: { src: string | null; alt: string; size?
     <div
       style={{
         width: size, height: size, borderRadius: 8, flexShrink: 0,
-        background: '#F0F2F5', border: '1px solid #E9EDEF',
+        background: 'var(--surface)', border: '1px solid var(--surface-border)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}
     >
-      <ImageOff size={size * 0.4} color="#8696A0" />
+      <ImageOff size={size * 0.4} color="var(--ink-faint)" />
     </div>
   )
 }
@@ -442,7 +442,7 @@ export default function MasterCatalogClient() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 rounded-xl" style={{ background: '#F0F2F5' }}>
+      <div className="flex gap-1 p-1 rounded-xl" style={{ background: 'var(--surface)' }}>
         {([
           { id: 'catalog', label: 'Master Catalog', icon: Package },
           { id: 'enable', label: 'Enable for Shops', icon: Store },
@@ -453,9 +453,9 @@ export default function MasterCatalogClient() {
             onClick={() => setActiveTab(tab.id)}
             className={clsx(
               'flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all',
-              activeTab === tab.id ? 'text-[#128C7E]' : 'text-ink-muted hover:text-ink'
+              activeTab === tab.id ? 'text-[var(--brand-dark)]' : 'text-ink-muted hover:text-ink'
             )}
-            style={activeTab === tab.id ? { background: '#FFFFFF', border: '1px solid #E9EDEF', boxShadow: '0 1px 3px rgba(17,27,33,0.08)' } : {}}
+            style={activeTab === tab.id ? { background: '#FFFFFF', border: '1px solid var(--surface-border)', boxShadow: '0 1px 3px rgba(11,28,48,0.08)' } : {}}
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
@@ -468,7 +468,7 @@ export default function MasterCatalogClient() {
         <div className="grid gap-4" style={{ gridTemplateColumns: '280px 1fr', alignItems: 'start' }}>
           {/* Sidebar */}
           <div className="card p-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', maxHeight: 640 }}>
-            <div style={{ padding: 12, borderBottom: '1px solid #E9EDEF' }}>
+            <div style={{ padding: 12, borderBottom: '1px solid var(--surface-border)' }}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                 <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search categories…" className="input pl-9" />
@@ -486,23 +486,23 @@ export default function MasterCatalogClient() {
                       onClick={() => setSelectedCategoryId(cat.id)}
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                        background: selected ? '#DCF8C6' : 'transparent', border: 'none', borderBottom: '1px solid #F0F2F5',
+                        background: selected ? 'var(--brand-light)' : 'transparent', border: 'none', borderBottom: '1px solid var(--surface)',
                         cursor: 'pointer', textAlign: 'left',
                       }}
                     >
                       <Thumb src={cat.image_url} alt={cat.name} size={30} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: selected ? '#128C7E' : '#111B21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 600, color: selected ? 'var(--brand-dark)' : 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {cat.name}
                           </span>
                           {!cat.is_active && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: '#8696A0', background: '#F0F2F5', padding: '1px 5px', borderRadius: 999 }}>OFF</span>
+                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--ink-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 999 }}>OFF</span>
                           )}
                         </div>
-                        <span style={{ fontSize: 11, color: '#8696A0' }}>{cat.master_products?.length ?? 0} items · in {enabledShopCount(cat.id)} shop{enabledShopCount(cat.id) === 1 ? '' : 's'}</span>
+                        <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{cat.master_products?.length ?? 0} items · in {enabledShopCount(cat.id)} shop{enabledShopCount(cat.id) === 1 ? '' : 's'}</span>
                       </div>
-                      <ChevronRight size={14} color="#8696A0" style={{ flexShrink: 0 }} />
+                      <ChevronRight size={14} color="var(--ink-faint)" style={{ flexShrink: 0 }} />
                     </button>
                   )
                 })
@@ -523,7 +523,7 @@ export default function MasterCatalogClient() {
                       <h2 className="font-semibold text-ink text-lg">{selectedCategory.name}</h2>
                       <span
                         className="text-xs px-2 py-0.5 rounded-full font-medium"
-                        style={{ background: selectedCategory.is_active ? '#DCF8C6' : '#F0F2F5', color: selectedCategory.is_active ? '#128C7E' : '#667781' }}
+                        style={{ background: selectedCategory.is_active ? 'var(--brand-light)' : 'var(--surface)', color: selectedCategory.is_active ? 'var(--brand-dark)' : 'var(--ink-muted)' }}
                       >
                         {selectedCategory.is_active ? 'Active' : 'Inactive'}
                       </span>
@@ -554,7 +554,7 @@ export default function MasterCatalogClient() {
                 {!selectedCategory.master_products?.length ? (
                   <div className="p-6 text-center text-ink-muted text-sm">
                     No products yet.{' '}
-                    <button onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }} className="text-[#128C7E] hover:underline">
+                    <button onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }} className="text-[var(--brand-dark)] hover:underline">
                       Add the first one
                     </button>
                   </div>
@@ -614,7 +614,7 @@ export default function MasterCatalogClient() {
       {activeTab === 'enable' && (
         <div className="grid gap-4" style={{ gridTemplateColumns: '280px 1fr', alignItems: 'start' }}>
           <div className="card p-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', maxHeight: 640 }}>
-            <div style={{ padding: 12, borderBottom: '1px solid #E9EDEF', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ padding: 12, borderBottom: '1px solid var(--surface-border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
                 <input value={shopSearch} onChange={(e) => setShopSearch(e.target.value)} placeholder="Search shops…" className="input pl-9" />
@@ -622,20 +622,20 @@ export default function MasterCatalogClient() {
               <div className="flex items-center justify-between text-xs text-ink-muted">
                 <span>{selectedShopIds.size} selected</span>
                 <div className="flex gap-2">
-                  <button className="text-[#128C7E] hover:underline" onClick={() => setSelectedShopIds(new Set(filteredShopsForEnable.map((s) => s.id)))}>All</button>
-                  <button className="text-[#128C7E] hover:underline" onClick={() => setSelectedShopIds(new Set())}>None</button>
+                  <button className="text-[var(--brand-dark)] hover:underline" onClick={() => setSelectedShopIds(new Set(filteredShopsForEnable.map((s) => s.id)))}>All</button>
+                  <button className="text-[var(--brand-dark)] hover:underline" onClick={() => setSelectedShopIds(new Set())}>None</button>
                 </div>
               </div>
             </div>
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {filteredShopsForEnable.map((shop) => (
-                <label key={shop.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: '1px solid #F0F2F5', cursor: 'pointer' }}>
+                <label key={shop.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: '1px solid var(--surface)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={selectedShopIds.has(shop.id)} onChange={() => toggleShopSelection(shop.id)} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: '#111B21', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {shop.name}{!shop.is_active && <span style={{ color: '#8696A0' }}> (inactive)</span>}
+                    <div style={{ fontSize: 13, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {shop.name}{!shop.is_active && <span style={{ color: 'var(--ink-faint)' }}> (inactive)</span>}
                     </div>
-                    {shop.city && <div style={{ fontSize: 11, color: '#8696A0' }}>{shop.city}</div>}
+                    {shop.city && <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{shop.city}</div>}
                   </div>
                 </label>
               ))}
@@ -665,7 +665,7 @@ export default function MasterCatalogClient() {
                       disabled={busy || selectedShopIds.size === 0}
                       onClick={() => bulkToggleCategory(cat.id, true)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
-                      style={{ color: '#128C7E', background: 'rgba(37,211,102,0.1)' }}
+                      style={{ color: 'var(--brand-dark)', background: 'rgba(0,104,95,0.1)' }}
                     >
                       <Check className="w-3.5 h-3.5" /> Enable
                     </button>
@@ -673,7 +673,7 @@ export default function MasterCatalogClient() {
                       disabled={busy || selectedShopIds.size === 0}
                       onClick={() => bulkToggleCategory(cat.id, false)}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
-                      style={{ color: '#C0392B', background: 'rgba(192,57,43,0.08)' }}
+                      style={{ color: 'var(--error)', background: 'rgba(186,26,26,0.08)' }}
                     >
                       <X className="w-3.5 h-3.5" /> Disable
                     </button>
@@ -707,7 +707,7 @@ export default function MasterCatalogClient() {
                   <div className="flex items-center gap-2 mb-1">
                     <p className="font-semibold text-ink">{req.name}</p>
                     {req.brand && <span className="text-xs text-ink-muted">{req.brand}</span>}
-                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: '#F0F2F5', color: '#667781' }}>{req.unit}</span>
+                    <span className="text-xs px-2 py-0.5 rounded" style={{ background: 'var(--surface)', color: 'var(--ink-muted)' }}>{req.unit}</span>
                   </div>
                   <p className="text-xs text-ink-muted">
                     From: <span className="text-ink">{req.shops?.name}</span>
@@ -722,7 +722,7 @@ export default function MasterCatalogClient() {
                   <button onClick={() => handleRequest(req, 'approved_local')} className="btn-secondary text-xs flex items-center gap-1" title="Approve only for this shop">
                     <Store className="w-3 h-3" /> Shop Only
                   </button>
-                  <button onClick={() => handleRequest(req, 'rejected')} className="btn-ghost text-xs flex items-center gap-1" style={{ color: '#C0392B' }}>
+                  <button onClick={() => handleRequest(req, 'rejected')} className="btn-ghost text-xs flex items-center gap-1" style={{ color: 'var(--error)' }}>
                     <X className="w-3 h-3" /> Reject
                   </button>
                 </div>
@@ -736,7 +736,7 @@ export default function MasterCatalogClient() {
       {(showAddCategory || editingCategory) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => { setShowAddCategory(false); setEditingCategory(null) }} />
-          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)' }}>
             <div className="p-6">
               <h2 className="font-display font-bold text-ink text-lg mb-5">{editingCategory ? 'Edit Category' : 'Add Category'}</h2>
               <form onSubmit={editingCategory ? handleEditCategory : handleAddCategory} className="space-y-4">
@@ -774,7 +774,7 @@ export default function MasterCatalogClient() {
       {(showAddProduct || editingProduct) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => { setShowAddProduct(false); setEditingProduct(null) }} />
-          <div className="relative rounded-2xl w-full max-w-md shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <div className="relative rounded-2xl w-full max-w-md shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)' }}>
             <div className="p-6">
               <h2 className="font-display font-bold text-ink text-lg mb-1">{editingProduct ? 'Edit Product' : 'Add Master Product'}</h2>
               <p className="text-ink-muted text-sm mb-5">
@@ -818,7 +818,7 @@ export default function MasterCatalogClient() {
       {showApproveGlobal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/60" onClick={() => { setShowApproveGlobal(null); setApproveCategoryId('') }} />
-          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
+          <div className="relative rounded-2xl w-full max-w-sm shadow-2xl" style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)' }}>
             <div className="p-6">
               <h2 className="font-display font-bold text-ink text-lg mb-1">Add to Master Catalog</h2>
               <p className="text-ink-muted text-sm mb-5">
@@ -846,8 +846,8 @@ export default function MasterCatalogClient() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-ink flex items-center gap-2" style={{ background: '#FFFFFF', border: '1px solid #E9EDEF' }}>
-          <Check className="w-4 h-4" style={{ color: '#128C7E' }} />
+        <div className="fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 shadow-xl text-sm text-ink flex items-center gap-2" style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)' }}>
+          <Check className="w-4 h-4" style={{ color: 'var(--brand-dark)' }} />
           {toast}
         </div>
       )}

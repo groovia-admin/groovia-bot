@@ -10,7 +10,7 @@ export async function GET() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: '#25D366',
+          background: '#00685F',
           color: '#fff',
           fontSize: 288,
           fontWeight: 800,

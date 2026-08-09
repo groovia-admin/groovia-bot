@@ -171,13 +171,13 @@ export default async function DashboardPage() {
         <a
           href="/dashboard/inventory"
           className="flex items-center gap-3 rounded-xl px-4 py-3 transition-colors hover:opacity-90"
-          style={{ background: '#FDECEA', border: '1px solid #F5C6C2' }}
+          style={{ background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)' }}
         >
-          <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: '#C0392B' }} />
-          <p className="text-sm flex-1" style={{ color: '#C0392B' }}>
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="text-sm flex-1" style={{ color: 'var(--error)' }}>
             <span className="font-semibold">{lowStockCount} product{lowStockCount === 1 ? '' : 's'}</span> running low on stock.
           </p>
-          <span className="text-xs font-medium flex-shrink-0" style={{ color: '#C0392B' }}>Review inventory →</span>
+          <span className="text-xs font-medium flex-shrink-0" style={{ color: 'var(--error)' }}>Review inventory →</span>
         </a>
       )}
 

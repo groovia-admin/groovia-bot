@@ -108,7 +108,7 @@ const SUB: Record<
   },
   cancelled: {
     label: "Cancelled",
-    color: "#667781",
+    color: "var(--ink-muted)",
     bg: "rgba(148,163,184,0.1)",
   },
   expired: {
@@ -642,7 +642,7 @@ export default function ShopsClient({
   const S = {
     card: {
       background: "#FFFFFF",
-      border: "1px solid #E9EDEF",
+      border: "1px solid var(--surface-border)",
       borderRadius: 12,
       padding: 20,
     } as React.CSSProperties,
@@ -681,9 +681,9 @@ export default function ShopsClient({
       width: "100%",
       padding: "9px 14px",
       borderRadius: 8,
-      border: "1px solid #E9EDEF",
-      background: "#F0F2F5",
-      color: "#111B21",
+      border: "1px solid var(--surface-border)",
+      background: "var(--surface)",
+      color: "var(--ink)",
       fontSize: 13,
       outline: "none",
       fontFamily: "inherit",
@@ -693,7 +693,7 @@ export default function ShopsClient({
     label: {
       display: "block",
       fontSize: 12,
-      color: "#667781",
+      color: "var(--ink-muted)",
       marginBottom: 6,
       fontWeight: 600,
     } as React.CSSProperties,
@@ -704,16 +704,16 @@ export default function ShopsClient({
       fontSize: 11,
       textTransform: "uppercase",
       letterSpacing: "0.7px",
-      color: "#8696A0",
+      color: "var(--ink-faint)",
       fontWeight: 600,
-      borderBottom: "1px solid #E9EDEF",
+      borderBottom: "1px solid var(--surface-border)",
     } as React.CSSProperties,
 
     td: {
       padding: "12px 16px",
       fontSize: 13,
-      color: "#667781",
-      borderBottom: "1px solid #F0F2F5",
+      color: "var(--ink-muted)",
+      borderBottom: "1px solid var(--surface)",
     } as React.CSSProperties,
   };
 
@@ -738,7 +738,7 @@ export default function ShopsClient({
             style={{
               fontSize: 22,
               fontWeight: 800,
-              color: "#111B21",
+              color: "var(--ink)",
               margin: 0,
             }}
           >
@@ -748,7 +748,7 @@ export default function ShopsClient({
           <p
             style={{
               fontSize: 13,
-              color: "#667781",
+              color: "var(--ink-muted)",
               marginTop: 2,
               marginBottom: 0,
             }}
@@ -759,7 +759,7 @@ export default function ShopsClient({
 
         <button
           type="button"
-          style={S.btn("#25D366", "#fff")}
+          style={S.btn("var(--brand)", "#fff")}
           onClick={() => {
             setShowAdd(true);
             setAddError("");
@@ -783,8 +783,8 @@ export default function ShopsClient({
           {
             label: "Total Shops",
             value: stats.total,
-            icon: <Store size={16} color="#667781" />,
-            color: "#111B21",
+            icon: <Store size={16} color="var(--ink-muted)" />,
+            color: "var(--ink)",
           },
           {
             label: "Active",
@@ -801,8 +801,8 @@ export default function ShopsClient({
           {
             label: "Paying",
             value: stats.paying,
-            icon: <CheckCircle size={16} color="#25D366" />,
-            color: "#25D366",
+            icon: <CheckCircle size={16} color="var(--brand)" />,
+            color: "var(--brand)",
           },
         ].map((stat) => (
           <div key={stat.label} style={S.card}>
@@ -816,7 +816,7 @@ export default function ShopsClient({
               <span
                 style={{
                   fontSize: 12,
-                  color: "#667781",
+                  color: "var(--ink-muted)",
                 }}
               >
                 {stat.label}
@@ -858,7 +858,7 @@ export default function ShopsClient({
               left: 12,
               top: "50%",
               transform: "translateY(-50%)",
-              color: "#8696A0",
+              color: "var(--ink-faint)",
             }}
           />
 
@@ -938,7 +938,7 @@ export default function ShopsClient({
                       ...S.td,
                       textAlign: "center",
                       padding: 48,
-                      color: "#8696A0",
+                      color: "var(--ink-faint)",
                     }}
                   >
                     {search || filterStatus !== "all"
@@ -964,7 +964,7 @@ export default function ShopsClient({
                       }}
                       onMouseEnter={(event) => {
                         event.currentTarget.style.background =
-                          "#F5F6F6";
+                          "var(--surface-hover)";
                       }}
                       onMouseLeave={(event) => {
                         event.currentTarget.style.background = "";
@@ -990,14 +990,14 @@ export default function ShopsClient({
                               flexShrink: 0,
                             }}
                           >
-                            <Store size={14} color="#25D366" />
+                            <Store size={14} color="var(--brand)" />
                           </div>
 
                           <div>
                             <div
                               style={{
                                 fontWeight: 600,
-                                color: "#111B21",
+                                color: "var(--ink)",
                                 fontSize: 13,
                               }}
                             >
@@ -1007,7 +1007,7 @@ export default function ShopsClient({
                             <div
                               style={{
                                 fontSize: 11,
-                                color: "#8696A0",
+                                color: "var(--ink-faint)",
                               }}
                             >
                               /{shop.slug}
@@ -1034,7 +1034,7 @@ export default function ShopsClient({
                         ) : (
                           <span
                             style={{
-                              color: "#8696A0",
+                              color: "var(--ink-faint)",
                             }}
                           >
                             —
@@ -1054,7 +1054,7 @@ export default function ShopsClient({
                           <span
                             style={{
                               fontSize: 12,
-                              color: trialExpired ? "#ef4444" : "#667781",
+                              color: trialExpired ? "#ef4444" : "var(--ink-muted)",
                             }}
                           >
                             {trialExpired
@@ -1069,7 +1069,7 @@ export default function ShopsClient({
                         ) : (
                           <span
                             style={{
-                              color: "#8696A0",
+                              color: "var(--ink-faint)",
                             }}
                           >
                             —
@@ -1132,7 +1132,7 @@ export default function ShopsClient({
                               background: "none",
                               border: "none",
                               cursor: isUpdating ? "not-allowed" : "pointer",
-                              color: "#667781",
+                              color: "var(--ink-muted)",
                               padding: "4px 6px",
                               borderRadius: 6,
                               opacity: isUpdating ? 0.5 : 1,
@@ -1186,7 +1186,7 @@ export default function ShopsClient({
                                   zIndex: 20,
                                   width: 200,
                                   background: "#FFFFFF",
-                                  border: "1px solid #E9EDEF",
+                                  border: "1px solid var(--surface-border)",
                                   borderRadius: 12,
                                   boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
                                   padding: "4px 0",
@@ -1239,7 +1239,7 @@ export default function ShopsClient({
                                     background: "none",
                                     border: "none",
                                     cursor: "pointer",
-                                    color: "#111B21",
+                                    color: "var(--ink)",
                                     fontSize: 13,
                                     fontFamily: "inherit",
                                   }}
@@ -1250,7 +1250,7 @@ export default function ShopsClient({
 
                                 <div
                                   style={{
-                                    borderTop: "1px solid #E9EDEF",
+                                    borderTop: "1px solid var(--surface-border)",
                                     margin: "4px 0",
                                   }}
                                 />
@@ -1259,7 +1259,7 @@ export default function ShopsClient({
                                   style={{
                                     padding: "4px 14px",
                                     fontSize: 11,
-                                    color: "#8696A0",
+                                    color: "var(--ink-faint)",
                                     fontWeight: 600,
                                     textTransform: "uppercase",
                                     letterSpacing: "0.6px",
@@ -1292,8 +1292,8 @@ export default function ShopsClient({
                                         : "pointer",
                                       color:
                                         shop.subscription_status === value
-                                          ? "#25D366"
-                                          : "#111B21",
+                                          ? "var(--brand)"
+                                          : "var(--ink)",
                                       fontSize: 13,
                                       fontFamily: "inherit",
                                     }}
@@ -1317,7 +1317,7 @@ export default function ShopsClient({
 
                                 <div
                                   style={{
-                                    borderTop: "1px solid #E9EDEF",
+                                    borderTop: "1px solid var(--surface-border)",
                                     margin: "4px 0",
                                   }}
                                 />
@@ -1333,7 +1333,7 @@ export default function ShopsClient({
                                     alignItems: "center",
                                     gap: 8,
                                     padding: "8px 14px",
-                                    color: "#111B21",
+                                    color: "var(--ink)",
                                     fontSize: 13,
                                     textDecoration: "none",
                                   }}
@@ -1359,9 +1359,9 @@ export default function ShopsClient({
           <div
             style={{
               padding: "10px 16px",
-              borderTop: "1px solid #E9EDEF",
+              borderTop: "1px solid var(--surface-border)",
               fontSize: 12,
-              color: "#8696A0",
+              color: "var(--ink-faint)",
             }}
           >
             Showing {filtered.length} of {shops.length} shops
@@ -1395,7 +1395,7 @@ export default function ShopsClient({
             style={{
               position: "relative",
               background: "#FFFFFF",
-              border: "1px solid #E9EDEF",
+              border: "1px solid var(--surface-border)",
               borderRadius: 16,
               width: "100%",
               maxWidth: 440,
@@ -1408,7 +1408,7 @@ export default function ShopsClient({
               style={{
                 fontSize: 16,
                 fontWeight: 700,
-                color: "#111B21",
+                color: "var(--ink)",
                 marginTop: 0,
                 marginBottom: 4,
               }}
@@ -1419,7 +1419,7 @@ export default function ShopsClient({
             <p
               style={{
                 fontSize: 12,
-                color: "#667781",
+                color: "var(--ink-muted)",
                 marginTop: 0,
                 marginBottom: 20,
               }}
@@ -1445,7 +1445,7 @@ export default function ShopsClient({
                 >
                   <div
                     style={{
-                      color: "#128C7E",
+                      color: "var(--brand-dark)",
                       fontWeight: 700,
                       fontSize: 14,
                       marginBottom: 6,
@@ -1456,7 +1456,7 @@ export default function ShopsClient({
 
                   <div
                     style={{
-                      color: "#111B21",
+                      color: "var(--ink)",
                       fontSize: 12,
                     }}
                   >
@@ -1525,7 +1525,7 @@ export default function ShopsClient({
                   type="button"
                   onClick={closeAddModal}
                   style={{
-                    ...S.btn("#25D366", "#fff"),
+                    ...S.btn("var(--brand)", "#fff"),
                     justifyContent: "center",
                   }}
                 >
@@ -1559,7 +1559,7 @@ export default function ShopsClient({
                     Slug *{" "}
                     <span
                       style={{
-                        color: "#8696A0",
+                        color: "var(--ink-faint)",
                         fontWeight: 400,
                       }}
                     >
@@ -1643,7 +1643,7 @@ export default function ShopsClient({
                       style={{
                         margin: "5px 0 0",
                         fontSize: 12,
-                        color: "#667781",
+                        color: "var(--ink-muted)",
                       }}
                     >
                       Looking up city and state...
@@ -1655,7 +1655,7 @@ export default function ShopsClient({
                       style={{
                         margin: "5px 0 0",
                         fontSize: 12,
-                        color: "#C0392B",
+                        color: "var(--error)",
                       }}
                     >
                       {pinError}
@@ -1743,7 +1743,7 @@ export default function ShopsClient({
 
                 <div
                   style={{
-                    borderTop: "1px solid #E9EDEF",
+                    borderTop: "1px solid var(--surface-border)",
                     paddingTop: 14,
                     marginTop: 2,
                   }}
@@ -1751,7 +1751,7 @@ export default function ShopsClient({
                   <div
                     style={{
                       fontSize: 12,
-                      color: "#111B21",
+                      color: "var(--ink)",
                       fontWeight: 700,
                       marginBottom: 10,
                     }}
@@ -1841,7 +1841,7 @@ export default function ShopsClient({
                       border: "1px solid rgba(239,68,68,0.3)",
                       borderRadius: 8,
                       padding: "8px 12px",
-                      color: "#C0392B",
+                      color: "var(--error)",
                       fontSize: 12,
                     }}
                   >
@@ -1861,7 +1861,7 @@ export default function ShopsClient({
                     onClick={closeAddModal}
                     disabled={saving}
                     style={{
-                      ...S.btn("#E9EDEF", "#667781"),
+                      ...S.btn("var(--surface-border)", "var(--ink-muted)"),
                       flex: 1,
                       justifyContent: "center",
                       opacity: saving ? 0.6 : 1,
@@ -1874,7 +1874,7 @@ export default function ShopsClient({
                     type="submit"
                     disabled={saving}
                     style={{
-                      ...S.btn("#25D366", "#fff"),
+                      ...S.btn("var(--brand)", "#fff"),
                       flex: 1,
                       justifyContent: "center",
                       opacity: saving ? 0.6 : 1,
@@ -1910,7 +1910,7 @@ export default function ShopsClient({
             style={{
               position: "relative",
               background: "#FFFFFF",
-              border: "1px solid #E9EDEF",
+              border: "1px solid var(--surface-border)",
               borderRadius: 16,
               width: "100%",
               maxWidth: 440,
@@ -1919,21 +1919,21 @@ export default function ShopsClient({
               overflowY: "auto",
             }}
           >
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "#111B21", marginTop: 0, marginBottom: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 4 }}>
               WhatsApp Connection — {whatsappShop.name}
             </h2>
-            <p style={{ fontSize: 12, color: "#667781", marginTop: 0, marginBottom: 20 }}>
+            <p style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 0, marginBottom: 20 }}>
               Find these values in Meta Business Manager → WhatsApp Manager → API Setup for this shop&apos;s number.
             </p>
 
             {whatsappLoading ? (
-              <p style={{ fontSize: 13, color: "#8696A0" }}>Loading…</p>
+              <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>Loading…</p>
             ) : (
               <form onSubmit={handleSaveWhatsapp} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {whatsappError && (
                   <div
                     style={{
-                      color: "#C0392B",
+                      color: "var(--error)",
                       background: "rgba(239,68,68,0.1)",
                       border: "1px solid rgba(239,68,68,0.2)",
                       borderRadius: 8,
@@ -1989,14 +1989,14 @@ export default function ShopsClient({
                     type="button"
                     onClick={closeWhatsappModal}
                     disabled={whatsappSaving}
-                    style={{ ...S.btn("#E9EDEF", "#667781"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
+                    style={{ ...S.btn("var(--surface-border)", "var(--ink-muted)"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={whatsappSaving}
-                    style={{ ...S.btn("#25D366", "#fff"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
+                    style={{ ...S.btn("var(--brand)", "#fff"), flex: 1, justifyContent: "center", opacity: whatsappSaving ? 0.6 : 1 }}
                   >
                     {whatsappSaving ? "Saving…" : "Save connection"}
                   </button>
@@ -2016,11 +2016,11 @@ export default function ShopsClient({
             right: 24,
             zIndex: 99,
             background: "#FFFFFF",
-            border: "1px solid #E9EDEF",
+            border: "1px solid var(--surface-border)",
             borderRadius: 12,
             padding: "12px 20px",
             fontSize: 13,
-            color: "#111B21",
+            color: "var(--ink)",
             display: "flex",
             alignItems: "center",
             gap: 8,

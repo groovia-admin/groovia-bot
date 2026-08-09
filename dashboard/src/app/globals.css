@@ -2,18 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ── CSS custom properties — WhatsApp-derived light theme ── */
+/* ── CSS custom properties — teal brand theme ──
+   Same token names as the old WhatsApp-derived palette (so every existing
+   Tailwind class and inline var() reference keeps working unchanged) —
+   only the hex values moved. New tokens (--error*) consolidate what used
+   to be three different reds (#C0392B, #ef4444, #EA4335) picked ad hoc
+   per file into one. */
 :root {
-  --surface:        #F0F2F5;
+  --surface:        #F8F9FF;
   --surface-card:   #FFFFFF;
-  --surface-hover:  #F5F6F6;
-  --surface-border: #E9EDEF;
-  --brand:          #25D366;
-  --brand-light:    #DCF8C6;
-  --brand-dark:     #128C7E;
-  --ink:            #111B21;
-  --ink-muted:      #667781;
-  --ink-faint:      #8696A0;
+  --surface-hover:  #EFF4FF;
+  --surface-border: #BCC9C6;
+  --brand:          #00685F;
+  --brand-light:    #89F5E7;
+  --brand-dark:     #005049;
+  --ink:            #0B1C30;
+  --ink-muted:      #3D4947;
+  --ink-faint:      #6D7A77;
+  --error:          #BA1A1A;
+  --error-light:    #FFDAD6;
+  --error-dark:     #93000A;
 }
 
 @layer base {
@@ -58,7 +66,7 @@
     @apply rounded-xl p-5;
     background-color: var(--surface-card);
     border: 1px solid var(--surface-border);
-    box-shadow: 0 1px 2px rgba(17,27,33,0.04);
+    box-shadow: 0 1px 2px rgba(11,28,48,0.04);
   }
 
   /* ── Input ── */
@@ -72,7 +80,7 @@
   .input::placeholder { color: var(--ink-faint); }
   .input:focus {
     border-color: var(--brand-dark);
-    box-shadow: 0 0 0 2px rgba(18,140,126,0.15);
+    box-shadow: 0 0 0 2px rgba(0,80,73,0.15);
   }
 
   /* ── Buttons ── */
@@ -98,11 +106,11 @@
 
   .btn-danger {
     @apply btn;
-    background-color: rgba(234,67,53,0.08);
-    color: #EA4335;
-    border: 1px solid rgba(234,67,53,0.2);
+    background-color: var(--error-light);
+    color: var(--error);
+    border: 1px solid var(--error);
   }
-  .btn-danger:hover:not(:disabled) { background-color: rgba(234,67,53,0.16); }
+  .btn-danger:hover:not(:disabled) { background-color: rgba(186,26,26,0.16); }
 
   .btn-ghost {
     @apply btn;

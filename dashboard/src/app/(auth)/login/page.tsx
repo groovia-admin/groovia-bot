@@ -115,12 +115,12 @@ export default function LoginPage() {
   }
 
   const s = {
-    page:  { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: '#F0F2F5' },
-    card:  { background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px', boxShadow: '0 2px 12px rgba(17,27,33,0.06)' },
-    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #E9EDEF', background: '#F7F8FA', color: '#111B21', fontSize: '14px', outline: 'none', fontFamily: 'inherit' } as React.CSSProperties,
-    btn:   { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '8px', border: 'none', background: '#25D366', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative', overflow: 'hidden' } as React.CSSProperties,
-    label: { display: 'block', fontSize: '12px', color: '#667781', marginBottom: '6px', fontWeight: 600 } as React.CSSProperties,
-    error: { background: '#FDECEA', border: '1px solid #F5C6C2', color: '#C0392B', padding: '10px 14px', borderRadius: '8px', fontSize: '12px' },
+    page:  { minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'var(--surface)' },
+    card:  { background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: '16px', padding: '28px', width: '100%', maxWidth: '380px', boxShadow: '0 2px 12px rgba(11,28,48,0.06)' },
+    input: { width: '100%', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--surface-border)', background: '#F7F8FA', color: 'var(--ink)', fontSize: '14px', outline: 'none', fontFamily: 'inherit' } as React.CSSProperties,
+    btn:   { width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '11px', borderRadius: '8px', border: 'none', background: 'var(--brand)', color: '#fff', fontSize: '14px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', position: 'relative', overflow: 'hidden' } as React.CSSProperties,
+    label: { display: 'block', fontSize: '12px', color: 'var(--ink-muted)', marginBottom: '6px', fontWeight: 600 } as React.CSSProperties,
+    error: { background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)', color: 'var(--error)', padding: '10px 14px', borderRadius: '8px', fontSize: '12px' },
   }
 
   // Cart-runs-through-the-button loading state — icon-only (no text) micro
@@ -188,7 +188,7 @@ export default function LoginPage() {
             interaction used on the submit buttons below. */}
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div className="login-logo-wrap" style={{ position: 'relative', width: '72px', height: '72px', margin: '0 auto 10px' }}>
-            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px dashed rgba(37,211,102,0.35)' }} />
+            <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px dashed rgba(0,104,95,0.35)' }} />
             <div
               style={{
                 position: 'absolute',
@@ -197,8 +197,8 @@ export default function LoginPage() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 borderRadius: '50%',
-                background: '#25D366',
-                boxShadow: '0 2px 8px rgba(37,211,102,0.35)',
+                background: 'var(--brand)',
+                boxShadow: '0 2px 8px rgba(0,104,95,0.35)',
               }}
             >
               <span style={{ color: '#fff', fontWeight: 800, fontSize: '22px' }}>G</span>
@@ -214,25 +214,25 @@ export default function LoginPage() {
                   height: '22px',
                   borderRadius: '50%',
                   background: '#fff',
-                  border: '1px solid #E9EDEF',
+                  border: '1px solid var(--surface-border)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  boxShadow: '0 1px 4px rgba(17,27,33,0.15)',
+                  boxShadow: '0 1px 4px rgba(11,28,48,0.15)',
                 }}
               >
-                <ShoppingCart size={12} color="#128C7E" />
+                <ShoppingCart size={12} color="var(--brand-dark)" />
               </div>
             </div>
           </div>
-          <div style={{ fontSize: '22px', fontWeight: 800, color: '#111B21' }}>GrooVia</div>
-          <div style={{ fontSize: '13px', color: '#667781', marginTop: '2px' }}>Admin Dashboard</div>
+          <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--ink)' }}>GrooVia</div>
+          <div style={{ fontSize: '13px', color: 'var(--ink-muted)', marginTop: '2px' }}>Admin Dashboard</div>
         </div>
 
         <div style={s.card}>
           <div style={{ marginBottom: '20px' }}>
-            <div style={{ fontSize: '16px', fontWeight: 700, color: '#111B21', marginBottom: '4px' }}>Sign in</div>
-            <div style={{ fontSize: '12px', color: '#667781' }}>
+            <div style={{ fontSize: '16px', fontWeight: 700, color: 'var(--ink)', marginBottom: '4px' }}>Sign in</div>
+            <div style={{ fontSize: '12px', color: 'var(--ink-muted)' }}>
               {method === 'password'
                 ? 'Platform admin? Enter your email and password'
                 : "Shop owner, manager or staff — we'll text you a one-time code"}
@@ -240,17 +240,17 @@ export default function LoginPage() {
           </div>
 
           {/* Method toggle */}
-          <div style={{ display: 'flex', borderRadius: '8px', padding: '4px', background: '#F0F2F5', marginBottom: '20px', gap: '4px' }}>
+          <div style={{ display: 'flex', borderRadius: '8px', padding: '4px', background: 'var(--surface)', marginBottom: '20px', gap: '4px' }}>
             <button
               type="button"
               onClick={() => switchMethod('password')}
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 padding: '8px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit', border: method === 'password' ? '1px solid #E9EDEF' : '1px solid transparent',
+                fontFamily: 'inherit', border: method === 'password' ? '1px solid var(--surface-border)' : '1px solid transparent',
                 background: method === 'password' ? '#FFFFFF' : 'transparent',
-                color: method === 'password' ? '#128C7E' : '#8696A0',
-                boxShadow: method === 'password' ? '0 1px 3px rgba(17,27,33,0.08)' : 'none',
+                color: method === 'password' ? 'var(--brand-dark)' : 'var(--ink-faint)',
+                boxShadow: method === 'password' ? '0 1px 3px rgba(11,28,48,0.08)' : 'none',
               }}
             >
               <Mail size={13} /> Email
@@ -261,10 +261,10 @@ export default function LoginPage() {
               style={{
                 flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                 padding: '8px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, cursor: 'pointer',
-                fontFamily: 'inherit', border: method === 'phone' ? '1px solid #E9EDEF' : '1px solid transparent',
+                fontFamily: 'inherit', border: method === 'phone' ? '1px solid var(--surface-border)' : '1px solid transparent',
                 background: method === 'phone' ? '#FFFFFF' : 'transparent',
-                color: method === 'phone' ? '#128C7E' : '#8696A0',
-                boxShadow: method === 'phone' ? '0 1px 3px rgba(17,27,33,0.08)' : 'none',
+                color: method === 'phone' ? 'var(--brand-dark)' : 'var(--ink-faint)',
+                boxShadow: method === 'phone' ? '0 1px 3px rgba(11,28,48,0.08)' : 'none',
               }}
             >
               <Phone size={13} /> Phone
@@ -276,7 +276,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Email address</label>
                 <div style={{ position: 'relative' }}>
-                  <Mail size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8696A0' }} />
+                  <Mail size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
                   <input
                     type="email"
                     value={email}
@@ -292,7 +292,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Password</label>
                 <div style={{ position: 'relative' }}>
-                  <Lock size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#8696A0' }} />
+                  <Lock size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--ink-faint)' }} />
                   <input
                     type={showPw ? 'text' : 'password'}
                     value={password}
@@ -304,7 +304,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => setShowPw(!showPw)}
-                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#8696A0', cursor: 'pointer', padding: 0 }}
+                    style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--ink-faint)', cursor: 'pointer', padding: 0 }}
                   >
                     {showPw ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
@@ -326,7 +326,7 @@ export default function LoginPage() {
               <div>
                 <label style={s.label}>Phone number</label>
                 <div style={{ display: 'flex' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderRadius: '8px 0 0 8px', border: '1px solid #E9EDEF', borderRight: 'none', background: '#F0F2F5', color: '#667781', fontSize: '14px' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', padding: '0 12px', borderRadius: '8px 0 0 8px', border: '1px solid var(--surface-border)', borderRight: 'none', background: 'var(--surface)', color: 'var(--ink-muted)', fontSize: '14px' }}>
                     +91
                   </span>
                   <input
@@ -354,8 +354,8 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#667781' }}>
-                <Shield size={14} color="#25D366" />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: 'var(--ink-muted)' }}>
+                <Shield size={14} color="var(--brand)" />
                 Code sent to +91 {phone}
               </div>
 
@@ -386,7 +386,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => { setPhoneStep('input'); setOtp(''); setError('') }}
-                style={{ background: 'none', border: 'none', color: '#667781', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ background: 'none', border: 'none', color: 'var(--ink-muted)', fontSize: '12px', cursor: 'pointer', fontFamily: 'inherit' }}
               >
                 ← Change number
               </button>
@@ -394,14 +394,14 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p style={{ textAlign: 'center', fontSize: '11px', color: '#8696A0', marginTop: '20px' }}>
+        <p style={{ textAlign: 'center', fontSize: '11px', color: 'var(--ink-faint)', marginTop: '20px' }}>
           Access by invitation only ·{' '}
-          <a href="mailto:admin@groovia.co.in" style={{ color: '#128C7E' }}>admin@groovia.co.in</a>
+          <a href="mailto:admin@groovia.co.in" style={{ color: 'var(--brand-dark)' }}>admin@groovia.co.in</a>
         </p>
 
-        <p style={{ textAlign: 'center', fontSize: '11px', color: '#8696A0', marginTop: '10px' }}>
+        <p style={{ textAlign: 'center', fontSize: '11px', color: 'var(--ink-faint)', marginTop: '10px' }}>
           Powered by{' '}
-          <span style={{ color: '#128C7E', fontWeight: 700 }}>GrooVia</span>
+          <span style={{ color: 'var(--brand-dark)', fontWeight: 700 }}>GrooVia</span>
         </p>
       </div>
     </div>

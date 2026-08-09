@@ -17,8 +17,8 @@ const STATUS_STYLE: Record<string, [string, string]> = {
   preparing: ['#6D28D9', 'rgba(139,92,246,0.12)'],
   ready: ['#0F9D6B', 'rgba(16,185,129,0.12)'],
   completed: ['#4B5563', 'rgba(107,114,128,0.12)'],
-  rejected: ['#C0392B', 'rgba(239,68,68,0.12)'],
-  cancelled: ['#C0392B', 'rgba(239,68,68,0.12)'],
+  rejected: ['var(--error)', 'rgba(239,68,68,0.12)'],
+  cancelled: ['var(--error)', 'rgba(239,68,68,0.12)'],
 }
 
 const TIMELINE_STEPS: { key: string; label: string }[] = [
@@ -34,7 +34,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const { id } = await params
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid #E9EDEF', borderRadius: 12, padding: 20, color: '#667781', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
   }
 
   const adminClient = createAdminClient()
@@ -64,15 +64,15 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 760 }}>
-      <Link href="/dashboard/orders" style={{ ...S.btn('transparent', '#667781'), padding: 0, width: 'fit-content' }}>
+      <Link href="/dashboard/orders" style={{ ...S.btn('transparent', 'var(--ink-muted)'), padding: 0, width: 'fit-content' }}>
         <ArrowLeft size={15} />
         Back to orders
       </Link>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: '#111B21', margin: 0 }}>Order #{order.order_number}</h1>
-          <p style={{ fontSize: 13, color: '#667781', marginTop: 4 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Order #{order.order_number}</h1>
+          <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
             {details?.customer_name_snapshot || details?.customer_phone_snapshot || 'Unknown customer'}
             {details?.customer_phone_snapshot && details?.customer_name_snapshot ? ` · ${details.customer_phone_snapshot}` : ''}
           </p>
@@ -90,7 +90,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               href={`/api/shop/orders/${order.id}/invoice`}
               target="_blank"
               rel="noopener noreferrer"
-              style={{ ...S.btn('transparent', '#667781'), textDecoration: 'none' }}
+              style={{ ...S.btn('transparent', 'var(--ink-muted)'), textDecoration: 'none' }}
             >
               <FileText size={15} />
               Invoice
@@ -100,7 +100,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {isTerminalFail && (order.rejection_reason || order.cancellation_reason) && (
-        <div style={{ color: '#C0392B', background: '#FDECEA', border: '1px solid #F5C6C2', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ color: 'var(--error)', background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
           {order.status === 'rejected' ? 'Rejection reason: ' : 'Cancellation reason: '}
           {order.rejection_reason || order.cancellation_reason}
         </div>
@@ -121,20 +121,20 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                       width: 12,
                       height: 12,
                       borderRadius: '50%',
-                      background: reached ? '#25D366' : '#E9EDEF',
+                      background: reached ? 'var(--brand)' : 'var(--surface-border)',
                     }}
                   />
-                  <div style={{ fontSize: 11, color: reached ? '#111B21' : '#8696A0', fontWeight: reached ? 600 : 400, textAlign: 'center' }}>
+                  <div style={{ fontSize: 11, color: reached ? 'var(--ink)' : 'var(--ink-faint)', fontWeight: reached ? 600 : 400, textAlign: 'center' }}>
                     {step.label}
                   </div>
                   {value && (
-                    <div style={{ fontSize: 10, color: '#8696A0' }}>
+                    <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
                       {new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   )}
                 </div>
                 {i < TIMELINE_STEPS.length - 1 && (
-                  <div style={{ flex: 1, height: 2, background: reached ? '#25D366' : '#E9EDEF', margin: '0 4px 20px' }} />
+                  <div style={{ flex: 1, height: 2, background: reached ? 'var(--brand)' : 'var(--surface-border)', margin: '0 4px 20px' }} />
                 )}
               </div>
             )
@@ -163,7 +163,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
               ) : (
                 items.map((item) => (
                   <tr key={item.id}>
-                    <td style={{ ...S.td, color: '#111B21', fontWeight: 500 }}>{item.product_name_snapshot}</td>
+                    <td style={{ ...S.td, color: 'var(--ink)', fontWeight: 500 }}>{item.product_name_snapshot}</td>
                     <td style={S.td}>{item.quantity} {item.unit_snapshot}</td>
                     {showRevenue && <td style={S.td}>₹{Number(item.unit_price).toFixed(2)}</td>}
                     {showRevenue && <td style={{ ...S.td, textAlign: 'right' }}>₹{Number(item.subtotal).toFixed(2)}</td>}
@@ -181,10 +181,10 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           {order.delivery_fee > 0 && <Row label="Delivery fee" value={order.delivery_fee} />}
           {order.tax_amount > 0 && <Row label="Tax" value={order.tax_amount} />}
           {order.discount_amount > 0 && <Row label="Discount" value={-order.discount_amount} />}
-          <div style={{ borderTop: '1px solid #E9EDEF', marginTop: 4, paddingTop: 6 }}>
+          <div style={{ borderTop: '1px solid var(--surface-border)', marginTop: 4, paddingTop: 6 }}>
             <Row label="Total" value={order.total_amount} bold />
           </div>
-          <div style={{ fontSize: 12, color: '#667781', marginTop: 4 }}>
+          <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 4 }}>
             {order.payment_method ?? 'Payment method not set'} · {order.payment_status}
           </div>
         </div>
@@ -192,8 +192,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       {order.notes && (
         <div style={{ ...S.card }}>
-          <div style={{ fontSize: 12, color: '#667781', fontWeight: 600, marginBottom: 4 }}>Order notes</div>
-          <div style={{ fontSize: 13, color: '#111B21' }}>{order.notes}</div>
+          <div style={{ fontSize: 12, color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>Order notes</div>
+          <div style={{ fontSize: 13, color: 'var(--ink)' }}>{order.notes}</div>
         </div>
       )}
     </div>
@@ -202,8 +202,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
 function Row({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: bold ? 14 : 13, fontWeight: bold ? 700 : 400, color: '#111B21' }}>
-      <span style={{ color: bold ? '#111B21' : '#667781' }}>{label}</span>
+    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: bold ? 14 : 13, fontWeight: bold ? 700 : 400, color: 'var(--ink)' }}>
+      <span style={{ color: bold ? 'var(--ink)' : 'var(--ink-muted)' }}>{label}</span>
       <span>₹{Number(value).toFixed(2)}</span>
     </div>
   )

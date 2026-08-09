@@ -2,9 +2,9 @@ export const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "9px 14px",
   borderRadius: 8,
-  border: "1px solid #E9EDEF",
+  border: "1px solid var(--surface-border)",
   background: "#FFFFFF",
-  color: "#111B21",
+  color: "var(--ink)",
   fontSize: 13,
   outline: "none",
   fontFamily: "inherit",
@@ -14,7 +14,7 @@ export const inputStyle: React.CSSProperties = {
 export const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 12,
-  color: "#667781",
+  color: "var(--ink-muted)",
   marginBottom: 6,
   fontWeight: 600,
 };
@@ -27,7 +27,7 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
   padding: "9px 16px",
   borderRadius: 8,
   border: "none",
-  background: "#25D366",
+  background: "var(--brand)",
   color: "#fff",
   fontSize: 13,
   fontWeight: 600,
@@ -39,27 +39,27 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
 
 export const noticeStyle: React.CSSProperties = {
   fontSize: 11.5,
-  color: "#667781",
-  background: "#F0F2F5",
-  border: "1px solid #E9EDEF",
+  color: "var(--ink-muted)",
+  background: "var(--surface)",
+  border: "1px solid var(--surface-border)",
   borderRadius: 8,
   padding: "8px 12px",
   lineHeight: 1.5,
 };
 
 export const errorStyle: React.CSSProperties = {
-  color: "#C0392B",
-  background: "#FDECEA",
-  border: "1px solid #F5C6C2",
+  color: "var(--error)",
+  background: "var(--error-light)",
+  border: "1px solid rgba(186,26,26,0.3)",
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 13,
 };
 
 export const successStyle: React.CSSProperties = {
-  color: "#128C7E",
-  background: "#DCF8C6",
-  border: "1px solid #B9EFA4",
+  color: "var(--brand-dark)",
+  background: "var(--brand-light)",
+  border: "1px solid rgba(0,104,95,0.35)",
   borderRadius: 8,
   padding: "10px 14px",
   fontSize: 13,
@@ -73,7 +73,7 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
         width: 40,
         height: 22,
         borderRadius: 11,
-        background: on ? "#25D366" : "#E9EDEF",
+        background: on ? "var(--brand)" : "var(--surface-border)",
         position: "relative",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -91,7 +91,7 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
           top: 3,
           left: on ? 21 : 3,
           transition: "left 0.15s",
-          boxShadow: "0 1px 2px rgba(17,27,33,0.2)",
+          boxShadow: "0 1px 2px rgba(11,28,48,0.2)",
         }}
       />
     </div>
@@ -111,7 +111,7 @@ export function ToggleRow({
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ fontSize: 13, color: "#111B21" }}>{label}</span>
+      <span style={{ fontSize: 13, color: "var(--ink)" }}>{label}</span>
       <Toggle on={on} onToggle={onToggle} disabled={disabled} />
     </div>
   );

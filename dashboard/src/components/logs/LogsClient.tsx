@@ -39,15 +39,15 @@ function DiffRow({ oldValues, newValues }: { oldValues: Record<string, unknown> 
         const before = oldValues?.[key];
         const after = newValues?.[key];
         return (
-          <div key={key} style={{ color: "#667781" }}>
-            <span style={{ color: "#111B21" }}>{key}</span>:{" "}
+          <div key={key} style={{ color: "var(--ink-muted)" }}>
+            <span style={{ color: "var(--ink)" }}>{key}</span>:{" "}
             {oldValues && key in oldValues ? (
               <>
-                <span style={{ color: "#C0392B" }}>{formatValue(before)}</span>
+                <span style={{ color: "var(--error)" }}>{formatValue(before)}</span>
                 {" → "}
               </>
             ) : null}
-            <span style={{ color: "#128C7E" }}>{formatValue(after)}</span>
+            <span style={{ color: "var(--brand-dark)" }}>{formatValue(after)}</span>
           </div>
         );
       })}
@@ -112,10 +112,10 @@ export default function LogsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111B21", margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>
             {showShopColumn ? "Audit Logs" : "Activity Logs"}
           </h1>
-          <p style={{ fontSize: 13, color: "#667781", marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
             {showShopColumn
               ? "Platform-wide record of shop and staff changes."
               : "Record of staff and account changes for this shop."}
@@ -125,10 +125,10 @@ export default function LogsClient({
         {showShopColumn && (
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
                 Category
               </label>
-              <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "#F0F2F5", border: "1px solid #E9EDEF", gap: 2 }}>
+              <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "var(--surface)", border: "1px solid var(--surface-border)", gap: 2 }}>
                 {(
                   [
                     { value: "all", label: "All" },
@@ -149,8 +149,8 @@ export default function LogsClient({
                       fontFamily: "inherit",
                       border: "none",
                       background: category === opt.value ? "#FFFFFF" : "transparent",
-                      color: category === opt.value ? "#128C7E" : "#667781",
-                      boxShadow: category === opt.value ? "0 1px 3px rgba(17,27,33,0.08)" : "none",
+                      color: category === opt.value ? "var(--brand-dark)" : "var(--ink-muted)",
+                      boxShadow: category === opt.value ? "0 1px 3px rgba(11,28,48,0.08)" : "none",
                     }}
                   >
                     {opt.label}
@@ -161,7 +161,7 @@ export default function LogsClient({
 
             {shops && shops.length > 0 && (
               <div>
-                <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
                   Filter by shop
                 </label>
                 <select
@@ -170,9 +170,9 @@ export default function LogsClient({
                   style={{
                     padding: "7px 12px",
                     borderRadius: 8,
-                    border: "1px solid #E9EDEF",
+                    border: "1px solid var(--surface-border)",
                     background: "#FFFFFF",
-                    color: "#111B21",
+                    color: "var(--ink)",
                     fontSize: 13,
                     fontFamily: "inherit",
                     minWidth: 200,
@@ -193,8 +193,8 @@ export default function LogsClient({
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
-          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>Search</label>
-          <Search size={14} color="#8696A0" style={{ position: "absolute", left: 10, top: 30, transform: "translateY(-50%)" }} />
+          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>Search</label>
+          <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: 30, transform: "translateY(-50%)" }} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -203,21 +203,21 @@ export default function LogsClient({
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>From</label>
+          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>From</label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #E9EDEF", background: "#FFFFFF", color: "#111B21", fontSize: 13, fontFamily: "inherit" }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: 13, fontFamily: "inherit" }}
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 11, color: "#667781", marginBottom: 4, fontWeight: 600 }}>To</label>
+          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>To</label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #E9EDEF", background: "#FFFFFF", color: "#111B21", fontSize: 13, fontFamily: "inherit" }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: 13, fontFamily: "inherit" }}
           />
         </div>
         {(search || dateFrom || dateTo) && (
@@ -228,7 +228,7 @@ export default function LogsClient({
               setDateFrom("");
               setDateTo("");
             }}
-            style={S.btn("#F5F6F6", "#111B21")}
+            style={S.btn("var(--surface-hover)", "var(--ink)")}
           >
             Clear filters
           </button>
@@ -251,7 +251,7 @@ export default function LogsClient({
               {logs.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={columnCount}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#667781" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
                       <ScrollText size={14} />
                       {initialLogs.length === 0 ? "No activity recorded yet." : "No activity matches your filters."}
                     </div>
@@ -277,16 +277,16 @@ export default function LogsClient({
                         onClick={() => hasDetails && setExpandedId(expanded ? null : row.id)}
                         style={{ cursor: hasDetails ? "pointer" : "default" }}
                       >
-                        <td style={{ ...S.td, whiteSpace: "nowrap", color: "#667781" }}>
+                        <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--ink-muted)" }}>
                           {format(new Date(row.created_at), "MMM d, HH:mm:ss")}
                         </td>
                         <td style={S.td}>
                           <span style={S.badge(color, background)}>{actorName}</span>
                         </td>
-                        <td style={{ ...S.td, color: "#111B21" }}>
+                        <td style={{ ...S.td, color: "var(--ink)" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                             {hasDetails &&
-                              (expanded ? <ChevronDown size={13} color="#667781" /> : <ChevronRight size={13} color="#667781" />)}
+                              (expanded ? <ChevronDown size={13} color="var(--ink-muted)" /> : <ChevronRight size={13} color="var(--ink-muted)" />)}
                             {ACTION_LABEL[row.action] ?? row.action}
                           </div>
                         </td>
