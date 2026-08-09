@@ -70,3 +70,4 @@
 | #105 | Welcome message: full shop name/address/phone + dashboard Shop Details settings | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 16:28 UTC | 0d 0h 0m |
 | #106 | PDF invoice on completion -- customer WhatsApp + dashboard, never owner WhatsApp | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 16:34 UTC | 0d 0h 5m |
 | #107 | Dashboard: edit a pending order's items (adjust quantity or remove) —… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-08 16:58 UTC | 0d 0h 4m |
+| #108 | Rebrand dashboard to the new teal palette (cosmetic only) | dashboard | @groovia-admin | @groovia-admin | 2026-08-09 07:38 UTC | 0d 0h 0m |
