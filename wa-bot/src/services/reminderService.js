@@ -1,13 +1,21 @@
 const logger = require('../utils/logger');
 const { getSupabase, getActiveStaffPhones } = require('./shopResolver');
-const { sendWhatsAppTemplate } = require('./whatsappClient');
+const { sendWhatsAppTemplateWithFallback } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
 
 // Registered separately from templates.js's ORDER_TEMPLATES registry —
 // that one is keyed by orders.status for customer-facing notifications;
 // this is staff-facing, same category as orderCreator.js's own
 // NEW_ORDER_ALERT_TEMPLATE. Final submitted text:
-//   Category: Utility, Name: order_reminder, Language: en_US
+//   Category: Utility, Name: order_reminder, Language: en_US (as
+//   originally declared here — but confirmed in production that Meta
+//   rejects it under en_US with #132001 "template name does not exist
+//   in the translation", so it was evidently approved under a different
+//   language code. Sent via sendWhatsAppTemplateWithFallback below
+//   instead of a raw single-language call, same fix as every other
+//   template send already has — this was the one place in the codebase
+//   still missing it, and the only one with zero retry/fallback safety
+//   net, so every reminder was silently failing outright.
 //   Body:
 //     "⏰ Reminder:
 //
@@ -95,7 +103,7 @@ async function sendReminder(supabase, order, timezone) {
   const phones = await getActiveStaffPhones(order.shop_id);
   await Promise.all(
     phones.map((phone) =>
-      sendWhatsAppTemplate(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)
+      sendWhatsAppTemplateWithFallback(phone, ORDER_REMINDER_TEMPLATE.name, ORDER_REMINDER_TEMPLATE.language, components)
     )
   );
 }

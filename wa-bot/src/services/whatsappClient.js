@@ -122,6 +122,34 @@ async function sendWhatsAppTemplate(to, templateName, languageCode, components, 
   return result.success;
 }
 
+// Meta's template UI often defaults to "English (US)" (en_US) rather
+// than the neutral "English" (en) code declares — picking the wrong one
+// at creation time fails outright (#132001, "template name does not
+// exist in <language>") rather than falling back on its own. Confirmed
+// in production against order_reminder: reminderService.js called
+// sendWhatsAppTemplate directly with a single hardcoded 'en_US' and no
+// fallback, so every single reminder silently failed with 132001 and
+// there was no second attempt — this is what customerNotifier.js's
+// notifyCustomer already guarded against for every other template, just
+// not exposed for other callers to reuse until now.
+const LANGUAGE_FALLBACKS = ['en', 'en_US'];
+
+async function sendWhatsAppTemplateWithFallback(to, templateName, primaryLanguage, components, overrides = {}) {
+  // Always try the caller's own configured language first — that's the
+  // one presumed actually confirmed against WhatsApp Manager, not a
+  // guess. Only if that fails does this try the other common locale
+  // code, so a template correctly configured under its declared language
+  // never wastes a doomed-to-fail attempt first.
+  const languages = [primaryLanguage, ...LANGUAGE_FALLBACKS.filter((l) => l !== primaryLanguage)];
+
+  for (const language of languages) {
+    const sent = await sendWhatsAppTemplate(to, templateName, language, components, overrides);
+    if (sent) return true;
+  }
+
+  return false;
+}
+
 // ── Native catalog invite (greeting -> "View catalog" native button) ──
 async function sendCatalogMessage(to, bodyText, thumbnailProductId, overrides = {}) {
   const phoneNumberId = overrides.phoneNumberId || config.phoneNumberId;
@@ -403,6 +431,7 @@ module.exports = {
   sendWhatsAppMessage,
   sendWhatsAppTemplate,
   sendWhatsAppTemplateDetailed,
+  sendWhatsAppTemplateWithFallback,
   sendCatalogMessage,
   sendButtonMessage,
   sendButtonMessageDetailed,
