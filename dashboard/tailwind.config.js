@@ -44,8 +44,11 @@ module.exports = {
         },
       },
       fontFamily: {
-        sans:    ['Inter', 'sans-serif'],
-        display: ['Sora', 'sans-serif'],
+        // Point at the CSS variables next/font generates (see app/layout.tsx)
+        // rather than the bare family name — the bare name only works if
+        // something actually loaded that font file, which nothing was.
+        sans:    ['var(--font-inter)', 'sans-serif'],
+        display: ['var(--font-sora)', 'sans-serif'],
       },
     },
   },
