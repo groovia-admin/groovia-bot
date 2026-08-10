@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { formatDistanceToNow, format, isToday, isYesterday } from "date-fns";
 import { MessageSquare, User, Search } from "lucide-react";
+import EmptyState from "@/components/ui/EmptyState";
 
 type ConversationRow = {
   id: string;
@@ -171,9 +172,11 @@ export default function ConversationsClient({ initialConversations }: { initialC
           </div>
           <div style={{ overflowY: "auto", flex: 1 }}>
             {filteredConversations.length === 0 ? (
-              <div style={{ padding: 20, fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>
-                {conversations.length === 0 ? "No conversations yet." : "No conversations match your search."}
-              </div>
+              conversations.length === 0 ? (
+                <EmptyState icon={MessageSquare} title="No conversations yet" description="Customer chats on WhatsApp will show up here." compact />
+              ) : (
+                <EmptyState icon={Search} title="No conversations match your search" compact />
+              )
             ) : (
               filteredConversations.map((c) => {
                 const active = c.id === selectedId;
@@ -250,7 +253,7 @@ export default function ConversationsClient({ initialConversations }: { initialC
                 ) : error ? (
                   <div style={{ fontSize: "var(--text-base)", color: "var(--error)" }}>{error}</div>
                 ) : groupedMessages.length === 0 ? (
-                  <div style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>No messages in this conversation yet.</div>
+                  <EmptyState icon={MessageSquare} title="No messages in this conversation yet" compact />
                 ) : (
                   groupedMessages.map((group) => (
                     <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: 10 }}>

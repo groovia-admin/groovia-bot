@@ -6,6 +6,7 @@ import { formatDistanceToNowStrict } from "date-fns";
 import { Search, Users, CreditCard, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import EmptyState from "@/components/ui/EmptyState";
 import { toCsv, downloadCsv } from "@/lib/csv";
 
 type CustomerRow = {
@@ -159,10 +160,11 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
               {filtered.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={showRevenue ? 6 : 4}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
-                      <Users size={14} />
-                      {initialCustomers.length === 0 ? "No customers yet." : "No customers match your search."}
-                    </div>
+                    {initialCustomers.length === 0 ? (
+                      <EmptyState icon={Users} title="No customers yet" description="Everyone who orders from you on WhatsApp will show up here automatically." compact />
+                    ) : (
+                      <EmptyState icon={Search} title="No customers match your search" compact />
+                    )}
                   </td>
                 </tr>
               ) : (

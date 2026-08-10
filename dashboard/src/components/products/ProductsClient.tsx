@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight, Package, FolderPlus } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import EmptyState from "@/components/ui/EmptyState";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import ProductEditModal from "./ProductEditModal";
 
@@ -377,7 +378,7 @@ export default function ProductsClient({
         )}
 
         {categories.length === 0 ? (
-          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", margin: 0 }}>No categories yet. Add one to start adding products.</p>
+          <EmptyState icon={FolderPlus} title="No categories yet" description="Add a category first — every product needs one to sort under." compact />
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {categories.map((category) => (
@@ -594,7 +595,11 @@ export default function ProductsClient({
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={9}>
-                    {products.length === 0 ? "No products yet." : "No products match your search."}
+                    {products.length === 0 ? (
+                      <EmptyState icon={Package} title="No products yet" description="Add your first product above to start selling on WhatsApp." compact />
+                    ) : (
+                      <EmptyState icon={Search} title="No products match your search" compact />
+                    )}
                   </td>
                 </tr>
               ) : (

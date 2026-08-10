@@ -2,6 +2,7 @@ import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
 import { TrendingUp, TrendingDown, Minus, Package, ShoppingBag, XCircle, PiggyBank } from 'lucide-react'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -181,7 +182,7 @@ export default async function AnalyticsPage() {
           {showRevenue ? 'Revenue' : 'Orders'} — last {PERIOD_DAYS} days
         </div>
         {allOrders.length === 0 ? (
-          <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No orders in this period yet.</p>
+          <EmptyState icon={TrendingUp} title="No orders in this period yet" compact />
         ) : (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
             {trend.map((d) => {
@@ -210,7 +211,7 @@ export default async function AnalyticsPage() {
         <div style={S.card}>
           <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Orders by status</div>
           {allOrders.length === 0 ? (
-            <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No orders yet.</p>
+            <EmptyState icon={ShoppingBag} title="No orders yet" compact />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {Object.entries(statusCounts)
@@ -233,7 +234,7 @@ export default async function AnalyticsPage() {
             Top products {showRevenue ? '(by revenue)' : '(by quantity)'}
           </div>
           {topProducts.length === 0 ? (
-            <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No completed orders yet.</p>
+            <EmptyState icon={Package} title="No completed orders yet" compact />
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {topProducts.map((p) => {

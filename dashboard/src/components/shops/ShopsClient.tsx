@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { format, formatDistanceToNow, isPast } from "date-fns";
+import EmptyState from "@/components/ui/EmptyState";
 import {
   AlertTriangle,
   Calendar,
@@ -932,18 +933,12 @@ export default function ShopsClient({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      ...S.td,
-                      textAlign: "center",
-                      padding: 48,
-                      color: "var(--ink-faint)",
-                    }}
-                  >
-                    {search || filterStatus !== "all"
-                      ? "No shops match the selected filters."
-                      : "No shops yet. Add the first shop."}
+                  <td colSpan={7} style={S.td}>
+                    {search || filterStatus !== "all" ? (
+                      <EmptyState icon={Search} title="No shops match the selected filters" compact />
+                    ) : (
+                      <EmptyState icon={Store} title="No shops yet" description="Add the first shop to get started." compact />
+                    )}
                   </td>
                 </tr>
               ) : (

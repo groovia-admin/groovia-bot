@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, ShieldCheck, UserX, UserCheck } from "lucide-react";
+import { Plus, ShieldCheck, UserX, UserCheck, Users } from "lucide-react";
+import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
@@ -232,7 +233,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
               {staff.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={6}>
-                    No staff added yet.
+                    <EmptyState icon={Users} title="No staff added yet" description="Invite managers and staff to help run orders and inventory." compact />
                   </td>
                 </tr>
               ) : (

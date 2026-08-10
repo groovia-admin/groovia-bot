@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { format, isToday, isYesterday } from 'date-fns'
+import { PackageCheck, Boxes } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,9 +90,7 @@ export default async function InventoryPage() {
         }}
       >
         {lowStock.length === 0 ? (
-          <p style={{ padding: 20, fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>
-            Nothing low on stock right now.
-          </p>
+          <EmptyState icon={PackageCheck} title="Nothing low on stock" description="Every available product is above its low-stock threshold." compact />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -141,7 +141,7 @@ export default async function InventoryPage() {
         }}
       >
         {movementGroups.length === 0 ? (
-          <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No stock movements recorded yet.</p>
+          <EmptyState icon={Boxes} title="No stock movements yet" description="Sales, restocks, and manual edits will show up here." compact />
         ) : (
           movementGroups.map((group) => (
             <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

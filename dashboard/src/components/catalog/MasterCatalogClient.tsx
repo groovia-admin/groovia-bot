@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import clsx from 'clsx'
 import CartLoader from '@/components/ui/CartLoader'
+import EmptyState from '@/components/ui/EmptyState'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 interface MasterCategory {
@@ -552,12 +553,15 @@ export default function MasterCatalogClient() {
 
               <div className="card p-0 overflow-hidden">
                 {!selectedCategory.master_products?.length ? (
-                  <div className="p-6 text-center text-ink-muted text-sm">
-                    No products yet.{' '}
-                    <button onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }} className="text-[var(--brand-dark)] hover:underline">
-                      Add the first one
-                    </button>
-                  </div>
+                  <EmptyState
+                    icon={Package}
+                    title="No products yet"
+                    description="Add the first product to this category."
+                    action={{
+                      label: 'Add product',
+                      onClick: () => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) },
+                    }}
+                  />
                 ) : (
                   <table className="data-table">
                     <thead>

@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Phone, Mail, CreditCard } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, CreditCard, ShoppingBag } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -116,7 +117,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <tbody>
             {(orders ?? []).length === 0 ? (
               <tr>
-                <td style={S.td} colSpan={showRevenue ? 4 : 3}>No orders yet.</td>
+                <td style={S.td} colSpan={showRevenue ? 4 : 3}>
+                  <EmptyState icon={ShoppingBag} title="No orders yet" compact />
+                </td>
               </tr>
             ) : (
               (orders ?? []).map((o) => {

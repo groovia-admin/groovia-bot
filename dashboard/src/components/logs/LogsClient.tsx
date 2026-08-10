@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ChevronDown, ChevronRight, ScrollText, Search } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
+import EmptyState from "@/components/ui/EmptyState";
 import { ACTION_LABEL, ACTOR_BADGE, actorLabel, type ActorType } from "@/lib/auditLabels";
 
 type LogRow = {
@@ -251,10 +252,11 @@ export default function LogsClient({
               {logs.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={columnCount}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
-                      <ScrollText size={14} />
-                      {initialLogs.length === 0 ? "No activity recorded yet." : "No activity matches your filters."}
-                    </div>
+                    {initialLogs.length === 0 ? (
+                      <EmptyState icon={ScrollText} title="No activity recorded yet" description="Actions taken in the dashboard — order updates, staff changes, settings edits — will show up here." compact />
+                    ) : (
+                      <EmptyState icon={Search} title="No activity matches your filters" compact />
+                    )}
                   </td>
                 </tr>
               ) : (

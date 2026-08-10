@@ -7,6 +7,7 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import { Search, ShoppingBag, Check, X, RefreshCw, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
@@ -389,10 +390,16 @@ export default function OrdersClient({
               {filtered.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={(showRevenue ? 7 : 6) + (canManage ? 1 : 0)}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
-                      <ShoppingBag size={14} />
-                      {orders.length === 0 ? "No orders yet." : "No orders match your search."}
-                    </div>
+                    {orders.length === 0 ? (
+                      <EmptyState
+                        icon={ShoppingBag}
+                        title="No orders yet"
+                        description="Orders placed by customers on WhatsApp will show up here as soon as they come in."
+                        compact
+                      />
+                    ) : (
+                      <EmptyState icon={Search} title="No orders match your search" description="Try a different order number, name, or phone number." compact />
+                    )}
                   </td>
                 </tr>
               ) : (
