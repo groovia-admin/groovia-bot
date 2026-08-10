@@ -2,8 +2,8 @@ import type { MetadataRoute } from 'next'
 
 // Lets staff "Add to Home Screen" on the tablet/phone they run the counter
 // from, so the dashboard opens full-screen like a native app instead of a
-// browser tab with an address bar. Icons are generated at build/request
-// time by the sibling icon-192.png and icon-512.png route handlers.
+// browser tab with an address bar. Icons are the real brand mark (public/),
+// resized with sharp to the exact dimensions each entry declares.
 export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'Groovia Admin',

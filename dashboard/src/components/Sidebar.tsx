@@ -11,6 +11,7 @@ import {
   Settings, Store, LogOut, MessageSquare, ClipboardList,
   ScrollText, Boxes, PanelLeftClose, PanelLeftOpen, Menu, X
 } from 'lucide-react'
+import GrooviaMark from '@/components/ui/GrooviaMark'
 
 const PENDING_ORDERS_POLL_MS = 30_000
 const COLLAPSE_STORAGE_KEY = 'groovia_sidebar_collapsed'
@@ -203,7 +204,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={shopLogoUrl} alt={shopName} className="w-full h-full object-cover" />
               ) : (
-                <span className="font-display font-bold text-brand text-sm">G</span>
+                <GrooviaMark size={20} />
               )}
             </div>
             <div className={clsx('min-w-0 flex-1', collapsed && 'md:hidden')}>
