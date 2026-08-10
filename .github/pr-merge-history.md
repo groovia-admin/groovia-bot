@@ -75,3 +75,4 @@
 | #111 | Daily summary: orders/revenue/top-products each morning, on/off + time configurable | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 01:47 UTC | 0d 0h 0m |
 | #112 | Global UI polish (dropdowns, checkboxes, focus/hover states) + fix st… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 01:48 UTC | 0d 0h 0m |
 | #110 | Replace chat-based order edit with a link to the dashboard's item edi… | wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 01:48 UTC | 0d 0h 1m |
+| #113 | Settings 2-column layout, inline product edit modal, continuous-runni… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 05:43 UTC | 0d 0h 11m |
