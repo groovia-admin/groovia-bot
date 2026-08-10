@@ -81,3 +81,4 @@
 | #115 | Fix two production-blocking gaps: fonts never loaded, zero mobile sup… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 10:01 UTC | 0d 0h 18m |
 | #117 | Enforce stock limits on orders; fix staff edit page stuck after Done | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 14:36 UTC | 0d 0h 0m |
 | #118 | Cart loading animation: 2x speed, centered; reuse on login | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 14:49 UTC | 0d 0h 1m |
+| #119 | Bot real logo assets | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 15:03 UTC | 0d 0h 9m |
