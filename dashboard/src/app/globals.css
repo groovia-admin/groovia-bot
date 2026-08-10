@@ -168,4 +168,20 @@
     background-color: var(--surface-hover);
     color: var(--ink);
   }
+
+  /* ── Fixed 2-up grid ──
+     Deliberately NOT auto-fit/minmax — that packs as many columns as fit
+     the available width with no cap, so on a wide or zoomed-out viewport
+     it happily produces 4-6 columns instead of 2. This always renders
+     exactly 2 columns above the breakpoint and exactly 1 below it,
+     regardless of viewport width or browser zoom level. */
+  .grid-2up {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .grid-2up { grid-template-columns: 1fr; }
+  }
 }

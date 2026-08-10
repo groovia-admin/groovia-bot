@@ -9,10 +9,11 @@ import clsx from 'clsx'
 import {
   LayoutDashboard, ShoppingBag, Package, Users, BarChart2,
   Settings, Store, LogOut, MessageSquare, ClipboardList,
-  ScrollText, ChevronDown, Bell, Boxes
+  ScrollText, Bell, Boxes, PanelLeftClose, PanelLeftOpen
 } from 'lucide-react'
 
 const PENDING_ORDERS_POLL_MS = 30_000
+const COLLAPSE_STORAGE_KEY = 'groovia_sidebar_collapsed'
 
 interface SidebarProps {
   isSuperAdmin: boolean
@@ -78,12 +79,27 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   const router = useRouter()
   const supabase = createClient()
   const [pendingCount, setPendingCount] = useState(0)
+  // Lazy-init from localStorage so a returning user's choice sticks across
+  // full reloads, not just client-side nav (which would keep it anyway,
+  // since this layout doesn't remount on route changes within /dashboard).
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1'
+  })
 
   const navItems = getNav(isSuperAdmin, shopUser?.role ?? '')
   const displayName = shopUser?.full_name ?? userPhone
   const shopName = shopUser?.shops?.name ?? 'GrooVia Platform'
   const shopLogoUrl = shopUser?.shops?.logo_url ?? null
   const roleLabel = isSuperAdmin ? 'Super Admin' : shopUser?.role ?? ''
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      window.localStorage.setItem(COLLAPSE_STORAGE_KEY, next ? '1' : '0')
+      return next
+    })
+  }
 
   // Polls the same cheap count-only endpoint OrderAlertListener uses, so the
   // "Orders" nav badge reflects the real pending count instead of the
@@ -131,10 +147,15 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   }
 
   return (
-    <aside className="w-64 flex-shrink-0 flex flex-col bg-surface-card border-r border-surface-border">
+    <aside
+      className={clsx(
+        'flex-shrink-0 flex flex-col bg-surface-card border-r border-surface-border transition-[width] duration-200',
+        collapsed ? 'w-[68px]' : 'w-64'
+      )}
+    >
       {/* Logo + shop name */}
-      <div className="p-5 border-b border-surface-border">
-        <div className="flex items-center gap-3">
+      <div className={clsx('border-b border-surface-border', collapsed ? 'p-3' : 'p-5')}>
+        <div className={clsx('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-3')}>
           <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center overflow-hidden flex-shrink-0">
             {shopLogoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -143,56 +164,81 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
               <span className="font-display font-bold text-brand text-sm">G</span>
             )}
           </div>
-          <div className="min-w-0">
-            <p className="font-display font-semibold text-ink text-sm truncate">{shopName}</p>
-            <p className="text-xs text-ink-muted capitalize">{roleLabel}</p>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="font-display font-semibold text-ink text-sm truncate">{shopName}</p>
+              <p className="text-xs text-ink-muted capitalize">{roleLabel}</p>
+            </div>
+          )}
+          <button
+            onClick={toggleCollapsed}
+            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            className="p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
+          >
+            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 min-h-0 py-4 px-3 overflow-y-auto space-y-0.5">
+      <nav className={clsx('flex-1 min-h-0 py-4 overflow-y-auto space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
         {navItems.map(item => {
           const Icon = item.icon
           const active = isActive(item)
+          const showBadge = item.label === 'Orders' && pendingCount > 0
           return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group',
-                active
-                  ? 'bg-brand/15 text-brand-dark font-semibold'
-                  : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
-              )}
-            >
-              <Icon
-                className="w-4 h-4 flex-shrink-0"
-                style={active ? undefined : { color: item.color }}
-              />
-              {item.label}
-              {item.label === 'Orders' && pendingCount > 0 && (
-                <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
-                  {pendingCount > 99 ? '99+' : pendingCount}
+            <div key={item.href} className="relative group">
+              <Link
+                href={item.href}
+                className={clsx(
+                  'flex items-center rounded-lg text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
+                  active
+                    ? 'bg-brand/15 text-brand-dark font-semibold'
+                    : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
+                )}
+              >
+                <span className="relative flex-shrink-0">
+                  <Icon className="w-4 h-4" style={active ? undefined : { color: item.color }} />
+                  {collapsed && showBadge && (
+                    <span className="absolute -top-1.5 -right-1.5 bg-brand text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center leading-none px-0.5">
+                      {pendingCount > 9 ? '9+' : pendingCount}
+                    </span>
+                  )}
                 </span>
+                {!collapsed && item.label}
+                {!collapsed && showBadge && (
+                  <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
+                    {pendingCount > 99 ? '99+' : pendingCount}
+                  </span>
+                )}
+              </Link>
+              {/* Hover tooltip — collapsed mode only, since the label text
+                  itself is hidden then. */}
+              {collapsed && (
+                <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 whitespace-nowrap rounded-md bg-ink px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-50">
+                  {item.label}
+                </div>
               )}
-            </Link>
+            </div>
           )
         })}
       </nav>
 
       {/* User footer */}
-      <div className="p-3 border-t border-surface-border">
-        <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
-          <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+      <div className={clsx('border-t border-surface-border', collapsed ? 'p-2' : 'p-3')}>
+        <div className={clsx('flex items-center rounded-lg', collapsed ? 'flex-col gap-2 py-2' : 'gap-3 px-2 py-2')}>
+          <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0" title={collapsed ? displayName : undefined}>
             <span className="text-xs font-semibold text-brand-dark">
               {displayName.charAt(0).toUpperCase()}
             </span>
           </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-ink truncate">{displayName}</p>
-            <p className="text-xs text-ink-muted truncate">{userPhone}</p>
-          </div>
+          {!collapsed && (
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-ink truncate">{displayName}</p>
+              <p className="text-xs text-ink-muted truncate">{userPhone}</p>
+            </div>
+          )}
           <button
             onClick={handleSignOut}
             title="Sign out"
