@@ -7,6 +7,7 @@ const internalRouter = require('./routes/internal');
 const { getDueRetries } = require('./services/deliveryTracker');
 const { retryNewOrderAlert, processDueNewOrderAlerts } = require('./services/orderCreator');
 const { processDueReminders } = require('./services/reminderService');
+const { processDueDailySummaries } = require('./services/dailySummaryService');
 
 const app = express();
 
@@ -137,6 +138,16 @@ const reminderTimer = setInterval(() => {
   processDueReminders().catch((err) => logger.error({ err }, 'Reminder/auto-reject scan failed'));
 }, RETRY_INTERVAL_MS);
 reminderTimer.unref();
+
+// Daily summary scan — same poll-and-claim pattern as the timers above.
+// Fires at most once per shop per shop-local calendar day (see
+// processDueDailySummaries), so a 60s cadence here is just about keeping
+// the actual send close to the shop's configured time, not a correctness
+// requirement.
+const dailySummaryTimer = setInterval(() => {
+  processDueDailySummaries().catch((err) => logger.error({ err }, 'Daily summary scan failed'));
+}, RETRY_INTERVAL_MS);
+dailySummaryTimer.unref();
 
 // Graceful shutdown
 const shutdown = (signal) => {

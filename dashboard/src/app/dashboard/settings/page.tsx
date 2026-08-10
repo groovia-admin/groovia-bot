@@ -4,6 +4,7 @@ import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
 import ShopProfileForm from '@/components/settings/ShopProfileForm'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
 import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
+import DailySummarySettingsForm from '@/components/settings/DailySummarySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 import ShopQrCode from '@/components/settings/ShopQrCode'
 
@@ -39,7 +40,7 @@ export default async function SettingsPage() {
       adminClient
         .from('shop_settings')
         .select(
-          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes'
+          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time'
         )
         .eq('shop_id', context.shopId)
         .maybeSingle(),
@@ -109,6 +110,12 @@ export default async function SettingsPage() {
             <h2 style={cardTitleStyle}>Order &amp; Delivery</h2>
             <p style={cardSubStyle}>Pickup/delivery availability, fees, and tax.</p>
             <DeliverySettingsForm initial={settings} />
+          </div>
+
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Daily Summary</h2>
+            <p style={cardSubStyle}>A morning WhatsApp recap of yesterday&apos;s orders, revenue, and top products.</p>
+            <DailySummarySettingsForm initial={settings} />
           </div>
 
           {isOwner && (
