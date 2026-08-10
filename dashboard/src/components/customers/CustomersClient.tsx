@@ -3,9 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Search, Users, CreditCard } from "lucide-react";
+import { Search, Users, CreditCard, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import { toCsv, downloadCsv } from "@/lib/csv";
 
 type CustomerRow = {
   id: string;
@@ -50,19 +51,57 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
   const totalOutstandingCredit = useMemo(() => initialCustomers.reduce((sum, c) => sum + Number(c.outstanding_credit), 0), [initialCustomers]);
   const repeatCustomers = useMemo(() => initialCustomers.filter((c) => c.total_orders > 1).length, [initialCustomers]);
 
+  function exportCsv() {
+    const csv = toCsv(filtered, [
+      { key: "full_name", label: "Name" },
+      { key: "phone", label: "Phone" },
+      { key: "email", label: "Email" },
+      { key: "total_orders", label: "Total orders" },
+      ...(showRevenue ? [{ key: "total_spent" as const, label: "Total spent" }] : []),
+      ...(showRevenue ? [{ key: "outstanding_credit" as const, label: "Outstanding credit" }] : []),
+      { key: "last_order_at", label: "Last order" },
+    ]);
+    downloadCsv(`customers-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Customers</h1>
-          <InfoTooltip
-            items={[
-              { color: "var(--brand-dark)", label: "Active", hint: "has placed at least one order" },
-              { color: "var(--error)", label: "Outstanding credit", hint: "owed to you — khata/pay-later balance" },
-            ]}
-          />
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Customers</h1>
+            <InfoTooltip
+              items={[
+                { color: "var(--brand-dark)", label: "Active", hint: "has placed at least one order" },
+                { color: "var(--error)", label: "Outstanding credit", hint: "owed to you — khata/pay-later balance" },
+              ]}
+            />
+          </div>
+          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
         </div>
-        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
+        <button
+          type="button"
+          onClick={exportCsv}
+          disabled={filtered.length === 0}
+          title="Export the customers currently shown to a CSV file"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "6px 10px",
+            borderRadius: 8,
+            border: "1px solid var(--surface-border)",
+            background: "var(--surface-card)",
+            color: "var(--ink-muted)",
+            fontSize: 12,
+            cursor: filtered.length === 0 ? "default" : "pointer",
+            fontFamily: "inherit",
+            opacity: filtered.length === 0 ? 0.5 : 1,
+          }}
+        >
+          <Download size={13} />
+          Export CSV
+        </button>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>

@@ -37,29 +37,29 @@ export default async function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-900">Platform Overview</h1>
-          <p className="text-slate-500 text-sm mt-0.5">GrooVia Super Admin</p>
+          <h1 className="font-display text-2xl font-bold text-ink">Platform Overview</h1>
+          <p className="text-ink-muted text-sm mt-0.5">GrooVia Super Admin</p>
         </div>
 
         {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-slate-800" />
-          <StatCard icon={Store}         label="Active"       value={activeShops ?? 0} color="text-emerald-400" />
-          <StatCard icon={AlertTriangle} label="On Trial"     value={trialShops  ?? 0} color="text-amber-400" />
+          <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-ink" />
+          <StatCard icon={Store}         label="Active"       value={activeShops ?? 0} color="text-brand" />
+          <StatCard icon={AlertTriangle} label="On Trial"     value={trialShops  ?? 0} color="text-amber-600" />
           <StatCard icon={Store}         label="Paid"         value={paidShops   ?? 0} color="text-brand" />
         </div>
 
         {/* Recent shops */}
         <div className="card">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-slate-900">Recently Added Shops</h2>
+            <h2 className="font-semibold text-ink">Recently Added Shops</h2>
             <a href="/dashboard/shops" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
               View all →
             </a>
           </div>
 
           {!recentShops?.length ? (
-            <p className="text-slate-500 text-sm">No shops yet.</p>
+            <p className="text-ink-muted text-sm">No shops yet.</p>
           ) : (
             <div className="space-y-0">
               {recentShops.map((shop, i) => (
@@ -76,13 +76,13 @@ export default async function DashboardPage() {
                       {shop.name.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="text-sm font-medium text-slate-800">{shop.name}</p>
-                      <p className="text-xs text-slate-500">{shop.city ?? '—'} · /{shop.slug}</p>
+                      <p className="text-sm font-medium text-ink">{shop.name}</p>
+                      <p className="text-xs text-ink-muted">{shop.city ?? '—'} · /{shop.slug}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <SubBadge status={shop.subscription_status} />
-                    <span className="text-xs text-slate-500 hidden sm:block">
+                    <span className="text-xs text-ink-muted hidden sm:block">
                       {new Date(shop.created_at).toLocaleDateString('en-IN', {
                         day: '2-digit', month: 'short', year: 'numeric'
                       })}
@@ -141,24 +141,28 @@ export default async function DashboardPage() {
 
   const lowStockCount = (stockLevels ?? []).filter((p) => p.stock_quantity <= p.low_stock_threshold).length
 
+  // Same values as OrdersClient's STATUS_STYLE — this page used to run its
+  // own lighter, Tailwind-400-weight palette (tuned for a dark background
+  // this app no longer has), which read as washed-out next to every other
+  // page's more saturated status colors.
   const STATUS_STYLES: Record<string, { bg: string; color: string }> = {
-    pending:   { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b' },
-    accepted:  { bg: 'rgba(59,130,246,0.15)',  color: '#60a5fa' },
-    preparing: { bg: 'rgba(139,92,246,0.15)',  color: '#a78bfa' },
-    ready:     { bg: 'rgba(16,185,129,0.15)',  color: '#34d399' },
-    completed: { bg: 'rgba(107,114,128,0.15)', color: '#9ca3af' },
-    rejected:  { bg: 'rgba(239,68,68,0.15)',   color: '#f87171' },
-    cancelled: { bg: 'rgba(239,68,68,0.15)',   color: '#f87171' },
+    pending:   { bg: 'rgba(245,158,11,0.12)',  color: '#B7791F' },
+    accepted:  { bg: 'rgba(59,130,246,0.12)',  color: '#1D4ED8' },
+    preparing: { bg: 'rgba(139,92,246,0.12)',  color: '#6D28D9' },
+    ready:     { bg: 'rgba(16,185,129,0.12)',  color: '#0F9D6B' },
+    completed: { bg: 'rgba(107,114,128,0.12)', color: '#4B5563' },
+    rejected:  { bg: 'rgba(239,68,68,0.12)',   color: '#C0392B' },
+    cancelled: { bg: 'rgba(239,68,68,0.12)',   color: '#C0392B' },
   }
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="font-display text-2xl font-bold text-slate-900">
+          <h1 className="font-display text-2xl font-bold text-ink">
             Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
           </h1>
-          <p className="text-slate-500 text-sm mt-0.5">
+          <p className="text-ink-muted text-sm mt-0.5">
             {context.shopName ?? 'Your store'} — here's today at a glance
           </p>
         </div>
@@ -184,7 +188,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={ShoppingBag} label="Today's Orders" value={todayOrders   ?? 0} color="text-brand" />
         <StatCard icon={Clock}       label="Pending"        value={pendingOrders ?? 0} color="text-amber-600" urgent={!!pendingOrders && pendingOrders > 0} />
-        <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-slate-800" />
+        <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-ink" />
         <StatCard
           icon={AlertTriangle}
           label="Low Stock"
@@ -197,14 +201,14 @@ export default async function DashboardPage() {
 
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-slate-900">Recent Orders</h2>
+          <h2 className="font-semibold text-ink">Recent Orders</h2>
           <a href="/dashboard/orders" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
             View all →
           </a>
         </div>
 
         {!recentOrders?.length ? (
-          <p className="text-slate-500 text-sm">No orders yet today.</p>
+          <p className="text-ink-muted text-sm">No orders yet today.</p>
         ) : (
           <div>
             {recentOrders.map((order, i) => {
@@ -234,8 +238,8 @@ export default async function DashboardPage() {
                       )
                     })()}
                     <div>
-                      <p className="text-sm font-medium text-slate-800">#{order.order_number}</p>
-                      <p className="text-xs text-slate-500">
+                      <p className="text-sm font-medium text-ink">#{order.order_number}</p>
+                      <p className="text-xs text-ink-muted">
                         {order.pickup_slot_label ?? new Date(order.created_at).toLocaleTimeString('en-IN', {
                           hour: '2-digit', minute: '2-digit'
                         })}
@@ -243,7 +247,7 @@ export default async function DashboardPage() {
                     </div>
                   </div>
                   {showRevenue && (
-                    <p className="text-sm font-medium text-slate-800">
+                    <p className="text-sm font-medium text-ink">
                       ₹{Number(order.total_amount).toFixed(2)}
                     </p>
                   )}
@@ -270,7 +274,7 @@ function StatCard({ icon: Icon, label, value, color, urgent, href }: {
   const content = (
     <>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-xs text-slate-500">{label}</p>
+        <p className="text-xs text-ink-muted">{label}</p>
         <Icon className={`w-4 h-4 ${color}`} />
       </div>
       <p className={`text-2xl font-bold font-display ${color}`}>{value}</p>
@@ -299,12 +303,12 @@ function StatCard({ icon: Icon, label, value, color, urgent, href }: {
 
 function SubBadge({ status }: { status: string }) {
   const map: Record<string, { bg: string; color: string; label: string }> = {
-    trial:    { bg: 'rgba(245,158,11,0.15)',  color: '#f59e0b', label: 'Trial' },
-    active:   { bg: 'rgba(16,185,129,0.15)',  color: '#34d399', label: 'Active' },
-    past_due: { bg: 'rgba(249,115,22,0.15)',  color: '#fb923c', label: 'Past Due' },
-    expired:  { bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Expired' },
-    suspended:{ bg: 'rgba(239,68,68,0.15)',   color: '#f87171', label: 'Suspended' },
-    cancelled:{ bg: 'rgba(107,114,128,0.15)', color: '#9ca3af', label: 'Cancelled' },
+    trial:    { bg: 'rgba(245,158,11,0.12)',  color: '#B7791F', label: 'Trial' },
+    active:   { bg: 'rgba(16,185,129,0.12)',  color: '#0F9D6B', label: 'Active' },
+    past_due: { bg: 'rgba(249,115,22,0.12)',  color: '#C2410C', label: 'Past Due' },
+    expired:  { bg: 'rgba(239,68,68,0.12)',   color: '#C0392B', label: 'Expired' },
+    suspended:{ bg: 'rgba(239,68,68,0.12)',   color: '#C0392B', label: 'Suspended' },
+    cancelled:{ bg: 'rgba(107,114,128,0.12)', color: '#4B5563', label: 'Cancelled' },
   }
   const cfg = map[status] ?? map.trial
   return (
