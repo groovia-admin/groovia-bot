@@ -59,7 +59,7 @@ export default function InfoTooltip({
           }}
         >
           {items.map((item) => (
-            <div key={item.label} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 12 }}>
+            <div key={item.label} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: "var(--text-sm)" }}>
               <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color, flexShrink: 0, marginTop: 3 }} />
               <div>
                 <span style={{ color: "var(--ink)", fontWeight: 600 }}>{item.label}</span>

@@ -117,8 +117,8 @@ export default function ConversationsClient({ initialConversations }: { initialC
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Conversations</h1>
-        <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
+        <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Conversations</h1>
+        <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
           Customer WhatsApp conversations. Staff order commands aren&apos;t included here.
         </p>
       </div>
@@ -135,7 +135,7 @@ export default function ConversationsClient({ initialConversations }: { initialC
                 style={{
                   width: "100%",
                   padding: "8px 10px 8px 30px",
-                  fontSize: 13,
+                  fontSize: "var(--text-base)",
                   border: "1px solid var(--surface-border)",
                   borderRadius: 8,
                   background: "var(--surface)",
@@ -154,7 +154,7 @@ export default function ConversationsClient({ initialConversations }: { initialC
                     onClick={() => setStatusFilter(s)}
                     style={{
                       padding: "3px 10px",
-                      fontSize: 11,
+                      fontSize: "var(--text-xs)",
                       borderRadius: 999,
                       border: "1px solid " + (statusFilter === s ? "var(--brand)" : "var(--surface-border)"),
                       background: statusFilter === s ? "var(--brand-light)" : "#FFFFFF",
@@ -171,7 +171,7 @@ export default function ConversationsClient({ initialConversations }: { initialC
           </div>
           <div style={{ overflowY: "auto", flex: 1 }}>
             {filteredConversations.length === 0 ? (
-              <div style={{ padding: 20, fontSize: 13, color: "var(--ink-muted)" }}>
+              <div style={{ padding: 20, fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>
                 {conversations.length === 0 ? "No conversations yet." : "No conversations match your search."}
               </div>
             ) : (
@@ -211,10 +211,10 @@ export default function ConversationsClient({ initialConversations }: { initialC
                       <User size={14} color="var(--ink-muted)" />
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: active ? "var(--brand-dark)" : "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: "var(--text-base)", fontWeight: 600, color: active ? "var(--brand-dark)" : "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {c.customer_name || c.customer_phone}
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--ink-faint)" }}>
+                      <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>
                         {c.last_message_at ? formatDistanceToNow(new Date(c.last_message_at), { addSuffix: true }) : "No messages"}
                       </div>
                     </div>
@@ -227,7 +227,7 @@ export default function ConversationsClient({ initialConversations }: { initialC
 
         <div style={{ ...S.card, display: "flex", flexDirection: "column" }}>
           {!selectedConversation ? (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-muted)", fontSize: 13 }}>
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-muted)", fontSize: "var(--text-base)" }}>
               <div style={{ textAlign: "center" }}>
                 <MessageSquare size={24} style={{ marginBottom: 8, opacity: 0.5 }} />
                 <div>Select a conversation</div>
@@ -236,25 +236,25 @@ export default function ConversationsClient({ initialConversations }: { initialC
           ) : (
             <>
               <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--surface-border)" }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--ink)" }}>
+                <div style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)" }}>
                   {selectedConversation.customer_name || selectedConversation.customer_phone}
                 </div>
                 {selectedConversation.customer_name && (
-                  <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>{selectedConversation.customer_phone}</div>
+                  <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>{selectedConversation.customer_phone}</div>
                 )}
               </div>
 
               <div style={{ flex: 1, overflowY: "auto", padding: 18, display: "flex", flexDirection: "column", gap: 14, background: "var(--surface)" }}>
                 {loading ? (
-                  <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>Loading…</div>
+                  <div style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>Loading…</div>
                 ) : error ? (
-                  <div style={{ fontSize: 13, color: "var(--error)" }}>{error}</div>
+                  <div style={{ fontSize: "var(--text-base)", color: "var(--error)" }}>{error}</div>
                 ) : groupedMessages.length === 0 ? (
-                  <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>No messages in this conversation yet.</div>
+                  <div style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>No messages in this conversation yet.</div>
                 ) : (
                   groupedMessages.map((group) => (
                     <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ alignSelf: "center", fontSize: 11, color: "var(--ink-muted)", background: "#FFFFFF", border: "1px solid var(--surface-border)", borderRadius: 999, padding: "3px 12px" }}>
+                      <div style={{ alignSelf: "center", fontSize: "var(--text-xs)", color: "var(--ink-muted)", background: "#FFFFFF", border: "1px solid var(--surface-border)", borderRadius: 999, padding: "3px 12px" }}>
                         {group.label}
                       </div>
                       {group.items.map((m) => {
@@ -269,13 +269,13 @@ export default function ConversationsClient({ initialConversations }: { initialC
                               color: "var(--ink)",
                               padding: "8px 12px",
                               borderRadius: 10,
-                              fontSize: 13,
+                              fontSize: "var(--text-base)",
                               lineHeight: 1.4,
                               boxShadow: "0 1px 2px rgba(11,28,48,0.06)",
                             }}
                           >
                             <div style={{ whiteSpace: "pre-wrap" }}>{m.content || `[${m.message_type}]`}</div>
-                            <div style={{ fontSize: 10, color: "var(--ink-faint)", marginTop: 4, textAlign: "right" }}>
+                            <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", marginTop: 4, textAlign: "right" }}>
                               {format(new Date(m.sent_at), "HH:mm")}
                             </div>
                           </div>

@@ -231,7 +231,7 @@ export default function OrdersClient({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Orders</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Orders</h1>
             <InfoTooltip
               items={[
                 { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
@@ -243,7 +243,7 @@ export default function OrdersClient({
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
@@ -260,7 +260,7 @@ export default function OrdersClient({
               border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
               color: "var(--ink-muted)",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
               cursor: filtered.length === 0 ? "default" : "pointer",
               fontFamily: "inherit",
               opacity: filtered.length === 0 ? 0.5 : 1,
@@ -283,7 +283,7 @@ export default function OrdersClient({
               border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
               color: "var(--ink-muted)",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
               cursor: refreshing ? "default" : "pointer",
               fontFamily: "inherit",
             }}
@@ -318,7 +318,7 @@ export default function OrdersClient({
                 style={{
                   padding: "5px 12px",
                   borderRadius: 999,
-                  fontSize: 12,
+                  fontSize: "var(--text-sm)",
                   fontWeight: 600,
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -346,7 +346,7 @@ export default function OrdersClient({
             border: "1px solid rgba(0,104,95,0.35)",
           }}
         >
-          <span style={{ fontSize: 13, color: "var(--brand-dark)", fontWeight: 600 }}>
+          <span style={{ fontSize: "var(--text-base)", color: "var(--brand-dark)", fontWeight: 600 }}>
             {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
           </span>
           <button
@@ -419,7 +419,7 @@ export default function OrdersClient({
                           <div>
                             <div style={{ color: "var(--ink)" }}>{o.customer_name}</div>
                             {o.customer_phone && (
-                              <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 1 }}>{o.customer_phone}</div>
+                              <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 1 }}>{o.customer_phone}</div>
                             )}
                           </div>
                         ) : (
@@ -462,7 +462,7 @@ export default function OrdersClient({
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: 12, textDecoration: "none" }}>
+                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
                             View
                           </Link>
                         )}

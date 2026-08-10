@@ -77,7 +77,7 @@ export default function OrderItemsEditor({
 
   return (
     <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px 0", fontSize: 12, color: "var(--ink-muted)" }}>
+      <div style={{ padding: "12px 16px 0", fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
         Order still pending — adjust quantity or remove an item if something's unavailable. The customer is notified of any change.
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>

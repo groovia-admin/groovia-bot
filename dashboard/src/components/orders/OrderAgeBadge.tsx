@@ -19,7 +19,7 @@ export default function OrderAgeBadge({ createdAt, now }: { createdAt: string; n
         gap: 4,
         padding: "2px 8px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         color,
         background,

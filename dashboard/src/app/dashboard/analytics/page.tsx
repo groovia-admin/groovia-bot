@@ -27,7 +27,7 @@ export default async function AnalyticsPage() {
   const context = await requireRole(['owner', 'manager'])
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: "var(--text-base)" }}>Not applicable for super admins.</div>
   }
 
   const showRevenue = context.role === 'owner'
@@ -155,8 +155,8 @@ export default async function AnalyticsPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Analytics</h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>Last {PERIOD_DAYS} days, vs the {PERIOD_DAYS} days before that.</p>
+        <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Analytics</h1>
+        <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', marginTop: 4 }}>Last {PERIOD_DAYS} days, vs the {PERIOD_DAYS} days before that.</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
@@ -177,11 +177,11 @@ export default async function AnalyticsPage() {
       </div>
 
       <div style={S.card}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
+        <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
           {showRevenue ? 'Revenue' : 'Orders'} — last {PERIOD_DAYS} days
         </div>
         {allOrders.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No orders in this period yet.</p>
+          <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No orders in this period yet.</p>
         ) : (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 120 }}>
             {trend.map((d) => {
@@ -208,20 +208,20 @@ export default async function AnalyticsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Orders by status</div>
+          <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>Orders by status</div>
           {allOrders.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No orders yet.</p>
+            <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No orders yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {Object.entries(statusCounts)
                 .sort((a, b) => b[1] - a[1])
                 .map(([status, count]) => (
                   <div key={status} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 80, fontSize: 12, color: 'var(--ink-muted)', textTransform: 'capitalize' }}>{status}</div>
+                    <div style={{ width: 80, fontSize: "var(--text-sm)", color: 'var(--ink-muted)', textTransform: 'capitalize' }}>{status}</div>
                     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                       <div style={{ width: `${(count / maxStatusCount) * 100}%`, height: '100%', background: STATUS_COLOR[status] ?? 'var(--ink-faint)' }} />
                     </div>
-                    <div style={{ width: 24, fontSize: 12, color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>{count}</div>
+                    <div style={{ width: 24, fontSize: "var(--text-sm)", color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>{count}</div>
                   </div>
                 ))}
             </div>
@@ -229,22 +229,22 @@ export default async function AnalyticsPage() {
         </div>
 
         <div style={S.card}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
+          <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: 'var(--ink)', marginBottom: 14 }}>
             Top products {showRevenue ? '(by revenue)' : '(by quantity)'}
           </div>
           {topProducts.length === 0 ? (
-            <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No completed orders yet.</p>
+            <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', margin: 0 }}>No completed orders yet.</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {topProducts.map((p) => {
                 const value = showRevenue ? p.revenue : p.qty;
                 return (
                   <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 100, fontSize: 12, color: 'var(--ink-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                    <div style={{ width: 100, fontSize: "var(--text-sm)", color: 'var(--ink-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
                     <div style={{ flex: 1, background: 'var(--surface)', borderRadius: 4, height: 8, overflow: 'hidden' }}>
                       <div style={{ width: `${(value / maxProductValue) * 100}%`, height: '100%', background: 'var(--brand-dark)' }} />
                     </div>
-                    <div style={{ width: 50, fontSize: 12, color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>
+                    <div style={{ width: 50, fontSize: "var(--text-sm)", color: 'var(--ink)', fontWeight: 600, textAlign: 'right' }}>
                       {showRevenue ? `₹${p.revenue.toFixed(0)}` : p.qty}
                     </div>
                   </div>
@@ -289,19 +289,19 @@ function StatCard({
   return (
     <div style={S.card} title={hint}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <span style={{ fontSize: 12, color: 'var(--ink-muted)' }}>{label}</span>
+        <span style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>{label}</span>
         <Icon size={15} color={accent ?? 'var(--ink-faint)'} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-        <div style={{ fontSize: 22, fontWeight: 800, color: accent ?? 'var(--ink)' }}>{value}</div>
+        <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: accent ?? 'var(--ink)' }}>{value}</div>
         {hasComparison && (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 11, fontWeight: 700, color: noChange || delta === null ? 'var(--ink-faint)' : isGood ? 'var(--brand-dark)' : 'var(--error)' }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: "var(--text-xs)", fontWeight: 700, color: noChange || delta === null ? 'var(--ink-faint)' : isGood ? 'var(--brand-dark)' : 'var(--error)' }}>
             {noChange || delta === null ? <Minus size={11} /> : delta > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
             {noChange ? '—' : delta === null ? 'new' : `${Math.abs(delta).toFixed(0)}%`}
           </span>
         )}
       </div>
-      {hasComparison && <div style={{ fontSize: 10, color: 'var(--ink-faint)', marginTop: 2 }}>vs {prevValue} last period</div>}
+      {hasComparison && <div style={{ fontSize: "var(--text-xs)", color: 'var(--ink-faint)', marginTop: 2 }}>vs {prevValue} last period</div>}
     </div>
   )
 }

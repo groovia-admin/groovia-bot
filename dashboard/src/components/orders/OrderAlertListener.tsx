@@ -152,7 +152,7 @@ export default function OrderAlertListener() {
         border: "1px solid var(--surface-border)",
         background: "#FFFFFF",
         color: "var(--ink-muted)",
-        fontSize: 12,
+        fontSize: "var(--text-sm)",
         fontWeight: 600,
         cursor: "pointer",
         boxShadow: "0 2px 8px rgba(11,28,48,0.08)",

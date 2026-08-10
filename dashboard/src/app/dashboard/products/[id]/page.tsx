@@ -14,7 +14,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
   const context = await requireRole(['owner', 'manager', 'staff'])
 
   if (context.kind === 'super_admin') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: "var(--text-base)" }}>Not applicable for super admins.</div>
   }
 
   const { id } = await params

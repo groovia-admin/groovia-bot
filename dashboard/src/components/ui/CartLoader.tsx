@@ -67,7 +67,7 @@ export default function CartLoader({ label, size = "page" }: { label?: string; s
           </div>
         </div>
       </div>
-      {label && <div style={{ fontSize: 13, color: "var(--ink-muted)" }}>{label}</div>}
+      {label && <div style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)" }}>{label}</div>}
     </div>
   );
 }

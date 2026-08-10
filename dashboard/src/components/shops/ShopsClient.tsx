@@ -654,7 +654,7 @@ export default function ShopsClient({
         gap: 4,
         padding: "2px 10px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         color,
         background,
@@ -671,7 +671,7 @@ export default function ShopsClient({
         border: "none",
         background,
         color,
-        fontSize: 13,
+        fontSize: "var(--text-base)",
         fontWeight: 600,
         cursor: "pointer",
         fontFamily: "inherit",
@@ -684,7 +684,7 @@ export default function ShopsClient({
       border: "1px solid var(--surface-border)",
       background: "var(--surface)",
       color: "var(--ink)",
-      fontSize: 13,
+      fontSize: "var(--text-base)",
       outline: "none",
       fontFamily: "inherit",
       boxSizing: "border-box",
@@ -692,7 +692,7 @@ export default function ShopsClient({
 
     label: {
       display: "block",
-      fontSize: 12,
+      fontSize: "var(--text-sm)",
       color: "var(--ink-muted)",
       marginBottom: 6,
       fontWeight: 600,
@@ -701,7 +701,7 @@ export default function ShopsClient({
     th: {
       textAlign: "left",
       padding: "10px 16px",
-      fontSize: 11,
+      fontSize: "var(--text-xs)",
       textTransform: "uppercase",
       letterSpacing: "0.7px",
       color: "var(--ink-faint)",
@@ -711,7 +711,7 @@ export default function ShopsClient({
 
     td: {
       padding: "12px 16px",
-      fontSize: 13,
+      fontSize: "var(--text-base)",
       color: "var(--ink-muted)",
       borderBottom: "1px solid var(--surface)",
     } as React.CSSProperties,
@@ -736,7 +736,7 @@ export default function ShopsClient({
         <div>
           <h1
             style={{
-              fontSize: 22,
+              fontSize: "var(--text-xl)",
               fontWeight: 800,
               color: "var(--ink)",
               margin: 0,
@@ -747,7 +747,7 @@ export default function ShopsClient({
 
           <p
             style={{
-              fontSize: 13,
+              fontSize: "var(--text-base)",
               color: "var(--ink-muted)",
               marginTop: 2,
               marginBottom: 0,
@@ -815,7 +815,7 @@ export default function ShopsClient({
             >
               <span
                 style={{
-                  fontSize: 12,
+                  fontSize: "var(--text-sm)",
                   color: "var(--ink-muted)",
                 }}
               >
@@ -827,7 +827,7 @@ export default function ShopsClient({
 
             <div
               style={{
-                fontSize: 28,
+                fontSize: "var(--text-2xl)",
                 fontWeight: 800,
                 color: stat.color,
               }}
@@ -998,7 +998,7 @@ export default function ShopsClient({
                               style={{
                                 fontWeight: 600,
                                 color: "var(--ink)",
-                                fontSize: 13,
+                                fontSize: "var(--text-base)",
                               }}
                             >
                               {shop.name}
@@ -1006,7 +1006,7 @@ export default function ShopsClient({
 
                             <div
                               style={{
-                                fontSize: 11,
+                                fontSize: "var(--text-xs)",
                                 color: "var(--ink-faint)",
                               }}
                             >
@@ -1053,7 +1053,7 @@ export default function ShopsClient({
                         shop.trial_ends_at ? (
                           <span
                             style={{
-                              fontSize: 12,
+                              fontSize: "var(--text-sm)",
                               color: trialExpired ? "#ef4444" : "var(--ink-muted)",
                             }}
                           >
@@ -1102,7 +1102,7 @@ export default function ShopsClient({
                             display: "flex",
                             alignItems: "center",
                             gap: 4,
-                            fontSize: 12,
+                            fontSize: "var(--text-sm)",
                           }}
                         >
                           <Calendar size={12} />
@@ -1210,7 +1210,7 @@ export default function ShopsClient({
                                     color: shop.is_active
                                       ? "#ef4444"
                                       : "#22c55e",
-                                    fontSize: 13,
+                                    fontSize: "var(--text-base)",
                                     fontFamily: "inherit",
                                   }}
                                 >
@@ -1240,7 +1240,7 @@ export default function ShopsClient({
                                     border: "none",
                                     cursor: "pointer",
                                     color: "var(--ink)",
-                                    fontSize: 13,
+                                    fontSize: "var(--text-base)",
                                     fontFamily: "inherit",
                                   }}
                                 >
@@ -1258,7 +1258,7 @@ export default function ShopsClient({
                                 <div
                                   style={{
                                     padding: "4px 14px",
-                                    fontSize: 11,
+                                    fontSize: "var(--text-xs)",
                                     color: "var(--ink-faint)",
                                     fontWeight: 600,
                                     textTransform: "uppercase",
@@ -1294,7 +1294,7 @@ export default function ShopsClient({
                                         shop.subscription_status === value
                                           ? "var(--brand)"
                                           : "var(--ink)",
-                                      fontSize: 13,
+                                      fontSize: "var(--text-base)",
                                       fontFamily: "inherit",
                                     }}
                                   >
@@ -1334,7 +1334,7 @@ export default function ShopsClient({
                                     gap: 8,
                                     padding: "8px 14px",
                                     color: "var(--ink)",
-                                    fontSize: 13,
+                                    fontSize: "var(--text-base)",
                                     textDecoration: "none",
                                   }}
                                   onClick={() => setOpenMenu(null)}
@@ -1360,7 +1360,7 @@ export default function ShopsClient({
             style={{
               padding: "10px 16px",
               borderTop: "1px solid var(--surface-border)",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
               color: "var(--ink-faint)",
             }}
           >
@@ -1406,7 +1406,7 @@ export default function ShopsClient({
           >
             <h2
               style={{
-                fontSize: 16,
+                fontSize: "var(--text-md)",
                 fontWeight: 700,
                 color: "var(--ink)",
                 marginTop: 0,
@@ -1418,7 +1418,7 @@ export default function ShopsClient({
 
             <p
               style={{
-                fontSize: 12,
+                fontSize: "var(--text-sm)",
                 color: "var(--ink-muted)",
                 marginTop: 0,
                 marginBottom: 20,
@@ -1447,7 +1447,7 @@ export default function ShopsClient({
                     style={{
                       color: "var(--brand-dark)",
                       fontWeight: 700,
-                      fontSize: 14,
+                      fontSize: "var(--text-md)",
                       marginBottom: 6,
                     }}
                   >
@@ -1457,7 +1457,7 @@ export default function ShopsClient({
                   <div
                     style={{
                       color: "var(--ink)",
-                      fontSize: 12,
+                      fontSize: "var(--text-sm)",
                     }}
                   >
                     Owner login for <strong>{createdOwner.shopName}</strong>
@@ -1499,7 +1499,7 @@ export default function ShopsClient({
                       borderRadius: 10,
                       padding: 12,
                       color: "#1D4ED8",
-                      fontSize: 12,
+                      fontSize: "var(--text-sm)",
                       lineHeight: 1.5,
                     }}
                   >
@@ -1509,7 +1509,7 @@ export default function ShopsClient({
                 ) : (
                   <p
                     style={{
-                      fontSize: 11,
+                      fontSize: "var(--text-xs)",
                       color: "#B7791F",
                       lineHeight: 1.5,
                       margin: 0,
@@ -1642,7 +1642,7 @@ export default function ShopsClient({
                     <p
                       style={{
                         margin: "5px 0 0",
-                        fontSize: 12,
+                        fontSize: "var(--text-sm)",
                         color: "var(--ink-muted)",
                       }}
                     >
@@ -1654,7 +1654,7 @@ export default function ShopsClient({
                     <p
                       style={{
                         margin: "5px 0 0",
-                        fontSize: 12,
+                        fontSize: "var(--text-sm)",
                         color: "var(--error)",
                       }}
                     >
@@ -1750,7 +1750,7 @@ export default function ShopsClient({
                 >
                   <div
                     style={{
-                      fontSize: 12,
+                      fontSize: "var(--text-sm)",
                       color: "var(--ink)",
                       fontWeight: 700,
                       marginBottom: 10,
@@ -1842,7 +1842,7 @@ export default function ShopsClient({
                       borderRadius: 8,
                       padding: "8px 12px",
                       color: "var(--error)",
-                      fontSize: 12,
+                      fontSize: "var(--text-sm)",
                     }}
                   >
                     {addError}
@@ -1919,15 +1919,15 @@ export default function ShopsClient({
               overflowY: "auto",
             }}
           >
-            <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 4 }}>
+            <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 4 }}>
               WhatsApp Connection — {whatsappShop.name}
             </h2>
-            <p style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 0, marginBottom: 20 }}>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 0, marginBottom: 20 }}>
               Find these values in Meta Business Manager → WhatsApp Manager → API Setup for this shop&apos;s number.
             </p>
 
             {whatsappLoading ? (
-              <p style={{ fontSize: 13, color: "var(--ink-faint)" }}>Loading…</p>
+              <p style={{ fontSize: "var(--text-base)", color: "var(--ink-faint)" }}>Loading…</p>
             ) : (
               <form onSubmit={handleSaveWhatsapp} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
                 {whatsappError && (
@@ -1938,7 +1938,7 @@ export default function ShopsClient({
                       border: "1px solid rgba(239,68,68,0.2)",
                       borderRadius: 8,
                       padding: "10px 14px",
-                      fontSize: 13,
+                      fontSize: "var(--text-base)",
                     }}
                   >
                     {whatsappError}
@@ -2019,7 +2019,7 @@ export default function ShopsClient({
             border: "1px solid var(--surface-border)",
             borderRadius: 12,
             padding: "12px 20px",
-            fontSize: 13,
+            fontSize: "var(--text-base)",
             color: "var(--ink)",
             display: "flex",
             alignItems: "center",

@@ -133,7 +133,7 @@ export default function GlobalSearch() {
           border: "1px solid var(--surface-border)",
           background: "#FFFFFF",
           color: "var(--ink-faint)",
-          fontSize: 13,
+          fontSize: "var(--text-base)",
           cursor: "pointer",
           fontFamily: "inherit",
           width: "100%",
@@ -142,7 +142,7 @@ export default function GlobalSearch() {
       >
         <Search size={14} />
         <span style={{ flex: 1, textAlign: "left" }}>Search…</span>
-        <span style={{ fontSize: 11, border: "1px solid var(--surface-border)", borderRadius: 4, padding: "1px 5px", color: "var(--ink-faint)" }}>Ctrl K</span>
+        <span style={{ fontSize: "var(--text-xs)", border: "1px solid var(--surface-border)", borderRadius: 4, padding: "1px 5px", color: "var(--ink-faint)" }}>Ctrl K</span>
       </button>
 
       {open && (
@@ -166,17 +166,17 @@ export default function GlobalSearch() {
                 }}
                 onKeyDown={onKeyDown}
                 placeholder="Search orders, products, customers…"
-                style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "var(--ink)", fontFamily: "inherit" }}
+                style={{ flex: 1, border: "none", outline: "none", fontSize: "var(--text-md)", color: "var(--ink)", fontFamily: "inherit" }}
               />
             </div>
 
             <div style={{ maxHeight: "50vh", overflowY: "auto" }}>
               {query.trim().length < 2 ? (
-                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Type at least 2 characters to search.</div>
+                <div style={{ padding: 24, fontSize: "var(--text-base)", color: "var(--ink-faint)", textAlign: "center" }}>Type at least 2 characters to search.</div>
               ) : loading ? (
-                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Searching…</div>
+                <div style={{ padding: 24, fontSize: "var(--text-base)", color: "var(--ink-faint)", textAlign: "center" }}>Searching…</div>
               ) : flatResults.length === 0 ? (
-                <div style={{ padding: 24, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>No matches for &quot;{query}&quot;.</div>
+                <div style={{ padding: 24, fontSize: "var(--text-base)", color: "var(--ink-faint)", textAlign: "center" }}>No matches for &quot;{query}&quot;.</div>
               ) : (
                 flatResults.map((r, i) => (
                   <button
@@ -198,10 +198,10 @@ export default function GlobalSearch() {
                   >
                     <r.icon size={15} color="var(--ink-muted)" style={{ flexShrink: 0 }} />
                     <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      <div style={{ fontSize: "var(--text-base)", fontWeight: 600, color: "var(--ink)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                         {r.primary}
                       </div>
-                      <div style={{ fontSize: 12, color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.secondary}</div>
+                      <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.secondary}</div>
                     </div>
                     {r.key.startsWith("order-") && (
                       <span

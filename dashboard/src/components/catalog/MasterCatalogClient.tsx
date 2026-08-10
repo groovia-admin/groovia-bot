@@ -493,14 +493,14 @@ export default function MasterCatalogClient() {
                       <Thumb src={cat.image_url} alt={cat.name} size={30} />
                       <div style={{ minWidth: 0, flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 600, color: selected ? 'var(--brand-dark)' : 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: "var(--text-base)", fontWeight: 600, color: selected ? 'var(--brand-dark)' : 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {cat.name}
                           </span>
                           {!cat.is_active && (
-                            <span style={{ fontSize: 9, fontWeight: 700, color: 'var(--ink-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 999 }}>OFF</span>
+                            <span style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: 'var(--ink-faint)', background: 'var(--surface)', padding: '1px 5px', borderRadius: 999 }}>OFF</span>
                           )}
                         </div>
-                        <span style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{cat.master_products?.length ?? 0} items · in {enabledShopCount(cat.id)} shop{enabledShopCount(cat.id) === 1 ? '' : 's'}</span>
+                        <span style={{ fontSize: "var(--text-xs)", color: 'var(--ink-faint)' }}>{cat.master_products?.length ?? 0} items · in {enabledShopCount(cat.id)} shop{enabledShopCount(cat.id) === 1 ? '' : 's'}</span>
                       </div>
                       <ChevronRight size={14} color="var(--ink-faint)" style={{ flexShrink: 0 }} />
                     </button>
@@ -632,10 +632,10 @@ export default function MasterCatalogClient() {
                 <label key={shop.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderBottom: '1px solid var(--surface)', cursor: 'pointer' }}>
                   <input type="checkbox" checked={selectedShopIds.has(shop.id)} onChange={() => toggleShopSelection(shop.id)} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13, color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: "var(--text-base)", color: 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {shop.name}{!shop.is_active && <span style={{ color: 'var(--ink-faint)' }}> (inactive)</span>}
                     </div>
-                    {shop.city && <div style={{ fontSize: 11, color: 'var(--ink-faint)' }}>{shop.city}</div>}
+                    {shop.city && <div style={{ fontSize: "var(--text-xs)", color: 'var(--ink-faint)' }}>{shop.city}</div>}
                   </div>
                 </label>
               ))}

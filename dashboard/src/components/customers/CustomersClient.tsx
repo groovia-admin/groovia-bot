@@ -69,7 +69,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Customers</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Customers</h1>
             <InfoTooltip
               items={[
                 { color: "var(--brand-dark)", label: "Active", hint: "has placed at least one order" },
@@ -77,7 +77,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>Everyone who has ordered from you on WhatsApp.</p>
         </div>
         <button
           type="button"
@@ -93,7 +93,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
             border: "1px solid var(--surface-border)",
             background: "var(--surface-card)",
             color: "var(--ink-muted)",
-            fontSize: 12,
+            fontSize: "var(--text-sm)",
             cursor: filtered.length === 0 ? "default" : "pointer",
             fontFamily: "inherit",
             opacity: filtered.length === 0 ? 0.5 : 1,
@@ -106,17 +106,17 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Total customers</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{initialCustomers.length}</div>
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>Total customers</div>
+          <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{initialCustomers.length}</div>
         </div>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Repeat customers</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{repeatCustomers}</div>
+          <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>Repeat customers</div>
+          <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", marginTop: 4 }}>{repeatCustomers}</div>
         </div>
         {showRevenue && (
           <div style={S.card}>
-            <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>Outstanding credit</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: totalOutstandingCredit > 0 ? "var(--error)" : "var(--ink)", marginTop: 4 }}>
+            <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>Outstanding credit</div>
+            <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: totalOutstandingCredit > 0 ? "var(--error)" : "var(--ink)", marginTop: 4 }}>
               ₹{totalOutstandingCredit.toFixed(0)}
             </div>
           </div>
@@ -135,7 +135,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
           <option value="credit">Sort: Outstanding credit</option>
         </select>
         {showRevenue && (
-          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--ink)", cursor: "pointer" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--text-base)", color: "var(--ink)", cursor: "pointer" }}>
             <input type="checkbox" checked={creditOnly} onChange={(e) => setCreditOnly(e.target.checked)} />
             Has outstanding credit only
           </label>

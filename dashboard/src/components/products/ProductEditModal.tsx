@@ -159,7 +159,7 @@ export default function ProductEditModal({
         }}
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 800, color: "var(--ink)", margin: 0 }}>
+          <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>
             {canManage ? "Edit product" : "View product"}
           </h2>
           <button
@@ -173,13 +173,13 @@ export default function ProductEditModal({
         </div>
 
         {!canManage && (
-          <div style={{ color: "var(--ink-muted)", background: "var(--surface)", border: "1px solid var(--surface-border)", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 14 }}>
+          <div style={{ color: "var(--ink-muted)", background: "var(--surface)", border: "1px solid var(--surface-border)", borderRadius: 8, padding: "10px 14px", fontSize: "var(--text-base)", marginBottom: 14 }}>
             You don&apos;t have permission to edit products. Ask the shop owner to grant it.
           </div>
         )}
 
         {error && (
-          <div style={{ color: "var(--error)", background: "var(--error-light)", border: "1px solid rgba(186,26,26,0.3)", borderRadius: 8, padding: "10px 14px", fontSize: 13, marginBottom: 14 }}>
+          <div style={{ color: "var(--error)", background: "var(--error-light)", border: "1px solid rgba(186,26,26,0.3)", borderRadius: 8, padding: "10px 14px", fontSize: "var(--text-base)", marginBottom: 14 }}>
             {error}
           </div>
         )}
@@ -246,7 +246,7 @@ export default function ProductEditModal({
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={form.image_url} alt="" style={{ width: 56, height: 56, borderRadius: 8, objectFit: "cover", border: "1px solid var(--surface-border)" }} />
                 ) : (
-                  <div style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed var(--surface-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-faint)", fontSize: 10, textAlign: "center" }}>
+                  <div style={{ width: 56, height: 56, borderRadius: 8, border: "1px dashed var(--surface-border)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-faint)", fontSize: "var(--text-xs)", textAlign: "center" }}>
                     No image
                   </div>
                 )}
@@ -274,7 +274,7 @@ export default function ProductEditModal({
               <input style={S.input} value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} />
             </div>
 
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink)" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-base)", color: "var(--ink)" }}>
               <input type="checkbox" checked={form.is_available} onChange={(e) => setForm((f) => ({ ...f, is_available: e.target.checked }))} />
               Available for sale
             </label>

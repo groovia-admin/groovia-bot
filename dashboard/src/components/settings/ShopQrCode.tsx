@@ -11,12 +11,12 @@ type Props = {
 // <a download> link. No 'use client' interactivity required at all.
 export default async function ShopQrCode({ slug, whatsappNumber }: Props) {
   if (!slug) {
-    return <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>Shop link not available yet.</p>
+    return <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)' }}>Shop link not available yet.</p>
   }
 
   if (!whatsappNumber) {
     return (
-      <p style={{ fontSize: 13, color: 'var(--ink-muted)' }}>
+      <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)' }}>
         Connect a WhatsApp number first (see your platform admin) — the QR code links directly to a WhatsApp chat, so it
         needs a number to point to.
       </p>
@@ -42,7 +42,7 @@ export default async function ShopQrCode({ slug, whatsappNumber }: Props) {
         style={{ borderRadius: 8, border: '1px solid var(--surface-border)' }}
       />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <p style={{ fontSize: 12, color: 'var(--ink-muted)', margin: 0, maxWidth: 320 }}>
+        <p style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)', margin: 0, maxWidth: 320 }}>
           Print this near your counter, or share it online. Scanning it opens WhatsApp with a message pre-filled — no
           typing needed for the customer.
         </p>
@@ -53,7 +53,7 @@ export default async function ShopQrCode({ slug, whatsappNumber }: Props) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            fontSize: 13,
+            fontSize: "var(--text-base)",
             fontWeight: 600,
             color: 'var(--brand-dark)',
             textDecoration: 'none',

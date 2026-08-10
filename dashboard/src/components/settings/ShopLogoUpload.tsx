@@ -63,7 +63,7 @@ export default function ShopLogoUpload({ initialLogoUrl }: { initialLogoUrl: str
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoUrl} alt="Shop logo" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
         ) : (
-          <span style={{ fontSize: 11, color: "var(--ink-faint)" }}>No logo</span>
+          <span style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>No logo</span>
         )}
       </div>
 
@@ -81,7 +81,7 @@ export default function ShopLogoUpload({ initialLogoUrl }: { initialLogoUrl: str
             border: "1px solid var(--surface-border)",
             background: "var(--surface-hover)",
             color: "var(--ink)",
-            fontSize: 13,
+            fontSize: "var(--text-base)",
             fontWeight: 600,
             cursor: "pointer",
             fontFamily: "inherit",
@@ -92,7 +92,7 @@ export default function ShopLogoUpload({ initialLogoUrl }: { initialLogoUrl: str
           <Upload size={14} />
           {uploading ? "Uploading…" : logoUrl ? "Change logo" : "Upload logo"}
         </button>
-        <p style={{ fontSize: 11, color: "var(--ink-faint)", margin: 0 }}>JPEG, PNG, or WebP. Up to 5MB.</p>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: 0 }}>JPEG, PNG, or WebP. Up to 5MB.</p>
         {error && <div style={{ ...errorStyle, padding: "6px 10px" }}>{error}</div>}
       </div>
 

@@ -22,6 +22,25 @@
   --error:          #BA1A1A;
   --error-light:    #FFDAD6;
   --error-dark:     #93000A;
+
+  /* ── Type scale ──
+     Most of the dashboard is inline-styled, and every file picked its own
+     font sizes independently — an audit found 15+ distinct values in use
+     (9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22px...) with no consistent
+     mapping to a role. These 6 sizes are that mapping now; the nearby
+     stray values above were folded into whichever of these they were
+     closest to, not left as a 7th/8th/9th option. Icon-generation files
+     (favicon/PWA icon routes, which render at 96-288px) are unrelated to
+     UI text and intentionally don't use these.
+     xs: captions/meta · sm: labels/table headers · base: default body ·
+     md: card titles/subheadings · lg: section headings · xl: page titles */
+  --text-xs:   11px;
+  --text-sm:   12px;
+  --text-base: 13px;
+  --text-md:   15px;
+  --text-lg:   18px;
+  --text-xl:   22px;
+  --text-2xl:  28px;
 }
 
 @layer base {

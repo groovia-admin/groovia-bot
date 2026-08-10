@@ -138,12 +138,12 @@ export default function ShopProfileForm({
       <div>
         <label style={labelStyle}>WhatsApp number</label>
         <input style={{ ...inputStyle, background: "#F7F8FA", color: "var(--ink-muted)" }} value={whatsappNumber ?? "Not connected"} disabled />
-        <p style={{ fontSize: 11, color: "var(--ink-faint)", margin: "6px 0 0" }}>
+        <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: "6px 0 0" }}>
           Shown to customers automatically — set up under your WhatsApp connection, not editable here.
         </p>
       </div>
 
-      <p style={{ fontSize: 11, color: "var(--ink-faint)", margin: 0 }}>
+      <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: 0 }}>
         Name, address, and this number are shown to customers in the WhatsApp welcome message when they start an order.
       </p>
 

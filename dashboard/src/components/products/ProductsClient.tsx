@@ -318,7 +318,7 @@ export default function ProductsClient({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Products</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Products</h1>
             <InfoTooltip
               items={[
                 { color: "var(--brand-dark)", label: "Available", hint: "shown to customers on WhatsApp" },
@@ -327,7 +327,7 @@ export default function ProductsClient({
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
             Manage your catalog and inventory.
           </p>
         </div>
@@ -341,7 +341,7 @@ export default function ProductsClient({
             border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
-            fontSize: 13,
+            fontSize: "var(--text-base)",
           }}
         >
           {error}
@@ -351,7 +351,7 @@ export default function ProductsClient({
       {/* Categories */}
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>Categories</h2>
+          <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>Categories</h2>
           {canManage && (
             <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAddCategory((v) => !v)}>
               <Plus size={14} />
@@ -377,7 +377,7 @@ export default function ProductsClient({
         )}
 
         {categories.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: 0 }}>No categories yet. Add one to start adding products.</p>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", margin: 0 }}>No categories yet. Add one to start adding products.</p>
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {categories.map((category) => (
@@ -443,7 +443,7 @@ export default function ProductsClient({
 
       {/* Products */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
+        <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
@@ -542,7 +542,7 @@ export default function ProductsClient({
               />
             </div>
           </div>
-          <p style={{ fontSize: 11, color: "var(--ink-muted)", margin: 0 }}>* Required</p>
+          <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-muted)", margin: 0 }}>* Required</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="submit" disabled={savingProduct} style={{ ...S.btn("var(--brand)", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
               {savingProduct ? "Adding…" : "Add product"}
@@ -564,7 +564,7 @@ export default function ProductsClient({
             style={{ ...S.input, paddingLeft: 30 }}
           />
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-muted)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
           Per page
           <select value={pageSize} onChange={(e) => updatePageSize(Number(e.target.value))} style={{ ...S.input, width: "auto" }}>
             <option value={20}>20</option>
@@ -681,7 +681,7 @@ export default function ProductsClient({
           >
             <ChevronLeft size={14} />
           </button>
-          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+          <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
             Page {currentPage} of {totalPages} · {filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}
           </span>
           <button

@@ -120,7 +120,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Staff</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Staff</h1>
             <InfoTooltip
               items={[
                 { color: "var(--brand-dark)", label: "Active", hint: "can sign in and use the dashboard" },
@@ -128,7 +128,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
             Manage who can access this shop and what they can do.
           </p>
         </div>
@@ -146,7 +146,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
             border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
-            fontSize: 13,
+            fontSize: "var(--text-base)",
           }}
         >
           {error}
@@ -178,7 +178,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                     borderRight: "none",
                     background: "var(--surface)",
                     color: "var(--ink-muted)",
-                    fontSize: 13,
+                    fontSize: "var(--text-base)",
                   }}
                 >
                   +91
@@ -258,7 +258,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                               ...S.input,
                               width: "auto",
                               padding: "4px 8px",
-                              fontSize: 12,
+                              fontSize: "var(--text-sm)",
                             }}
                           >
                             <option value="staff">Staff</option>
@@ -270,7 +270,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                         {row.role === "staff" ? (
                           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                             {(Object.keys(PERMISSION_LABEL) as StaffPermission[]).map((perm) => (
-                              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--ink)", cursor: busy ? "default" : "pointer" }}>
+                              <label key={perm} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--text-sm)", color: "var(--ink)", cursor: busy ? "default" : "pointer" }}>
                                 <input
                                   type="checkbox"
                                   disabled={busy}
@@ -282,7 +282,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                             ))}
                           </div>
                         ) : (
-                          <span style={{ fontSize: 12, color: "var(--ink-faint)" }}>Full access</span>
+                          <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>Full access</span>
                         )}
                       </td>
                       <td style={S.td}>

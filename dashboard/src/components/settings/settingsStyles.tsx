@@ -5,7 +5,7 @@ export const inputStyle: React.CSSProperties = {
   border: "1px solid var(--surface-border)",
   background: "#FFFFFF",
   color: "var(--ink)",
-  fontSize: 13,
+  fontSize: "var(--text-base)",
   outline: "none",
   fontFamily: "inherit",
   boxSizing: "border-box",
@@ -13,7 +13,7 @@ export const inputStyle: React.CSSProperties = {
 
 export const labelStyle: React.CSSProperties = {
   display: "block",
-  fontSize: 12,
+  fontSize: "var(--text-sm)",
   color: "var(--ink-muted)",
   marginBottom: 6,
   fontWeight: 600,
@@ -29,7 +29,7 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
   border: "none",
   background: "var(--brand)",
   color: "#fff",
-  fontSize: 13,
+  fontSize: "var(--text-base)",
   fontWeight: 600,
   cursor: "pointer",
   fontFamily: "inherit",
@@ -38,7 +38,7 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
 });
 
 export const noticeStyle: React.CSSProperties = {
-  fontSize: 11.5,
+  fontSize: "var(--text-xs)",
   color: "var(--ink-muted)",
   background: "var(--surface)",
   border: "1px solid var(--surface-border)",
@@ -53,7 +53,7 @@ export const errorStyle: React.CSSProperties = {
   border: "1px solid rgba(186,26,26,0.3)",
   borderRadius: 8,
   padding: "10px 14px",
-  fontSize: 13,
+  fontSize: "var(--text-base)",
 };
 
 export const successStyle: React.CSSProperties = {
@@ -62,7 +62,7 @@ export const successStyle: React.CSSProperties = {
   border: "1px solid rgba(0,104,95,0.35)",
   borderRadius: 8,
   padding: "10px 14px",
-  fontSize: 13,
+  fontSize: "var(--text-base)",
 };
 
 export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () => void; disabled?: boolean }) {
@@ -111,7 +111,7 @@ export function ToggleRow({
 }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <span style={{ fontSize: 13, color: "var(--ink)" }}>{label}</span>
+      <span style={{ fontSize: "var(--text-base)", color: "var(--ink)" }}>{label}</span>
       <Toggle on={on} onToggle={onToggle} disabled={disabled} />
     </div>
   );
