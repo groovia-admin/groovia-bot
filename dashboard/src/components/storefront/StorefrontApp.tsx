@@ -247,10 +247,18 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     }
   }, [view, waLink])
 
+  // Never lets the cart hold more than what's actually on the shelf —
+  // reported as a real gap: a customer could previously order past a
+  // product's stock_quantity entirely, since nothing anywhere checked
+  // it. Clamped here for immediate feedback; order submission
+  // re-validates the same limit server-side (stock can still change
+  // between browsing and checkout), so this client-side cap is a UX
+  // nicety, not the actual enforcement.
   function setQuantity(product: StorefrontProduct, quantity: number) {
+    const clamped = Math.min(quantity, product.stock_quantity)
     setCart((prev) => {
       const next = { ...prev }
-      if (quantity <= 0) {
+      if (clamped <= 0) {
         delete next[product.id]
       } else {
         next[product.id] = {
@@ -258,23 +266,30 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
           name: product.name,
           unit: product.unit,
           unit_price: product.price,
-          quantity,
-          subtotal: product.price * quantity,
+          quantity: clamped,
+          subtotal: product.price * clamped,
         }
       }
       return next
     })
   }
 
+  const stockByProductId = useMemo(
+    () => Object.fromEntries(products.map((p) => [p.id, p.stock_quantity])),
+    [products]
+  )
+
   function setLineQuantity(productId: string, quantity: number) {
+    const stock = stockByProductId[productId]
+    const clamped = stock != null ? Math.min(quantity, stock) : quantity
     setCart((prev) => {
       const existing = prev[productId]
       if (!existing) return prev
       const next = { ...prev }
-      if (quantity <= 0) {
+      if (clamped <= 0) {
         delete next[productId]
       } else {
-        next[productId] = { ...existing, quantity, subtotal: existing.unit_price * quantity }
+        next[productId] = { ...existing, quantity: clamped, subtotal: existing.unit_price * clamped }
       }
       return next
     })
@@ -296,6 +311,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         form={checkoutForm}
         onFormChange={setCheckoutForm}
         onQuantityChange={setLineQuantity}
+        stockByProductId={stockByProductId}
         canCheckout={session.status === 'active'}
         onBack={() => setView('browse')}
         onAddItems={() => setView('browse')}
@@ -439,13 +455,20 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                 <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
                 <div className="mt-auto pt-2 flex items-center justify-between">
                   <span className="text-sm font-semibold text-ink">{formatMoney(product.price)}</span>
-                  {inCart ? (
+                  {product.stock_quantity <= 0 ? (
+                    <span className="text-xs font-medium text-ink-faint">Out of stock</span>
+                  ) : inCart ? (
                     <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
                       <button className="text-white p-1" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
                         <Minus size={14} />
                       </button>
                       <span className="text-white text-sm font-medium w-4 text-center">{inCart.quantity}</span>
-                      <button className="text-white p-1" onClick={() => setQuantity(product, inCart.quantity + 1)} aria-label="Increase quantity">
+                      <button
+                        className="text-white p-1 disabled:opacity-40"
+                        onClick={() => setQuantity(product, inCart.quantity + 1)}
+                        aria-label="Increase quantity"
+                        disabled={inCart.quantity >= product.stock_quantity}
+                      >
                         <Plus size={14} />
                       </button>
                     </div>
@@ -459,6 +482,9 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                     </button>
                   )}
                 </div>
+                {inCart && inCart.quantity >= product.stock_quantity && (
+                  <p className="text-[11px] text-ink-faint mt-1">Only {product.stock_quantity} left</p>
+                )}
               </div>
             )
           })

@@ -23,6 +23,7 @@ export type StorefrontProduct = {
   unit: string
   price: number
   image_url: string | null
+  stock_quantity: number
 }
 
 export type StorefrontCategory = {
