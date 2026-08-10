@@ -218,6 +218,48 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
+  // Stock is committed as sold on acceptance, mirroring the dashboard's
+  // PATCH /api/shop/orders/[id] route. This is the path most orders
+  // actually go through (staff tap Accept on WhatsApp, not the
+  // dashboard), so without this stock never moves in normal operation.
+  // No restore path is needed here: REJECT only fires from 'pending',
+  // before any decrement, and 'cancelled' isn't reachable from this
+  // handler (only from the dashboard, which already restores it there).
+  if (command === 'ACCEPT') {
+    const { data: items, error: itemsError } = await supabase
+      .from('order_items')
+      .select('product_id, product_name_snapshot, quantity')
+      .eq('order_id', order.id);
+
+    if (itemsError) {
+      logger.error({ itemsError, orderId: order.id }, 'Failed to load order items for stock adjustment');
+    } else {
+      for (const item of items ?? []) {
+        if (!item.product_id) continue; // custom/removed products have no stock to adjust
+
+        const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
+          p_product_id: item.product_id,
+          p_delta: -item.quantity,
+        });
+
+        if (rpcError) {
+          logger.error({ rpcError, productId: item.product_id }, 'Failed to adjust stock for product');
+          continue;
+        }
+
+        await supabase.from('inventory_movements').insert({
+          shop_id: order.shop_id,
+          product_id: item.product_id,
+          quantity_delta: -item.quantity,
+          movement_type: 'sale',
+          reference_id: order.id,
+          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+          created_by: shopUser?.id ?? null,
+        });
+      }
+    }
+  }
+
   // Write audit log — best-effort. supabase-js query builders are
   // thenables (awaitable), not real Promise instances, so they have no
   // .catch() method; chaining one directly throws a TypeError instead of
