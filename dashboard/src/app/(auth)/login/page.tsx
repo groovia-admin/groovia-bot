@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { normalizeIndianPhone } from '@/lib/phone'
 import { logAuthEvent } from '@/lib/auth/log-auth-event'
 import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield, ShoppingCart } from 'lucide-react'
+import CartLoader from '@/components/ui/CartLoader'
 
 type Method = 'password' | 'phone'
 type PhoneStep = 'input' | 'otp'
@@ -123,26 +124,10 @@ export default function LoginPage() {
     error: { background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)', color: 'var(--error)', padding: '10px 14px', borderRadius: '8px', fontSize: "var(--text-sm)" },
   }
 
-  // Cart-runs-through-the-button loading state — icon-only (no text) micro
-  // interaction requested in place of a plain "Signing in..." label, using
-  // the button's own width via % positioning so it scales to any button.
-  function SubmitButtonContent({ loading, label }: { loading: boolean; label: string }) {
-    if (loading) {
-      return (
-        <span
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '-15%',
-            transform: 'translateY(-50%)',
-            display: 'flex',
-            animation: 'cartRun 1.1s ease-in-out infinite',
-          }}
-        >
-          <ShoppingCart size={18} />
-        </span>
-      )
-    }
+  // Plain button label — the loading state itself is now the same
+  // CartLoader animation used everywhere else in the dashboard (see each
+  // form below), not a bespoke per-button animation.
+  function SubmitButtonContent({ label }: { label: string }) {
     return (
       <>
         {label}
@@ -161,12 +146,6 @@ export default function LoginPage() {
         @keyframes loginLogoIn {
           from { opacity: 0; transform: scale(0.75); }
           to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes cartRun {
-          0%   { left: -15%; opacity: 0; }
-          12%  { opacity: 1; }
-          88%  { opacity: 1; }
-          100% { left: 110%; opacity: 0; }
         }
         @keyframes cartOrbit {
           from { transform: rotate(0deg); }
@@ -272,6 +251,9 @@ export default function LoginPage() {
           </div>
 
           {method === 'password' ? (
+            loading ? (
+              <CartLoader label="Signing in…" size="inline" />
+            ) : (
             <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={s.label}>Email address</label>
@@ -318,10 +300,14 @@ export default function LoginPage() {
                 disabled={loading || !email || !password}
                 style={{ ...s.btn, opacity: loading || !email || !password ? 0.5 : 1 }}
               >
-                <SubmitButtonContent loading={loading} label="Sign in" />
+                <SubmitButtonContent label="Sign in" />
               </button>
             </form>
+            )
           ) : phoneStep === 'input' ? (
+            loading ? (
+              <CartLoader label="Sending code…" size="inline" />
+            ) : (
             <form onSubmit={handleSendOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={s.label}>Phone number</label>
@@ -349,9 +335,12 @@ export default function LoginPage() {
                 disabled={loading || phone.length < 10}
                 style={{ ...s.btn, opacity: loading || phone.length < 10 ? 0.5 : 1 }}
               >
-                <SubmitButtonContent loading={loading} label="Send OTP" />
+                <SubmitButtonContent label="Send OTP" />
               </button>
             </form>
+            )
+          ) : loading ? (
+            <CartLoader label="Verifying…" size="inline" />
           ) : (
             <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>
@@ -380,7 +369,7 @@ export default function LoginPage() {
                 disabled={loading || otp.length < 6}
                 style={{ ...s.btn, opacity: loading || otp.length < 6 ? 0.5 : 1 }}
               >
-                <SubmitButtonContent loading={loading} label="Verify & sign in" />
+                <SubmitButtonContent label="Verify & sign in" />
               </button>
 
               <button
