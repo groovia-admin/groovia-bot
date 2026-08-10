@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2, Search, X } from 'lucide-react'
-import { CartView } from './CartView'
 import { CheckoutView } from './CheckoutView'
 import CartLoader from '@/components/ui/CartLoader'
 import ProductImage from './ProductImage'
@@ -64,7 +63,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
-  const [view, setView] = useState<'browse' | 'cart' | 'checkout' | 'placed'>('browse')
+  const [view, setView] = useState<'browse' | 'checkout' | 'placed'>('browse')
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
   // Lifted up here (not local to CheckoutView) so it survives the
   // customer navigating back to browse for a forgotten item and
@@ -285,20 +284,6 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     .filter((p) => !activeCategoryId || p.category_id === activeCategoryId)
     .filter((p) => !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
 
-  if (view === 'cart') {
-    return (
-      <CartView
-        items={cartItems}
-        total={cartTotal}
-        formatMoney={formatMoney}
-        onBack={() => setView('browse')}
-        onQuantityChange={setLineQuantity}
-        canCheckout={session.status === 'active'}
-        onCheckout={() => setView('checkout')}
-      />
-    )
-  }
-
   if (view === 'checkout' && token) {
     return (
       <CheckoutView
@@ -310,7 +295,9 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
         formatMoney={formatMoney}
         form={checkoutForm}
         onFormChange={setCheckoutForm}
-        onBack={() => setView('cart')}
+        onQuantityChange={setLineQuantity}
+        canCheckout={session.status === 'active'}
+        onBack={() => setView('browse')}
         onAddItems={() => setView('browse')}
         onPlaced={(orderNumber) => {
           setPlacedOrderNumber(orderNumber)
@@ -480,11 +467,11 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
 
       {cartCount > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-surface-card border-t border-surface-border px-4 py-3">
-          <button className="btn-primary w-full justify-between mx-auto max-w-2xl flex" onClick={() => setView('cart')}>
+          <button className="btn-primary w-full justify-between mx-auto max-w-2xl flex" onClick={() => setView('checkout')}>
             <span className="flex items-center gap-2">
               <ShoppingBag size={18} /> {cartCount} item{cartCount > 1 ? 's' : ''}
             </span>
-            <span>{formatMoney(cartTotal)} · View cart</span>
+            <span>View order · {formatMoney(cartTotal)}</span>
           </button>
         </div>
       )}
