@@ -24,7 +24,7 @@ const {
   sendNewOrderAlertTemplateFallback,
   buildOrderPlacedPayload,
 } = require('./orderCreator');
-const { getOrderWithItems } = require('./orderEditor');
+const { getOrderWithItems, createEditLink } = require('./orderEditor');
 const deliveryTracker = require('./deliveryTracker');
 
 // ── Dynamic hourly pickup slots ──────────────────────────────────
@@ -284,13 +284,15 @@ const STAFF_BUTTON_COMMANDS = {
 
 // Replaces the old chat-based flow (a tap-to-adjust list, or a >9-item
 // text fallback of "reply with item numbers" / "edit N" / "done") —
-// reported as clunky and hard to use. The dashboard already has a real
-// item editor (OrderItemsEditor.tsx: a proper +/- stepper and remove
-// button, already wired to notify the customer on any change via
-// notifyCustomerOfOrderEdit through /internal/orders/:orderId/notify-edit)
-// so this just hands staff a direct link to it instead of re-implementing
-// the same capability worse in chat. Reuses webviewBaseUrl — the
-// dashboard and the customer webview are the same Next.js deployment.
+// reported as clunky and hard to use. An earlier version of this linked
+// straight to the dashboard's own item editor, but the dashboard has no
+// mobile layout at all (a fixed 256px sidebar with no responsive
+// handling) and requires an OTP login — confirmed useless from a phone
+// on both counts. Now issues a fresh signed, no-login link
+// (createEditLink) to a dedicated mobile-first page
+// (/staff-edit/{orderId}?t={token}) instead — same "hashed random token
+// in the URL, no session" pattern the customer webview already uses,
+// just for this one order rather than a customer's whole session.
 async function sendEditPrompt(from, shopId, orderId) {
   const loaded = await getOrderWithItems(orderId, shopId);
   if (!loaded) {
@@ -304,12 +306,18 @@ async function sendEditPrompt(from, shopId, orderId) {
   }
 
   if (!config.webviewBaseUrl) {
-    logger.warn({ shopId, orderId }, 'WEBVIEW_BASE_URL not configured — cannot send the dashboard edit link');
+    logger.warn({ shopId, orderId }, 'WEBVIEW_BASE_URL not configured — cannot send the edit link');
     await sendWhatsAppMessage(from, '⚠️ Order editing isn\'t set up yet — please contact support.');
     return;
   }
 
-  const link = `${config.webviewBaseUrl}/dashboard/orders/${orderId}`;
+  const token = await createEditLink(orderId, shopId);
+  if (!token) {
+    await sendWhatsAppMessage(from, '⚠️ Could not start editing right now. Please try again, or Accept/Reject as-is.');
+    return;
+  }
+
+  const link = `${config.webviewBaseUrl}/staff-edit/${orderId}?t=${token}`;
   const text = `✏️ Adjust items for order *${loaded.order.order_number}* — tap below. The customer is notified automatically once you save.`;
 
   await sendCtaUrlMessage(from, text, 'Edit Order', link);
