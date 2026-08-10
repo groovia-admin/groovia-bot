@@ -83,3 +83,4 @@
 | #118 | Cart loading animation: 2x speed, centered; reuse on login | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 14:49 UTC | 0d 0h 1m |
 | #119 | Bot real logo assets | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 15:03 UTC | 0d 0h 9m |
 | #120 | Auto-accept an order on first edit + notify customer; less-vague edit message | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 15:11 UTC | 0d 0h 0m |
+| #121 | Staff confirmation + Mark-ready button when an edit auto-accepts an order | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 16:31 UTC | 0d 0h 0m |
