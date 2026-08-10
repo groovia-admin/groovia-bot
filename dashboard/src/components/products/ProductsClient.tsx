@@ -1,12 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import Link from "next/link";
 import { Plus, Pencil, EyeOff, Eye, Trash2, Download } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import { toCsv, downloadCsv } from "@/lib/csv";
+import ProductEditModal from "./ProductEditModal";
 
 type Category = {
   id: string;
@@ -19,6 +19,7 @@ type Category = {
 type Product = {
   id: string;
   name: string;
+  description?: string | null;
   category_id: string;
   unit: string;
   price: number;
@@ -66,6 +67,7 @@ export default function ProductsClient({
   });
   const [savingProduct, setSavingProduct] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
 
@@ -580,13 +582,14 @@ export default function ProductsClient({
                       </td>
                       <td style={{ ...S.td, textAlign: "right" }}>
                         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                          <Link
-                            href={`/dashboard/products/${product.id}`}
+                          <button
+                            type="button"
+                            onClick={() => setEditingProduct(product)}
                             title={canManage ? "Edit product" : "View product"}
-                            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px", textDecoration: "none" }}
+                            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px" }}
                           >
                             <Pencil size={13} />
-                          </Link>
+                          </button>
                           {canManage && (
                           <button
                             type="button"
@@ -615,6 +618,20 @@ export default function ProductsClient({
           </table>
         </div>
       </div>
+
+      {editingProduct && (
+        <ProductEditModal
+          product={editingProduct}
+          categories={activeCategories}
+          canManage={canManage}
+          onClose={() => setEditingProduct(null)}
+          onSaved={(updated) => {
+            setProducts((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)));
+            setEditingProduct(null);
+            toast("Product saved");
+          }}
+        />
+      )}
     </div>
   );
 }

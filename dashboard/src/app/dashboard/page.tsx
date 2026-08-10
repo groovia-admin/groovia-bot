@@ -42,7 +42,7 @@ export default async function DashboardPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard icon={Store}         label="Total Shops"  value={totalShops  ?? 0} color="text-ink" />
           <StatCard icon={Store}         label="Active"       value={activeShops ?? 0} color="text-brand" />
           <StatCard icon={AlertTriangle} label="On Trial"     value={trialShops  ?? 0} color="text-amber-600" />
@@ -185,7 +185,7 @@ export default async function DashboardPage() {
         </a>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard icon={ShoppingBag} label="Today's Orders" value={todayOrders   ?? 0} color="text-brand" />
         <StatCard icon={Clock}       label="Pending"        value={pendingOrders ?? 0} color="text-amber-600" urgent={!!pendingOrders && pendingOrders > 0} />
         <StatCard icon={Users}       label="Customers"      value={totalCustomers ?? 0} color="text-ink" />
