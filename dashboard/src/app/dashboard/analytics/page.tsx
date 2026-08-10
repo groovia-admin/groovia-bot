@@ -288,7 +288,7 @@ function StatCard({
   const isGood = delta === null ? null : invertDelta ? delta < 0 : delta > 0
 
   return (
-    <div style={S.card} title={hint}>
+    <div style={S.card} title={hint} aria-label={hint}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
         <span style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>{label}</span>
         <Icon size={15} color={accent ?? 'var(--ink-faint)'} />

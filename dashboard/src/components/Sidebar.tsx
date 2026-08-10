@@ -220,7 +220,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
             </button>
             <button
               onClick={toggleCollapsed}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
             >
               {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
@@ -283,7 +283,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
         {/* User footer */}
         <div className={clsx('border-t border-surface-border p-3', collapsed && 'md:p-2')}>
           <div className={clsx('flex items-center gap-3 px-2 py-2 rounded-lg', collapsed && 'md:flex-col md:gap-2')}>
-            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0" title={collapsed ? displayName : undefined}>
+            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0" title={collapsed ? displayName : undefined} aria-label={collapsed ? displayName : undefined}>
               <span className="text-xs font-semibold text-brand-dark">
                 {displayName.charAt(0).toUpperCase()}
               </span>

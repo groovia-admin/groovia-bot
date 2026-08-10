@@ -84,7 +84,7 @@ export default function CustomersClient({ initialCustomers, showRevenue }: { ini
           type="button"
           onClick={exportCsv}
           disabled={filtered.length === 0}
-          title="Export the customers currently shown to a CSV file"
+          title="Export the customers currently shown to a CSV file" aria-label="Export the customers currently shown to a CSV file"
           style={{
             display: "inline-flex",
             alignItems: "center",

@@ -49,7 +49,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
         type="button"
         onClick={toggle}
         disabled={busy}
-        title="Pause new orders"
+        title="Pause new orders" aria-label="Pause new orders"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -77,7 +77,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
       type="button"
       onClick={toggle}
       disabled={busy}
-      title="Resume accepting orders"
+      title="Resume accepting orders" aria-label="Resume accepting orders"
       style={{
         display: "inline-flex",
         alignItems: "center",

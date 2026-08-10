@@ -251,7 +251,7 @@ export default function OrdersClient({
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
-            title="Export the orders currently shown to a CSV file"
+            title="Export the orders currently shown to a CSV file" aria-label="Export the orders currently shown to a CSV file"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -274,7 +274,7 @@ export default function OrdersClient({
             type="button"
             onClick={manualRefresh}
             disabled={refreshing}
-            title="Refresh now"
+            title="Refresh now" aria-label="Refresh now"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -373,7 +373,7 @@ export default function OrdersClient({
                 {canManage && (
                   <th style={{ ...S.th, width: 32 }}>
                     {selectablePendingIds.length > 0 && (
-                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" />
+                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" aria-label="Select all pending orders" />
                     )}
                   </th>
                 )}
@@ -454,7 +454,7 @@ export default function OrdersClient({
                             <button
                               type="button"
                               disabled={busy}
-                              title="Accept order"
+                              title="Accept order" aria-label="Accept order"
                               onClick={() => quickAccept(o.id)}
                               style={{ ...S.btn("var(--brand)", "#fff"), padding: "6px 10px", opacity: busy ? 0.5 : 1 }}
                             >
@@ -462,7 +462,7 @@ export default function OrdersClient({
                             </button>
                             <Link
                               href={`/dashboard/orders/${o.id}`}
-                              title="Reject order"
+                              title="Reject order" aria-label="Reject order"
                               style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "6px 10px", textDecoration: "none" }}
                             >
                               <X size={13} />

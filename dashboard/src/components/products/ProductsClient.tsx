@@ -398,7 +398,7 @@ export default function ProductsClient({
                     type="button"
                     onClick={() => toggleCategoryActive(category)}
                     style={{ ...S.badge(category.is_active ? "var(--brand-dark)" : "var(--ink-muted)", "transparent"), border: "none" }}
-                    title={category.is_active ? "Click to deactivate" : "Click to activate"}
+                    title={category.is_active ? "Click to deactivate" : "Click to activate"} aria-label={category.is_active ? "Click to deactivate" : "Click to activate"}
                   >
                     {category.name}
                   </button>
@@ -450,7 +450,7 @@ export default function ProductsClient({
             type="button"
             onClick={exportCsv}
             disabled={products.length === 0}
-            title="Export all products to a CSV file"
+            title="Export all products to a CSV file" aria-label="Export all products to a CSV file"
             style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), opacity: products.length === 0 ? 0.5 : 1 }}
           >
             <Download size={15} />
@@ -462,7 +462,7 @@ export default function ProductsClient({
               style={{ ...S.btn("var(--brand)", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
               disabled={activeCategories.length === 0}
               onClick={() => setShowAddProduct((v) => !v)}
-              title={activeCategories.length === 0 ? "Add a category first" : undefined}
+              title={activeCategories.length === 0 ? "Add a category first" : undefined} aria-label={activeCategories.length === 0 ? "Add a category first" : undefined}
             >
               <Plus size={15} />
               Add product
@@ -642,7 +642,7 @@ export default function ProductsClient({
                           <button
                             type="button"
                             onClick={() => setEditingProduct(product)}
-                            title={canManage ? "Edit product" : "View product"}
+                            title={canManage ? "Edit product" : "View product"} aria-label={canManage ? "Edit product" : "View product"}
                             style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px" }}
                           >
                             <Pencil size={13} />
@@ -652,7 +652,7 @@ export default function ProductsClient({
                             type="button"
                             disabled={busy}
                             onClick={() => toggleAvailability(product)}
-                            title={product.is_available ? "Hide from customers" : "Show to customers"}
+                            title={product.is_available ? "Hide from customers" : "Show to customers"} aria-label={product.is_available ? "Hide from customers" : "Show to customers"}
                             style={{
                               ...S.btn(
                                 product.is_available ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",

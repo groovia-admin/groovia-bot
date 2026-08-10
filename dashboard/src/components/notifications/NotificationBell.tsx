@@ -78,7 +78,7 @@ export default function NotificationBell() {
       <button
         type="button"
         onClick={toggle}
-        title="Recent activity"
+        title="Recent activity" aria-label="Recent activity"
         style={{
           position: "relative",
           display: "inline-flex",

@@ -302,7 +302,7 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
                             type="button"
                             disabled={busy}
                             onClick={() => updateStaff(row.id, { is_active: !row.is_active })}
-                            title={row.is_active ? "Revoke dashboard access" : "Restore dashboard access"}
+                            title={row.is_active ? "Revoke dashboard access" : "Restore dashboard access"} aria-label={row.is_active ? "Revoke dashboard access" : "Restore dashboard access"}
                             style={{
                               ...S.btn(
                                 row.is_active ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",

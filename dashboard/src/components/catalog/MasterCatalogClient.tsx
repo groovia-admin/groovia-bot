@@ -720,10 +720,10 @@ export default function MasterCatalogClient() {
                   </p>
                 </div>
                 <div className="flex gap-2 flex-shrink-0">
-                  <button onClick={() => handleRequest(req, 'approved_global')} className="btn-secondary text-xs flex items-center gap-1" title="Add to master catalog (available to all shops)">
+                  <button onClick={() => handleRequest(req, 'approved_global')} className="btn-secondary text-xs flex items-center gap-1" title="Add to master catalog (available to all shops)" aria-label="Add to master catalog (available to all shops)">
                     <Package className="w-3 h-3" /> Add to Master
                   </button>
-                  <button onClick={() => handleRequest(req, 'approved_local')} className="btn-secondary text-xs flex items-center gap-1" title="Approve only for this shop">
+                  <button onClick={() => handleRequest(req, 'approved_local')} className="btn-secondary text-xs flex items-center gap-1" title="Approve only for this shop" aria-label="Approve only for this shop">
                     <Store className="w-3 h-3" /> Shop Only
                   </button>
                   <button onClick={() => handleRequest(req, 'rejected')} className="btn-ghost text-xs flex items-center gap-1" style={{ color: 'var(--error)' }}>

@@ -123,7 +123,7 @@ export default function GlobalSearch() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        title="Search orders, products, customers (Ctrl/Cmd+K)"
+        title="Search orders, products, customers (Ctrl/Cmd+K)" aria-label="Search orders, products, customers (Ctrl/Cmd+K)"
         style={{
           display: "inline-flex",
           alignItems: "center",

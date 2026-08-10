@@ -165,7 +165,7 @@ export default function ProductEditModal({
           <button
             type="button"
             onClick={onClose}
-            title="Close"
+            title="Close" aria-label="Close"
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", padding: 4 }}
           >
             <X size={18} />

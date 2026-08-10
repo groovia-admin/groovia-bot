@@ -102,7 +102,7 @@ export default function OrderItemsEditor({
                       type="button"
                       disabled={busy || item.quantity <= 1}
                       onClick={() => updateQuantity(item, item.quantity - 1)}
-                      title="Decrease quantity"
+                      title="Decrease quantity" aria-label="Decrease quantity"
                       style={{
                         ...S.btn("var(--surface-hover)", "var(--ink)"),
                         padding: "3px 7px",
@@ -118,7 +118,7 @@ export default function OrderItemsEditor({
                       type="button"
                       disabled={busy}
                       onClick={() => updateQuantity(item, item.quantity + 1)}
-                      title="Increase quantity"
+                      title="Increase quantity" aria-label="Increase quantity"
                       style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "3px 7px", opacity: busy ? 0.4 : 1 }}
                     >
                       <Plus size={12} />
@@ -132,7 +132,7 @@ export default function OrderItemsEditor({
                     type="button"
                     disabled={busy}
                     onClick={() => removeItem(item)}
-                    title="Remove item"
+                    title="Remove item" aria-label="Remove item"
                     style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "5px 8px", opacity: busy ? 0.4 : 1 }}
                   >
                     <Trash2 size={12} />
