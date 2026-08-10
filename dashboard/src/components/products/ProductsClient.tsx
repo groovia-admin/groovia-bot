@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, EyeOff, Eye, Trash2, Download } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
@@ -69,6 +69,10 @@ export default function ProductsClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
+  const [productSearch, setProductSearch] = useState("");
+  const [pageSize, setPageSize] = useState(20);
+  const [page, setPage] = useState(1);
+
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
 
   const productCountByCategory = useMemo(() => {
@@ -79,8 +83,36 @@ export default function ProductsClient({
     return map;
   }, [products]);
 
+  const filteredProducts = useMemo(() => {
+    const q = productSearch.trim().toLowerCase();
+    if (!q) return products;
+    return products.filter(
+      (p) => p.name.toLowerCase().includes(q) || (p.sku ?? "").toLowerCase().includes(q) || categoryName(p).toLowerCase().includes(q)
+    );
+  }, [products, productSearch]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  // Search/pageSize changes can leave `page` pointing past the new last
+  // page (e.g. searching down to 3 results while on page 4) — clamp on
+  // render rather than in an effect, so it can never flash a blank page.
+  const currentPage = Math.min(page, totalPages);
+  const paginatedProducts = useMemo(
+    () => filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [filteredProducts, currentPage, pageSize]
+  );
+
+  function updateSearch(value: string) {
+    setProductSearch(value);
+    setPage(1);
+  }
+
+  function updatePageSize(size: number) {
+    setPageSize(size);
+    setPage(1);
+  }
+
   function exportCsv() {
-    const rows = products.map((p) => ({
+    const rows = filteredProducts.map((p) => ({
       name: p.name,
       category: categoryName(p),
       unit: p.unit,
@@ -410,7 +442,7 @@ export default function ProductsClient({
       </div>
 
       {/* Products */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button
@@ -522,6 +554,26 @@ export default function ProductsClient({
         </form>
       )}
 
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
+          <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)" }} />
+          <input
+            value={productSearch}
+            onChange={(e) => updateSearch(e.target.value)}
+            placeholder="Search name, SKU, or category…"
+            style={{ ...S.input, paddingLeft: 30 }}
+          />
+        </div>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-muted)" }}>
+          Per page
+          <select value={pageSize} onChange={(e) => updatePageSize(Number(e.target.value))} style={{ ...S.input, width: "auto" }}>
+            <option value={20}>20</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+        </label>
+      </div>
+
       <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -539,14 +591,14 @@ export default function ProductsClient({
               </tr>
             </thead>
             <tbody>
-              {products.length === 0 ? (
+              {filteredProducts.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={9}>
-                    No products yet.
+                    {products.length === 0 ? "No products yet." : "No products match your search."}
                   </td>
                 </tr>
               ) : (
-                products.map((product) => {
+                paginatedProducts.map((product) => {
                   const lowStock = product.stock_quantity <= product.low_stock_threshold;
                   const busy = busyId === product.id;
                   return (
@@ -618,6 +670,30 @@ export default function ProductsClient({
           </table>
         </div>
       </div>
+
+      {filteredProducts.length > 0 && totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px", opacity: currentPage <= 1 ? 0.5 : 1 }}
+          >
+            <ChevronLeft size={14} />
+          </button>
+          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+            Page {currentPage} of {totalPages} · {filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+            style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px", opacity: currentPage >= totalPages ? 0.5 : 1 }}
+          >
+            <ChevronRight size={14} />
+          </button>
+        </div>
+      )}
 
       {editingProduct && (
         <ProductEditModal

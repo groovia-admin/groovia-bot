@@ -5,14 +5,14 @@
 // wherever a fetch is in flight (e.g. the storefront's initial catalog
 // load).
 //
-// Previous version ping-ponged back and forth across the track — reads as
-// a toy sliding side to side, not a cart running. Running is a
-// continuous, one-direction loop: the cart exits the right edge and
-// re-enters from the left, always facing forward, wheels visibly turning.
+// Continuous one-direction loop: the cart exits the right edge and
+// re-enters from the left (clipped by the track, so the reset is
+// invisible), always facing forward, wheels visibly turning — a
+// back-and-forth ping-pong reads as sliding, not running.
 export default function CartLoader({ label, size = "page" }: { label?: string; size?: "page" | "inline" }) {
-  const trackWidth = size === "page" ? 110 : 64;
-  const cart = size === "page" ? 24 : 15;
-  const duration = size === "page" ? 1.6 : 1.4;
+  const trackWidth = size === "page" ? 140 : 84;
+  const cart = size === "page" ? 30 : 19;
+  const duration = 1.5;
 
   return (
     <div

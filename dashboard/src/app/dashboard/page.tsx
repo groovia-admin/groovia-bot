@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
-import { Store, ShoppingBag, Users, AlertTriangle, Clock } from 'lucide-react'
+import { Store, ShoppingBag, Users, AlertTriangle, Clock, Plus, Package, Settings } from 'lucide-react'
 import { startOfTodayUtc } from '@/lib/timezone'
 import PauseOrdersToggle from '@/components/settings/PauseOrdersToggle'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
@@ -199,63 +199,87 @@ export default async function DashboardPage() {
         />
       </div>
 
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold text-ink">Recent Orders</h2>
-          <a href="/dashboard/orders" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
-            View all →
-          </a>
+      <div className="grid-2up">
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-semibold text-ink">Recent Orders</h2>
+            <a href="/dashboard/orders" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+              View all →
+            </a>
+          </div>
+
+          {!recentOrders?.length ? (
+            <p className="text-ink-muted text-sm">No orders yet today.</p>
+          ) : (
+            <div>
+              {recentOrders.map((order, i) => {
+                const style = STATUS_STYLES[order.status] ?? STATUS_STYLES.pending
+                return (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between py-3"
+                    style={{ borderBottom: i < recentOrders.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span
+                        className="text-xs font-medium px-2.5 py-0.5 rounded-full"
+                        style={{ background: style.bg, color: style.color }}
+                      >
+                        {order.status}
+                      </span>
+                      {order.status === 'pending' && (() => {
+                        const minutes = getOrderAgeMinutes(order.created_at)
+                        const level = getAgingLevel(minutes)
+                        if (level === 'normal') return null
+                        const { color, background } = AGING_COLOR[level]
+                        return (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background, color }}>
+                            {formatAgeShort(minutes)}
+                          </span>
+                        )
+                      })()}
+                      <div>
+                        <p className="text-sm font-medium text-ink">#{order.order_number}</p>
+                        <p className="text-xs text-ink-muted">
+                          {order.pickup_slot_label ?? new Date(order.created_at).toLocaleTimeString('en-IN', {
+                            hour: '2-digit', minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                    {showRevenue && (
+                      <p className="text-sm font-medium text-ink">
+                        ₹{Number(order.total_amount).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
 
-        {!recentOrders?.length ? (
-          <p className="text-ink-muted text-sm">No orders yet today.</p>
-        ) : (
-          <div>
-            {recentOrders.map((order, i) => {
-              const style = STATUS_STYLES[order.status] ?? STATUS_STYLES.pending
-              return (
-                <div
-                  key={order.id}
-                  className="flex items-center justify-between py-3"
-                  style={{ borderBottom: i < recentOrders.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="text-xs font-medium px-2.5 py-0.5 rounded-full"
-                      style={{ background: style.bg, color: style.color }}
-                    >
-                      {order.status}
-                    </span>
-                    {order.status === 'pending' && (() => {
-                      const minutes = getOrderAgeMinutes(order.created_at)
-                      const level = getAgingLevel(minutes)
-                      if (level === 'normal') return null
-                      const { color, background } = AGING_COLOR[level]
-                      return (
-                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background, color }}>
-                          {formatAgeShort(minutes)}
-                        </span>
-                      )
-                    })()}
-                    <div>
-                      <p className="text-sm font-medium text-ink">#{order.order_number}</p>
-                      <p className="text-xs text-ink-muted">
-                        {order.pickup_slot_label ?? new Date(order.created_at).toLocaleTimeString('en-IN', {
-                          hour: '2-digit', minute: '2-digit'
-                        })}
-                      </p>
-                    </div>
-                  </div>
-                  {showRevenue && (
-                    <p className="text-sm font-medium text-ink">
-                      ₹{Number(order.total_amount).toFixed(2)}
-                    </p>
-                  )}
-                </div>
-              )
-            })}
+        <div className="card">
+          <h2 className="font-semibold text-ink mb-4">Quick actions</h2>
+          <div className="flex flex-col gap-1">
+            <a href="/dashboard/products" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors">
+              <Plus className="w-4 h-4" style={{ color: '#a855f7' }} />
+              Add a product
+            </a>
+            <a href="/dashboard/orders" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors">
+              <ShoppingBag className="w-4 h-4" style={{ color: '#f59e0b' }} />
+              Review pending orders
+            </a>
+            <a href="/dashboard/inventory" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors">
+              <Package className="w-4 h-4" style={{ color: '#22c55e' }} />
+              Check low stock
+            </a>
+            <a href="/dashboard/settings" className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-ink-muted hover:text-ink hover:bg-surface-hover transition-colors">
+              <Settings className="w-4 h-4" style={{ color: '#64748b' }} />
+              Shop settings
+            </a>
           </div>
-        )}
+        </div>
       </div>
     </div>
   )
