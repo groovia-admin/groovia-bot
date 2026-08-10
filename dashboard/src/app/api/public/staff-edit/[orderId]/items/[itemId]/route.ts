@@ -58,15 +58,18 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
-  // Same check the WhatsApp/dashboard edit flows both make: only a
-  // still-pending order can have its items changed — accepting commits
-  // stock and hands the customer a receipt.
-  if (order.status !== 'pending') {
+  // 'accepted' stays editable too — a still-'pending' order now
+  // auto-accepts on its first edit (below), so this can't require
+  // 'pending' specifically without locking out any further changes
+  // right after that first one.
+  if (order.status !== 'pending' && order.status !== 'accepted') {
     return NextResponse.json(
       { error: `Order can no longer be edited (already ${order.status}).` },
       { status: 409 }
     )
   }
+
+  const wasPending = order.status === 'pending'
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
@@ -136,6 +139,28 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     return NextResponse.json({ error: 'Item was updated, but failed to recompute order total' }, { status: 500 })
   }
 
+  // Editing a still-pending order is the shop actively reviewing it —
+  // reported as a gap that this never actually accepted the order, so
+  // it silently stayed 'pending' with no formal confirmation reaching
+  // the customer. Auto-accepts on the first edit only, guarded by
+  // .eq('status','pending') so two racing edits can't both "win" this.
+  // Deliberately NOT tied to stock decrement here — see the dashboard
+  // route's twin of this comment for why.
+  let autoAccepted = false
+  if (wasPending) {
+    const { error: acceptError } = await adminClient
+      .from('orders')
+      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
+      .eq('id', orderId)
+      .eq('status', 'pending')
+
+    if (acceptError) {
+      console.error('Failed to auto-accept order on edit:', acceptError)
+    } else {
+      autoAccepted = true
+    }
+  }
+
   await logAuditEvent({
     shopId: link.shop_id,
     actorUserId: null,
@@ -148,13 +173,42 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     metadata: { target_name: `Order #${order.order_number} — ${item.product_name_snapshot}`, via: 'staff_edit_link' },
   })
 
-  // Best-effort: same "here's what changed" WhatsApp message every
-  // other edit path already sends the customer — must never fail the
-  // edit itself if wa-bot is unreachable or unconfigured.
+  if (autoAccepted) {
+    await logAuditEvent({
+      shopId: link.shop_id,
+      actorUserId: null,
+      actorType: 'whatsapp',
+      action: 'order.status_changed',
+      entityType: 'order',
+      entityId: orderId,
+      oldValues: { status: 'pending' },
+      newValues: { status: 'accepted' },
+      metadata: { target_name: `Order #${order.order_number}`, via: 'staff_edit_link' },
+    })
+  }
+
   const waBotUrl = process.env.WA_BOT_INTERNAL_URL
   const internalSecret = process.env.INTERNAL_API_SECRET
   if (waBotUrl && internalSecret) {
     const base = waBotUrl.replace(/\/$/, '')
+
+    if (autoAccepted) {
+      fetch(`${base}/internal/orders/${orderId}/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
+        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id }),
+      })
+        .then(async (res) => {
+          if (!res.ok) console.error('wa-bot rejected the accept notify:', res.status, await res.text().catch(() => ''))
+        })
+        .catch((err) => console.error('Failed to notify wa-bot of order auto-accept:', err))
+    }
+
+    // Best-effort: same "here's what changed" WhatsApp message every
+    // other edit path already sends the customer — must never fail the
+    // edit itself if wa-bot is unreachable or unconfigured. Sent
+    // alongside the accept notification above (not instead of it) when
+    // this was the accepting edit.
     const diffLine = removing
       ? `❌ ${item.product_name_snapshot} — removed`
       : `✏️ ${item.product_name_snapshot} — quantity ${previousQuantity} → ${quantity}`
@@ -171,7 +225,7 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   }
 
   return NextResponse.json(
-    { subtotal: newSubtotal, total: newTotal, removed: removing },
+    { subtotal: newSubtotal, total: newTotal, removed: removing, autoAccepted },
     { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
   )
 }
