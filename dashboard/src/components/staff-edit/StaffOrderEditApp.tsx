@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Minus, Plus, Trash2, CheckCircle2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Minus, Plus, Trash2, Loader2 } from 'lucide-react'
 
 type OrderItem = {
   id: string
@@ -33,6 +33,33 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
+  const [showManualReturn, setShowManualReturn] = useState(false)
+
+  const waLink = useMemo(() => {
+    if (!whatsappNumber) return null
+    const digits = whatsappNumber.replace(/\D/g, '')
+    return digits ? `https://wa.me/${digits}` : null
+  }, [whatsappNumber])
+
+  // Same auto-redirect pattern the customer webview already uses after
+  // placing an order (StorefrontApp.tsx) — a plain onClick + <a href>
+  // combo isn't reliable here: clicking an anchor starts navigation
+  // immediately, racing the same tick's React state update, and this is
+  // specifically a wa.me link (an app-switch, not a normal page nav) —
+  // exactly the case that reportedly left staff stuck on this screen
+  // with no visible next step. Tapping Done just flips `ended`; this
+  // effect owns the actual navigation, same as the customer flow.
+  useEffect(() => {
+    if (!ended || !waLink) return
+    const redirectTimer = setTimeout(() => {
+      window.location.href = waLink
+    }, 1200)
+    const fallbackTimer = setTimeout(() => setShowManualReturn(true), 4000)
+    return () => {
+      clearTimeout(redirectTimer)
+      clearTimeout(fallbackTimer)
+    }
+  }, [ended, waLink])
 
   const subtotal = items.reduce((sum, i) => sum + Number(i.subtotal), 0)
   const total = subtotal + Number(fees.delivery_fee || 0) + Number(fees.tax_amount || 0) - Number(fees.discount_amount || 0)
@@ -81,9 +108,19 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
     return (
       <main className="min-h-[100dvh] flex items-center justify-center bg-surface px-6">
         <div className="text-center max-w-xs">
-          <CheckCircle2 size={36} className="mx-auto text-brand mb-3" />
-          <p className="text-sm font-semibold text-ink">You can close this now</p>
-          <p className="text-xs text-ink-muted mt-1">Any changes were already saved and the customer notified.</p>
+          {waLink ? (
+            <p className="flex items-center justify-center gap-2 text-sm text-ink-muted">
+              <Loader2 size={16} className="animate-spin" /> Returning you to WhatsApp…
+            </p>
+          ) : (
+            <p className="text-sm font-semibold text-ink">You can close this now</p>
+          )}
+          <p className="text-xs text-ink-faint mt-2">Any changes were already saved and the customer notified.</p>
+          {showManualReturn && waLink && (
+            <a href={waLink} className="btn-secondary mt-4 w-full justify-center">
+              Tap here if you weren&apos;t redirected
+            </a>
+          )}
         </div>
       </main>
     )
@@ -171,19 +208,9 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
 
       <div className="fixed bottom-0 left-0 right-0 bg-surface-card border-t border-surface-border px-4 py-3">
         <div className="mx-auto max-w-md">
-          {whatsappNumber ? (
-            <a
-              href={`https://wa.me/${whatsappNumber}`}
-              className="btn-primary w-full justify-center"
-              onClick={() => setEnded(true)}
-            >
-              Done — back to WhatsApp
-            </a>
-          ) : (
-            <button className="btn-primary w-full justify-center" onClick={() => setEnded(true)}>
-              Done
-            </button>
-          )}
+          <button className="btn-primary w-full justify-center" onClick={() => setEnded(true)}>
+            {waLink ? 'Done — back to WhatsApp' : 'Done'}
+          </button>
         </div>
       </div>
     </main>
