@@ -9,7 +9,7 @@ import clsx from 'clsx'
 import {
   LayoutDashboard, ShoppingBag, Package, Users, BarChart2,
   Settings, Store, LogOut, MessageSquare, ClipboardList,
-  ScrollText, Bell, Boxes, PanelLeftClose, PanelLeftOpen
+  ScrollText, Boxes, PanelLeftClose, PanelLeftOpen, Menu, X
 } from 'lucide-react'
 
 const PENDING_ORDERS_POLL_MS = 30_000
@@ -82,10 +82,13 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   // Lazy-init from localStorage so a returning user's choice sticks across
   // full reloads, not just client-side nav (which would keep it anyway,
   // since this layout doesn't remount on route changes within /dashboard).
+  // Desktop-only concept — the icon-rail space-saving mode doesn't apply
+  // to the mobile drawer below, which is always shown full-width when open.
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === '1'
   })
+  const [mobileOpen, setMobileOpen] = useState(false)
 
   const navItems = getNav(isSuperAdmin, shopUser?.role ?? '')
   const displayName = shopUser?.full_name ?? userPhone
@@ -100,6 +103,21 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
       return next
     })
   }
+
+  // Below md (768px) there's no room for a permanent 256px rail — the
+  // sidebar becomes a slide-in drawer instead (see the fixed/translate
+  // classes on <aside> below), opened via the floating menu button and
+  // closed on backdrop tap, nav-link tap, or route change.
+  useEffect(() => {
+    setMobileOpen(false)
+  }, [pathname])
+
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? 'hidden' : ''
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [mobileOpen])
 
   // Polls the same cheap count-only endpoint OrderAlertListener uses, so the
   // "Orders" nav badge reflects the real pending count instead of the
@@ -147,107 +165,144 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   }
 
   return (
-    <aside
-      className={clsx(
-        'flex-shrink-0 flex flex-col bg-surface-card border-r border-surface-border transition-[width] duration-200',
-        collapsed ? 'w-[68px]' : 'w-64'
+    <>
+      {/* Mobile menu trigger — floating, only rendered while the drawer is
+          closed; hidden entirely at md+ where the sidebar is static. */}
+      {!mobileOpen && (
+        <button
+          onClick={() => setMobileOpen(true)}
+          aria-label="Open menu"
+          className="md:hidden fixed top-3 left-3 z-50 p-2 rounded-lg bg-surface-card border border-surface-border shadow-sm text-ink"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
       )}
-    >
-      {/* Logo + shop name */}
-      <div className={clsx('border-b border-surface-border', collapsed ? 'p-3' : 'p-5')}>
-        <div className={clsx('flex items-center', collapsed ? 'flex-col gap-2' : 'gap-3')}>
-          <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center overflow-hidden flex-shrink-0">
-            {shopLogoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={shopLogoUrl} alt={shopName} className="w-full h-full object-cover" />
-            ) : (
-              <span className="font-display font-bold text-brand text-sm">G</span>
-            )}
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
+
+      {/* Backdrop — mobile drawer only. */}
+      {mobileOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/40 z-30"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <aside
+        className={clsx(
+          'flex flex-col flex-shrink-0 bg-surface-card border-r border-surface-border transition-all duration-200',
+          'fixed inset-y-0 left-0 z-40 md:static md:z-auto',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+          collapsed ? 'w-64 md:w-[68px]' : 'w-64'
+        )}
+      >
+        {/* Logo + shop name */}
+        <div className={clsx('border-b border-surface-border p-5', collapsed && 'md:p-3')}>
+          <div className={clsx('flex items-center gap-3', collapsed && 'md:flex-col md:gap-2')}>
+            <div className="w-8 h-8 rounded-lg bg-brand/20 flex items-center justify-center overflow-hidden flex-shrink-0">
+              {shopLogoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={shopLogoUrl} alt={shopName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="font-display font-bold text-brand text-sm">G</span>
+              )}
+            </div>
+            <div className={clsx('min-w-0 flex-1', collapsed && 'md:hidden')}>
               <p className="font-display font-semibold text-ink text-sm truncate">{shopName}</p>
               <p className="text-xs text-ink-muted capitalize">{roleLabel}</p>
             </div>
-          )}
-          <button
-            onClick={toggleCollapsed}
-            title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            className="p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
-          >
-            {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-          </button>
+            {/* Mobile: closes the drawer. Desktop: collapses to icon rail. */}
+            <button
+              onClick={() => setMobileOpen(false)}
+              aria-label="Close menu"
+              className="md:hidden p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <button
+              onClick={toggleCollapsed}
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              className="hidden md:inline-flex p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
+            >
+              {collapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Navigation */}
-      <nav className={clsx('flex-1 min-h-0 py-4 overflow-y-auto space-y-0.5', collapsed ? 'px-2' : 'px-3')}>
-        {navItems.map(item => {
-          const Icon = item.icon
-          const active = isActive(item)
-          const showBadge = item.label === 'Orders' && pendingCount > 0
-          return (
-            <div key={item.href} className="relative group">
-              <Link
-                href={item.href}
-                className={clsx(
-                  'flex items-center rounded-lg text-sm font-medium transition-colors',
-                  collapsed ? 'justify-center px-0 py-2.5' : 'gap-3 px-3 py-2.5',
-                  active
-                    ? 'bg-brand/15 text-brand-dark font-semibold'
-                    : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
-                )}
-              >
-                <span className="relative flex-shrink-0">
-                  <Icon className="w-4 h-4" style={active ? undefined : { color: item.color }} />
-                  {collapsed && showBadge && (
-                    <span className="absolute -top-1.5 -right-1.5 bg-brand text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center leading-none px-0.5">
-                      {pendingCount > 9 ? '9+' : pendingCount}
+        {/* Navigation */}
+        <nav className={clsx('flex-1 min-h-0 py-4 px-3 overflow-y-auto space-y-0.5', collapsed && 'md:px-2')}>
+          {navItems.map(item => {
+            const Icon = item.icon
+            const active = isActive(item)
+            const showBadge = item.label === 'Orders' && pendingCount > 0
+            return (
+              <div key={item.href} className="relative group">
+                <Link
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={clsx(
+                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    collapsed && 'md:justify-center md:px-0 md:gap-0',
+                    active
+                      ? 'bg-brand/15 text-brand-dark font-semibold'
+                      : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
+                  )}
+                >
+                  <span className="relative flex-shrink-0">
+                    <Icon className="w-4 h-4" style={active ? undefined : { color: item.color }} />
+                    {showBadge && (
+                      <span className={clsx(
+                        'absolute -top-1.5 -right-1.5 bg-brand text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] items-center justify-center leading-none px-0.5',
+                        collapsed ? 'hidden md:flex' : 'hidden'
+                      )}>
+                        {pendingCount > 9 ? '9+' : pendingCount}
+                      </span>
+                    )}
+                  </span>
+                  <span className={clsx(collapsed && 'md:hidden')}>{item.label}</span>
+                  {showBadge && (
+                    <span className={clsx(
+                      'ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center',
+                      collapsed && 'md:hidden'
+                    )}>
+                      {pendingCount > 99 ? '99+' : pendingCount}
                     </span>
                   )}
-                </span>
-                {!collapsed && item.label}
-                {!collapsed && showBadge && (
-                  <span className="ml-auto bg-brand text-white text-xs px-1.5 py-0.5 rounded-full leading-none min-w-[18px] text-center">
-                    {pendingCount > 99 ? '99+' : pendingCount}
-                  </span>
+                </Link>
+                {/* Hover tooltip — desktop collapsed mode only, since that's
+                    the only state where the label text itself is hidden. */}
+                {collapsed && (
+                  <div className="hidden md:block pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 whitespace-nowrap rounded-md bg-ink px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-50">
+                    {item.label}
+                  </div>
                 )}
-              </Link>
-              {/* Hover tooltip — collapsed mode only, since the label text
-                  itself is hidden then. */}
-              {collapsed && (
-                <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-2 whitespace-nowrap rounded-md bg-ink px-2.5 py-1.5 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 z-50">
-                  {item.label}
-                </div>
-              )}
-            </div>
-          )
-        })}
-      </nav>
+              </div>
+            )
+          })}
+        </nav>
 
-      {/* User footer */}
-      <div className={clsx('border-t border-surface-border', collapsed ? 'p-2' : 'p-3')}>
-        <div className={clsx('flex items-center rounded-lg', collapsed ? 'flex-col gap-2 py-2' : 'gap-3 px-2 py-2')}>
-          <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0" title={collapsed ? displayName : undefined}>
-            <span className="text-xs font-semibold text-brand-dark">
-              {displayName.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
+        {/* User footer */}
+        <div className={clsx('border-t border-surface-border p-3', collapsed && 'md:p-2')}>
+          <div className={clsx('flex items-center gap-3 px-2 py-2 rounded-lg', collapsed && 'md:flex-col md:gap-2')}>
+            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0" title={collapsed ? displayName : undefined} aria-label={collapsed ? displayName : undefined}>
+              <span className="text-xs font-semibold text-brand-dark">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            </div>
+            <div className={clsx('min-w-0 flex-1', collapsed && 'md:hidden')}>
               <p className="text-sm font-medium text-ink truncate">{displayName}</p>
               <p className="text-xs text-ink-muted truncate">{userPhone}</p>
             </div>
-          )}
-          <button
-            onClick={handleSignOut}
-            title="Sign out"
-            className="p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-          </button>
+            <button
+              onClick={handleSignOut}
+              title="Sign out"
+              aria-label="Sign out"
+              className="p-1.5 rounded-lg hover:bg-surface-hover text-ink-faint hover:text-ink transition-colors flex-shrink-0"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   )
 }

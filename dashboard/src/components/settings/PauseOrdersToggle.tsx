@@ -49,7 +49,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
         type="button"
         onClick={toggle}
         disabled={busy}
-        title="Pause new orders"
+        title="Pause new orders" aria-label="Pause new orders"
         style={{
           display: "inline-flex",
           alignItems: "center",
@@ -59,7 +59,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
           border: "1px solid rgba(0,104,95,0.35)",
           background: "var(--brand-light)",
           color: "var(--brand-dark)",
-          fontSize: 12,
+          fontSize: "var(--text-sm)",
           fontWeight: 600,
           cursor: busy ? "default" : "pointer",
           fontFamily: "inherit",
@@ -77,7 +77,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
       type="button"
       onClick={toggle}
       disabled={busy}
-      title="Resume accepting orders"
+      title="Resume accepting orders" aria-label="Resume accepting orders"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -87,7 +87,7 @@ export default function PauseOrdersToggle({ initialEnabled }: { initialEnabled: 
         border: "1px solid rgba(186,26,26,0.3)",
         background: "var(--error-light)",
         color: "var(--error)",
-        fontSize: 12,
+        fontSize: "var(--text-sm)",
         fontWeight: 700,
         cursor: busy ? "default" : "pointer",
         fontFamily: "inherit",

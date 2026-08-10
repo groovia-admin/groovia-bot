@@ -77,7 +77,7 @@ export default function OrderItemsEditor({
 
   return (
     <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
-      <div style={{ padding: "12px 16px 0", fontSize: 12, color: "var(--ink-muted)" }}>
+      <div style={{ padding: "12px 16px 0", fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
         Order still pending — adjust quantity or remove an item if something's unavailable. The customer is notified of any change.
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -102,7 +102,7 @@ export default function OrderItemsEditor({
                       type="button"
                       disabled={busy || item.quantity <= 1}
                       onClick={() => updateQuantity(item, item.quantity - 1)}
-                      title="Decrease quantity"
+                      title="Decrease quantity" aria-label="Decrease quantity"
                       style={{
                         ...S.btn("var(--surface-hover)", "var(--ink)"),
                         padding: "3px 7px",
@@ -118,7 +118,7 @@ export default function OrderItemsEditor({
                       type="button"
                       disabled={busy}
                       onClick={() => updateQuantity(item, item.quantity + 1)}
-                      title="Increase quantity"
+                      title="Increase quantity" aria-label="Increase quantity"
                       style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "3px 7px", opacity: busy ? 0.4 : 1 }}
                     >
                       <Plus size={12} />
@@ -132,7 +132,7 @@ export default function OrderItemsEditor({
                     type="button"
                     disabled={busy}
                     onClick={() => removeItem(item)}
-                    title="Remove item"
+                    title="Remove item" aria-label="Remove item"
                     style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "5px 8px", opacity: busy ? 0.4 : 1 }}
                   >
                     <Trash2 size={12} />

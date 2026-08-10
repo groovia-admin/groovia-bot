@@ -4,6 +4,7 @@ import { Fragment, useMemo, useState } from "react";
 import { format } from "date-fns";
 import { ChevronDown, ChevronRight, ScrollText, Search } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
+import EmptyState from "@/components/ui/EmptyState";
 import { ACTION_LABEL, ACTOR_BADGE, actorLabel, type ActorType } from "@/lib/auditLabels";
 
 type LogRow = {
@@ -34,7 +35,7 @@ function DiffRow({ oldValues, newValues }: { oldValues: Record<string, unknown> 
   if (keys.length === 0) return null;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 12, fontFamily: "monospace" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--text-sm)", fontFamily: "monospace" }}>
       {keys.map((key) => {
         const before = oldValues?.[key];
         const after = newValues?.[key];
@@ -112,10 +113,10 @@ export default function LogsClient({
     <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
       <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>
+          <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>
             {showShopColumn ? "Audit Logs" : "Activity Logs"}
           </h1>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
             {showShopColumn
               ? "Platform-wide record of shop and staff changes."
               : "Record of staff and account changes for this shop."}
@@ -125,7 +126,7 @@ export default function LogsClient({
         {showShopColumn && (
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <div>
-              <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
+              <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
                 Category
               </label>
               <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "var(--surface)", border: "1px solid var(--surface-border)", gap: 2 }}>
@@ -143,7 +144,7 @@ export default function LogsClient({
                     style={{
                       padding: "5px 12px",
                       borderRadius: 6,
-                      fontSize: 12.5,
+                      fontSize: "var(--text-sm)",
                       fontWeight: 600,
                       cursor: "pointer",
                       fontFamily: "inherit",
@@ -161,7 +162,7 @@ export default function LogsClient({
 
             {shops && shops.length > 0 && (
               <div>
-                <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
+                <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
                   Filter by shop
                 </label>
                 <select
@@ -173,7 +174,7 @@ export default function LogsClient({
                     border: "1px solid var(--surface-border)",
                     background: "#FFFFFF",
                     color: "var(--ink)",
-                    fontSize: 13,
+                    fontSize: "var(--text-base)",
                     fontFamily: "inherit",
                     minWidth: 200,
                   }}
@@ -193,7 +194,7 @@ export default function LogsClient({
 
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
-          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>Search</label>
+          <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>Search</label>
           <Search size={14} color="var(--ink-faint)" style={{ position: "absolute", left: 10, top: 30, transform: "translateY(-50%)" }} />
           <input
             value={search}
@@ -203,21 +204,21 @@ export default function LogsClient({
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>From</label>
+          <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>From</label>
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: 13, fontFamily: "inherit" }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
           />
         </div>
         <div>
-          <label style={{ display: "block", fontSize: 11, color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>To</label>
+          <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>To</label>
           <input
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: 13, fontFamily: "inherit" }}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
           />
         </div>
         {(search || dateFrom || dateTo) && (
@@ -251,10 +252,11 @@ export default function LogsClient({
               {logs.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={columnCount}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
-                      <ScrollText size={14} />
-                      {initialLogs.length === 0 ? "No activity recorded yet." : "No activity matches your filters."}
-                    </div>
+                    {initialLogs.length === 0 ? (
+                      <EmptyState icon={ScrollText} title="No activity recorded yet" description="Actions taken in the dashboard — order updates, staff changes, settings edits — will show up here." compact />
+                    ) : (
+                      <EmptyState icon={Search} title="No activity matches your filters" compact />
+                    )}
                   </td>
                 </tr>
               ) : (

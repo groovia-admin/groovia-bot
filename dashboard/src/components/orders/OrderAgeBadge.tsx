@@ -19,12 +19,12 @@ export default function OrderAgeBadge({ createdAt, now }: { createdAt: string; n
         gap: 4,
         padding: "2px 8px",
         borderRadius: 999,
-        fontSize: 11,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         color,
         background,
       }}
-      title={level === "urgent" ? "Waiting a while — worth checking on" : level === "warning" ? "Getting close to needing attention" : "Recently placed"}
+      title={level === "urgent" ? "Waiting a while — worth checking on" : level === "warning" ? "Getting close to needing attention" : "Recently placed"} aria-label={level === "urgent" ? "Waiting a while — worth checking on" : level === "warning" ? "Getting close to needing attention" : "Recently placed"}
     >
       <Clock size={11} />
       {formatAgeShort(minutes)}

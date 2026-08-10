@@ -11,8 +11,8 @@ import ShopQrCode from '@/components/settings/ShopQrCode'
 export const dynamic = 'force-dynamic'
 
 const cardStyle: React.CSSProperties = { background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, boxShadow: '0 1px 2px rgba(11,28,48,0.04)' }
-const cardTitleStyle: React.CSSProperties = { fontSize: 15, fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }
-const cardSubStyle: React.CSSProperties = { fontSize: 12, color: 'var(--ink-muted)', margin: '0 0 16px' }
+const cardTitleStyle: React.CSSProperties = { fontSize: "var(--text-md)", fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }
+const cardSubStyle: React.CSSProperties = { fontSize: "var(--text-sm)", color: 'var(--ink-muted)', margin: '0 0 16px' }
 
 export default async function SettingsPage() {
   // Manager can reach this page (bot/store settings), but the payout &

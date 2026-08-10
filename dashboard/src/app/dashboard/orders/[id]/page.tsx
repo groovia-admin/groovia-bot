@@ -34,7 +34,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
   const { id } = await params
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: "var(--text-base)" }}>Not applicable for super admins.</div>
   }
 
   const adminClient = createAdminClient()
@@ -71,8 +71,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Order #{order.order_number}</h1>
-          <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
+          <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Order #{order.order_number}</h1>
+          <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', marginTop: 4 }}>
             {details?.customer_name_snapshot || details?.customer_phone_snapshot || 'Unknown customer'}
             {details?.customer_phone_snapshot && details?.customer_name_snapshot ? ` · ${details.customer_phone_snapshot}` : ''}
           </p>
@@ -100,7 +100,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
       </div>
 
       {isTerminalFail && (order.rejection_reason || order.cancellation_reason) && (
-        <div style={{ color: 'var(--error)', background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13 }}>
+        <div style={{ color: 'var(--error)', background: 'var(--error-light)', border: '1px solid rgba(186,26,26,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: "var(--text-base)" }}>
           {order.status === 'rejected' ? 'Rejection reason: ' : 'Cancellation reason: '}
           {order.rejection_reason || order.cancellation_reason}
         </div>
@@ -124,11 +124,11 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
                       background: reached ? 'var(--brand)' : 'var(--surface-border)',
                     }}
                   />
-                  <div style={{ fontSize: 11, color: reached ? 'var(--ink)' : 'var(--ink-faint)', fontWeight: reached ? 600 : 400, textAlign: 'center' }}>
+                  <div style={{ fontSize: "var(--text-xs)", color: reached ? 'var(--ink)' : 'var(--ink-faint)', fontWeight: reached ? 600 : 400, textAlign: 'center' }}>
                     {step.label}
                   </div>
                   {value && (
-                    <div style={{ fontSize: 10, color: 'var(--ink-faint)' }}>
+                    <div style={{ fontSize: "var(--text-xs)", color: 'var(--ink-faint)' }}>
                       {new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   )}
@@ -184,7 +184,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           <div style={{ borderTop: '1px solid var(--surface-border)', marginTop: 4, paddingTop: 6 }}>
             <Row label="Total" value={order.total_amount} bold />
           </div>
-          <div style={{ fontSize: 12, color: 'var(--ink-muted)', marginTop: 4 }}>
+          <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)', marginTop: 4 }}>
             {order.payment_method ?? 'Payment method not set'} · {order.payment_status}
           </div>
         </div>
@@ -192,8 +192,8 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
 
       {order.notes && (
         <div style={{ ...S.card }}>
-          <div style={{ fontSize: 12, color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>Order notes</div>
-          <div style={{ fontSize: 13, color: 'var(--ink)' }}>{order.notes}</div>
+          <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)', fontWeight: 600, marginBottom: 4 }}>Order notes</div>
+          <div style={{ fontSize: "var(--text-base)", color: 'var(--ink)' }}>{order.notes}</div>
         </div>
       )}
     </div>

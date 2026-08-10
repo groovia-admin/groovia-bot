@@ -1,9 +1,10 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Phone, Mail, CreditCard } from 'lucide-react'
+import { ArrowLeft, Phone, Mail, CreditCard, ShoppingBag } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { S } from '@/lib/ui/dashboardStyles'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,7 +23,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { id } = await params
 
   if (context.kind !== 'shop_user') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: "var(--text-base)" }}>Not applicable for super admins.</div>
   }
 
   const showRevenue = context.role === 'owner'
@@ -64,13 +65,13 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>{customer.full_name || 'Unnamed customer'}</h1>
+          <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', margin: 0 }}>{customer.full_name || 'Unnamed customer'}</h1>
           <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--ink-muted)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: "var(--text-base)", color: 'var(--ink-muted)' }}>
               <Phone size={13} /> {customer.phone}
             </span>
             {customer.email && (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 13, color: 'var(--ink-muted)' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: "var(--text-base)", color: 'var(--ink-muted)' }}>
                 <Mail size={13} /> {customer.email}
               </span>
             )}
@@ -85,25 +86,25 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 14 }}>
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Total orders</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>{customer.total_orders}</div>
+          <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>Total orders</div>
+          <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>{customer.total_orders}</div>
         </div>
         {showRevenue && (
           <div style={S.card}>
-            <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Total spent</div>
-            <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>₹{Number(customer.total_spent).toFixed(0)}</div>
+            <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>Total spent</div>
+            <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', marginTop: 4 }}>₹{Number(customer.total_spent).toFixed(0)}</div>
           </div>
         )}
         <div style={S.card}>
-          <div style={{ fontSize: 12, color: 'var(--ink-muted)' }}>Customer since</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)', marginTop: 6 }}>
+          <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-muted)' }}>Customer since</div>
+          <div style={{ fontSize: "var(--text-md)", fontWeight: 600, color: 'var(--ink)', marginTop: 6 }}>
             {new Date(customer.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
         </div>
       </div>
 
       <div style={{ ...S.card, padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--surface-border)', fontSize: 13, fontWeight: 700, color: 'var(--ink)' }}>Order history</div>
+        <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--surface-border)', fontSize: "var(--text-base)", fontWeight: 700, color: 'var(--ink)' }}>Order history</div>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr>
@@ -116,7 +117,9 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
           <tbody>
             {(orders ?? []).length === 0 ? (
               <tr>
-                <td style={S.td} colSpan={showRevenue ? 4 : 3}>No orders yet.</td>
+                <td style={S.td} colSpan={showRevenue ? 4 : 3}>
+                  <EmptyState icon={ShoppingBag} title="No orders yet" compact />
+                </td>
               </tr>
             ) : (
               (orders ?? []).map((o) => {

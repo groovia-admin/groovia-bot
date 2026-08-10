@@ -1,10 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight, Package, FolderPlus } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import EmptyState from "@/components/ui/EmptyState";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import ProductEditModal from "./ProductEditModal";
 
@@ -318,7 +319,7 @@ export default function ProductsClient({
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Products</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Products</h1>
             <InfoTooltip
               items={[
                 { color: "var(--brand-dark)", label: "Available", hint: "shown to customers on WhatsApp" },
@@ -327,7 +328,7 @@ export default function ProductsClient({
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
             Manage your catalog and inventory.
           </p>
         </div>
@@ -341,7 +342,7 @@ export default function ProductsClient({
             border: "1px solid rgba(186,26,26,0.3)",
             borderRadius: 8,
             padding: "10px 14px",
-            fontSize: 13,
+            fontSize: "var(--text-base)",
           }}
         >
           {error}
@@ -351,7 +352,7 @@ export default function ProductsClient({
       {/* Categories */}
       <div style={S.card}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>Categories</h2>
+          <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>Categories</h2>
           {canManage && (
             <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAddCategory((v) => !v)}>
               <Plus size={14} />
@@ -377,7 +378,7 @@ export default function ProductsClient({
         )}
 
         {categories.length === 0 ? (
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", margin: 0 }}>No categories yet. Add one to start adding products.</p>
+          <EmptyState icon={FolderPlus} title="No categories yet" description="Add a category first — every product needs one to sort under." compact />
         ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {categories.map((category) => (
@@ -397,7 +398,7 @@ export default function ProductsClient({
                     type="button"
                     onClick={() => toggleCategoryActive(category)}
                     style={{ ...S.badge(category.is_active ? "var(--brand-dark)" : "var(--ink-muted)", "transparent"), border: "none" }}
-                    title={category.is_active ? "Click to deactivate" : "Click to activate"}
+                    title={category.is_active ? "Click to deactivate" : "Click to activate"} aria-label={category.is_active ? "Click to deactivate" : "Click to activate"}
                   >
                     {category.name}
                   </button>
@@ -443,13 +444,13 @@ export default function ProductsClient({
 
       {/* Products */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-        <h2 style={{ fontSize: 15, fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
+        <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", margin: 0 }}>All products</h2>
         <div style={{ display: "flex", gap: 8 }}>
           <button
             type="button"
             onClick={exportCsv}
             disabled={products.length === 0}
-            title="Export all products to a CSV file"
+            title="Export all products to a CSV file" aria-label="Export all products to a CSV file"
             style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), opacity: products.length === 0 ? 0.5 : 1 }}
           >
             <Download size={15} />
@@ -461,7 +462,7 @@ export default function ProductsClient({
               style={{ ...S.btn("var(--brand)", "#fff"), opacity: activeCategories.length === 0 ? 0.5 : 1 }}
               disabled={activeCategories.length === 0}
               onClick={() => setShowAddProduct((v) => !v)}
-              title={activeCategories.length === 0 ? "Add a category first" : undefined}
+              title={activeCategories.length === 0 ? "Add a category first" : undefined} aria-label={activeCategories.length === 0 ? "Add a category first" : undefined}
             >
               <Plus size={15} />
               Add product
@@ -542,7 +543,7 @@ export default function ProductsClient({
               />
             </div>
           </div>
-          <p style={{ fontSize: 11, color: "var(--ink-muted)", margin: 0 }}>* Required</p>
+          <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-muted)", margin: 0 }}>* Required</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="submit" disabled={savingProduct} style={{ ...S.btn("var(--brand)", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
               {savingProduct ? "Adding…" : "Add product"}
@@ -564,7 +565,7 @@ export default function ProductsClient({
             style={{ ...S.input, paddingLeft: 30 }}
           />
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--ink-muted)" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
           Per page
           <select value={pageSize} onChange={(e) => updatePageSize(Number(e.target.value))} style={{ ...S.input, width: "auto" }}>
             <option value={20}>20</option>
@@ -594,7 +595,11 @@ export default function ProductsClient({
               {filteredProducts.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={9}>
-                    {products.length === 0 ? "No products yet." : "No products match your search."}
+                    {products.length === 0 ? (
+                      <EmptyState icon={Package} title="No products yet" description="Add your first product above to start selling on WhatsApp." compact />
+                    ) : (
+                      <EmptyState icon={Search} title="No products match your search" compact />
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -637,7 +642,7 @@ export default function ProductsClient({
                           <button
                             type="button"
                             onClick={() => setEditingProduct(product)}
-                            title={canManage ? "Edit product" : "View product"}
+                            title={canManage ? "Edit product" : "View product"} aria-label={canManage ? "Edit product" : "View product"}
                             style={{ ...S.btn("var(--surface-hover)", "var(--ink)"), padding: "6px 10px" }}
                           >
                             <Pencil size={13} />
@@ -647,7 +652,7 @@ export default function ProductsClient({
                             type="button"
                             disabled={busy}
                             onClick={() => toggleAvailability(product)}
-                            title={product.is_available ? "Hide from customers" : "Show to customers"}
+                            title={product.is_available ? "Hide from customers" : "Show to customers"} aria-label={product.is_available ? "Hide from customers" : "Show to customers"}
                             style={{
                               ...S.btn(
                                 product.is_available ? "rgba(239,68,68,0.12)" : "rgba(34,197,94,0.12)",
@@ -681,7 +686,7 @@ export default function ProductsClient({
           >
             <ChevronLeft size={14} />
           </button>
-          <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+          <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
             Page {currentPage} of {totalPages} · {filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}
           </span>
           <button

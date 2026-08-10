@@ -5,6 +5,7 @@ import { Store, ShoppingBag, Users, AlertTriangle, Clock, Plus, Package, Setting
 import { startOfTodayUtc } from '@/lib/timezone'
 import PauseOrdersToggle from '@/components/settings/PauseOrdersToggle'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,7 +60,7 @@ export default async function DashboardPage() {
           </div>
 
           {!recentShops?.length ? (
-            <p className="text-ink-muted text-sm">No shops yet.</p>
+            <EmptyState icon={Store} title="No shops yet" compact />
           ) : (
             <div className="space-y-0">
               {recentShops.map((shop, i) => (
@@ -209,7 +210,7 @@ export default async function DashboardPage() {
           </div>
 
           {!recentOrders?.length ? (
-            <p className="text-ink-muted text-sm">No orders yet today.</p>
+            <EmptyState icon={ShoppingBag} title="No orders yet today" compact />
           ) : (
             <div>
               {recentOrders.map((order, i) => {

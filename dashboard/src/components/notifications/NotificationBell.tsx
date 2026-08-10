@@ -78,7 +78,7 @@ export default function NotificationBell() {
       <button
         type="button"
         onClick={toggle}
-        title="Recent activity"
+        title="Recent activity" aria-label="Recent activity"
         style={{
           position: "relative",
           display: "inline-flex",
@@ -105,7 +105,7 @@ export default function NotificationBell() {
               borderRadius: 999,
               background: "var(--error)",
               color: "#fff",
-              fontSize: 10,
+              fontSize: "var(--text-xs)",
               fontWeight: 700,
               display: "flex",
               alignItems: "center",
@@ -134,13 +134,13 @@ export default function NotificationBell() {
             zIndex: 50,
           }}
         >
-          <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--surface-border)", fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>
+          <div style={{ padding: "12px 14px", borderBottom: "1px solid var(--surface-border)", fontSize: "var(--text-base)", fontWeight: 700, color: "var(--ink)" }}>
             Recent activity
           </div>
           {loading ? (
-            <div style={{ padding: 20, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Loading…</div>
+            <div style={{ padding: 20, fontSize: "var(--text-base)", color: "var(--ink-faint)", textAlign: "center" }}>Loading…</div>
           ) : notifications.length === 0 ? (
-            <div style={{ padding: 20, fontSize: 13, color: "var(--ink-faint)", textAlign: "center" }}>Nothing yet.</div>
+            <div style={{ padding: 20, fontSize: "var(--text-base)", color: "var(--ink-faint)", textAlign: "center" }}>Nothing yet.</div>
           ) : (
             notifications.map((n) => {
               const [color] = ACTOR_BADGE[n.actor_type] ?? ACTOR_BADGE.system;
@@ -150,11 +150,11 @@ export default function NotificationBell() {
                 <div key={n.id} style={{ padding: "10px 14px", borderBottom: "1px solid var(--surface)", display: "flex", gap: 10 }}>
                   <span style={{ width: 6, height: 6, borderRadius: "50%", background: color, marginTop: 6, flexShrink: 0 }} />
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, color: "var(--ink)" }}>
+                    <div style={{ fontSize: "var(--text-sm)", color: "var(--ink)" }}>
                       <span style={{ fontWeight: 600 }}>{actorName}</span> {(ACTION_LABEL[n.action] ?? n.action).toLowerCase()}
                       {targetName ? ` — ${targetName}` : ""}
                     </div>
-                    <div style={{ fontSize: 11, color: "var(--ink-faint)", marginTop: 2 }}>
+                    <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", marginTop: 2 }}>
                       {formatDistanceToNowStrict(new Date(n.created_at), { addSuffix: true })}
                     </div>
                   </div>
@@ -165,7 +165,7 @@ export default function NotificationBell() {
           <Link
             href="/dashboard/logs"
             onClick={() => setOpen(false)}
-            style={{ display: "block", textAlign: "center", padding: "10px 14px", fontSize: 12, color: "var(--brand-dark)", textDecoration: "none", fontWeight: 600 }}
+            style={{ display: "block", textAlign: "center", padding: "10px 14px", fontSize: "var(--text-sm)", color: "var(--brand-dark)", textDecoration: "none", fontWeight: 600 }}
           >
             View all activity →
           </Link>

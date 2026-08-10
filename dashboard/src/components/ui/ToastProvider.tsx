@@ -51,7 +51,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             style={{
               padding: "12px 18px",
               borderRadius: 10,
-              fontSize: 13,
+              fontSize: "var(--text-base)",
               fontWeight: 600,
               color: "#ffffff",
               background: t.type === "success" ? "var(--brand)" : "var(--error)",

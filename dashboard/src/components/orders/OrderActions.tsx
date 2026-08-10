@@ -70,7 +70,7 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
 
   return (
     <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink)" }}>Update order</div>
+      <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--ink)" }}>Update order</div>
 
       {pendingReasonFor ? (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

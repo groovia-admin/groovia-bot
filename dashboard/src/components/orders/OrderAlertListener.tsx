@@ -138,7 +138,7 @@ export default function OrderAlertListener() {
     <button
       type="button"
       onClick={requestPermission}
-      title="Get a sound + browser notification when a new order arrives, even on another tab"
+      title="Get a sound + browser notification when a new order arrives, even on another tab" aria-label="Get a sound + browser notification when a new order arrives, even on another tab"
       style={{
         position: "fixed",
         bottom: 20,
@@ -152,7 +152,7 @@ export default function OrderAlertListener() {
         border: "1px solid var(--surface-border)",
         background: "#FFFFFF",
         color: "var(--ink-muted)",
-        fontSize: 12,
+        fontSize: "var(--text-sm)",
         fontWeight: 600,
         cursor: "pointer",
         boxShadow: "0 2px 8px rgba(11,28,48,0.08)",

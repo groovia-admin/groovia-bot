@@ -7,6 +7,7 @@ import { format, formatDistanceToNowStrict } from "date-fns";
 import { Search, ShoppingBag, Check, X, RefreshCw, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
@@ -231,7 +232,7 @@ export default function OrdersClient({
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: "var(--ink)", margin: 0 }}>Orders</h1>
+            <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Orders</h1>
             <InfoTooltip
               items={[
                 { color: "#B7791F", label: "Pending", hint: "awaiting shop response" },
@@ -243,14 +244,14 @@ export default function OrdersClient({
               ]}
             />
           </div>
-          <p style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
+          <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>Track order lifecycle and fulfillment.</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <button
             type="button"
             onClick={exportCsv}
             disabled={filtered.length === 0}
-            title="Export the orders currently shown to a CSV file"
+            title="Export the orders currently shown to a CSV file" aria-label="Export the orders currently shown to a CSV file"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -260,7 +261,7 @@ export default function OrdersClient({
               border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
               color: "var(--ink-muted)",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
               cursor: filtered.length === 0 ? "default" : "pointer",
               fontFamily: "inherit",
               opacity: filtered.length === 0 ? 0.5 : 1,
@@ -273,7 +274,7 @@ export default function OrdersClient({
             type="button"
             onClick={manualRefresh}
             disabled={refreshing}
-            title="Refresh now"
+            title="Refresh now" aria-label="Refresh now"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -283,7 +284,7 @@ export default function OrdersClient({
               border: "1px solid var(--surface-border)",
               background: "#FFFFFF",
               color: "var(--ink-muted)",
-              fontSize: 12,
+              fontSize: "var(--text-sm)",
               cursor: refreshing ? "default" : "pointer",
               fontFamily: "inherit",
             }}
@@ -318,7 +319,7 @@ export default function OrdersClient({
                 style={{
                   padding: "5px 12px",
                   borderRadius: 999,
-                  fontSize: 12,
+                  fontSize: "var(--text-sm)",
                   fontWeight: 600,
                   cursor: "pointer",
                   fontFamily: "inherit",
@@ -346,7 +347,7 @@ export default function OrdersClient({
             border: "1px solid rgba(0,104,95,0.35)",
           }}
         >
-          <span style={{ fontSize: 13, color: "var(--brand-dark)", fontWeight: 600 }}>
+          <span style={{ fontSize: "var(--text-base)", color: "var(--brand-dark)", fontWeight: 600 }}>
             {selectedIds.size} order{selectedIds.size > 1 ? "s" : ""} selected
           </span>
           <button
@@ -372,7 +373,7 @@ export default function OrdersClient({
                 {canManage && (
                   <th style={{ ...S.th, width: 32 }}>
                     {selectablePendingIds.length > 0 && (
-                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" />
+                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" aria-label="Select all pending orders" />
                     )}
                   </th>
                 )}
@@ -389,10 +390,16 @@ export default function OrdersClient({
               {filtered.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={(showRevenue ? 7 : 6) + (canManage ? 1 : 0)}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--ink-muted)" }}>
-                      <ShoppingBag size={14} />
-                      {orders.length === 0 ? "No orders yet." : "No orders match your search."}
-                    </div>
+                    {orders.length === 0 ? (
+                      <EmptyState
+                        icon={ShoppingBag}
+                        title="No orders yet"
+                        description="Orders placed by customers on WhatsApp will show up here as soon as they come in."
+                        compact
+                      />
+                    ) : (
+                      <EmptyState icon={Search} title="No orders match your search" description="Try a different order number, name, or phone number." compact />
+                    )}
                   </td>
                 </tr>
               ) : (
@@ -419,7 +426,7 @@ export default function OrdersClient({
                           <div>
                             <div style={{ color: "var(--ink)" }}>{o.customer_name}</div>
                             {o.customer_phone && (
-                              <div style={{ fontSize: 12, color: "var(--ink-muted)", marginTop: 1 }}>{o.customer_phone}</div>
+                              <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 1 }}>{o.customer_phone}</div>
                             )}
                           </div>
                         ) : (
@@ -447,7 +454,7 @@ export default function OrdersClient({
                             <button
                               type="button"
                               disabled={busy}
-                              title="Accept order"
+                              title="Accept order" aria-label="Accept order"
                               onClick={() => quickAccept(o.id)}
                               style={{ ...S.btn("var(--brand)", "#fff"), padding: "6px 10px", opacity: busy ? 0.5 : 1 }}
                             >
@@ -455,14 +462,14 @@ export default function OrdersClient({
                             </button>
                             <Link
                               href={`/dashboard/orders/${o.id}`}
-                              title="Reject order"
+                              title="Reject order" aria-label="Reject order"
                               style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "6px 10px", textDecoration: "none" }}
                             >
                               <X size={13} />
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: 12, textDecoration: "none" }}>
+                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
                             View
                           </Link>
                         )}

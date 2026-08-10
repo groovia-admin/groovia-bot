@@ -1,7 +1,9 @@
 import Link from 'next/link'
 import { format, isToday, isYesterday } from 'date-fns'
+import { PackageCheck, Boxes } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
+import EmptyState from '@/components/ui/EmptyState'
 
 export const dynamic = 'force-dynamic'
 
@@ -26,7 +28,7 @@ export default async function InventoryPage() {
   const context = await requireRole(['owner', 'manager', 'staff'])
 
   if (context.kind === 'super_admin') {
-    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 13 }}>Not applicable for super admins.</div>
+    return <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: "var(--text-base)" }}>Not applicable for super admins.</div>
   }
 
   const adminClient = createAdminClient()
@@ -71,8 +73,8 @@ export default async function InventoryPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Inventory</h1>
-        <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
+        <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Inventory</h1>
+        <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', marginTop: 4 }}>
           Products at or below their low-stock threshold.
         </p>
       </div>
@@ -88,9 +90,7 @@ export default async function InventoryPage() {
         }}
       >
         {lowStock.length === 0 ? (
-          <p style={{ padding: 20, fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>
-            Nothing low on stock right now.
-          </p>
+          <EmptyState icon={PackageCheck} title="Nothing low on stock" description="Every available product is above its low-stock threshold." compact />
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -110,7 +110,7 @@ export default async function InventoryPage() {
                   <td style={{ ...td, color: '#D97706', fontWeight: 600 }}>{product.stock_quantity}</td>
                   <td style={td}>{product.low_stock_threshold}</td>
                   <td style={{ ...td, textAlign: 'right' }}>
-                    <Link href={`/dashboard/products/${product.id}`} style={{ color: 'var(--brand-dark)', fontSize: 13, textDecoration: 'none' }}>
+                    <Link href={`/dashboard/products/${product.id}`} style={{ color: 'var(--brand-dark)', fontSize: "var(--text-base)", textDecoration: 'none' }}>
                       Restock →
                     </Link>
                   </td>
@@ -122,8 +122,8 @@ export default async function InventoryPage() {
       </div>
 
       <div>
-        <h2 style={{ fontSize: 16, fontWeight: 700, color: 'var(--ink)', margin: 0 }}>Stock movements</h2>
-        <p style={{ fontSize: 13, color: 'var(--ink-muted)', marginTop: 4 }}>
+        <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: 'var(--ink)', margin: 0 }}>Stock movements</h2>
+        <p style={{ fontSize: "var(--text-base)", color: 'var(--ink-muted)', marginTop: 4 }}>
           Every change to stock — sales, restocks, manual edits, and cancellations — most recent first.
         </p>
       </div>
@@ -141,11 +141,11 @@ export default async function InventoryPage() {
         }}
       >
         {movementGroups.length === 0 ? (
-          <p style={{ fontSize: 13, color: 'var(--ink-muted)', margin: 0 }}>No stock movements recorded yet.</p>
+          <EmptyState icon={Boxes} title="No stock movements yet" description="Sales, restocks, and manual edits will show up here." compact />
         ) : (
           movementGroups.map((group) => (
             <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: 'var(--ink-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 {group.label}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -166,13 +166,13 @@ export default async function InventoryPage() {
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13, color: 'var(--ink)', fontWeight: 500 }}>{productName ?? 'Unknown product'}</div>
-                        <div style={{ fontSize: 12, color: 'var(--ink-faint)' }}>
+                        <div style={{ fontSize: "var(--text-base)", color: 'var(--ink)', fontWeight: 500 }}>{productName ?? 'Unknown product'}</div>
+                        <div style={{ fontSize: "var(--text-sm)", color: 'var(--ink-faint)' }}>
                           {MOVEMENT_LABEL[m.movement_type] ?? m.movement_type} · {format(new Date(m.created_at), 'HH:mm')}
                           {m.notes ? ` · ${m.notes}` : ''}
                         </div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: positive ? 'var(--brand-dark)' : 'var(--error)', whiteSpace: 'nowrap' }}>
+                      <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: positive ? 'var(--brand-dark)' : 'var(--error)', whiteSpace: 'nowrap' }}>
                         {positive ? '+' : ''}
                         {m.quantity_delta}
                       </div>
@@ -191,7 +191,7 @@ export default async function InventoryPage() {
 const th: React.CSSProperties = {
   textAlign: 'left',
   padding: '10px 16px',
-  fontSize: 11,
+  fontSize: "var(--text-xs)",
   textTransform: 'uppercase',
   letterSpacing: '0.7px',
   color: 'var(--ink-muted)',
@@ -201,7 +201,7 @@ const th: React.CSSProperties = {
 
 const td: React.CSSProperties = {
   padding: '12px 16px',
-  fontSize: 13,
+  fontSize: "var(--text-base)",
   color: 'var(--ink-muted)',
   borderBottom: '1px solid var(--surface)',
 }
