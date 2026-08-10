@@ -101,23 +101,26 @@ router.post('/orders/:orderId/confirm-placement', requireInternalSecret, async (
 });
 
 // POST /internal/orders/:orderId/notify-staff
-// Body: { status: string, shopId: string, actorName?: string, reason?: string }
+// Body: { status: string, shopId: string, actorName?: string, reason?: string, via?: string }
 // Proactive visibility for staff still watching WhatsApp when the
-// dashboard actions an order instead — without this, the original
-// new-order-alert message (with live Accept/Reject/Edit buttons that
-// WhatsApp never grays out) just sits there unchanged, and a teammate
-// has no way to know the order was already handled short of tapping a
-// stale button and getting handleOrderCommand's own bounce-back.
+// dashboard (or an item edit) actions an order instead — without this,
+// the original new-order-alert message (with live Accept/Reject/Edit
+// buttons that WhatsApp never grays out) just sits there unchanged, and
+// a teammate has no way to know the order was already handled short of
+// tapping a stale button and getting handleOrderCommand's own bounce-back.
+// `via` lets a caller other than the order-status PATCH route (e.g. an
+// item-edit auto-accept) describe itself accurately instead of
+// defaulting to "the dashboard".
 router.post('/orders/:orderId/notify-staff', requireInternalSecret, async (req, res) => {
   const { orderId } = req.params;
-  const { status, shopId, actorName, reason } = req.body || {};
+  const { status, shopId, actorName, reason, via } = req.body || {};
 
   if (!orderId || !status || !shopId) {
     return res.status(400).json({ error: 'orderId, status, and shopId are required' });
   }
 
   try {
-    await notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason);
+    await notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason, via);
     return res.status(200).json({ success: true });
   } catch (err) {
     logger.error({ err, orderId, status, shopId }, 'Internal notify-staff endpoint failed');

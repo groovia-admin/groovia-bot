@@ -342,23 +342,44 @@ const STATUS_STAFF_LABEL = {
   cancelled: { emoji: '🚫', verb: 'cancelled' },
 };
 
+// Same tap-to-advance affordance handleOrderCommand already offers
+// after a WhatsApp-driven transition (see messageHandler.js's own
+// NEXT_STEP_BUTTON) — without this, a status change that happened
+// through the dashboard (or, now, an item edit) left staff with a
+// plain confirmation and no obvious next action beyond typing a raw
+// command. Same button ids (`ready_<id>`/`complete_<id>`), so
+// handleStaffButtonReply's existing generic regex match routes a tap on
+// either straight into the normal command flow with no changes needed
+// there.
+const NEXT_STEP_STAFF_BUTTON = {
+  accepted: (orderId) => ({ id: `ready_${orderId}`, title: '📦 Mark ready' }),
+  ready: (orderId) => ({ id: `complete_${orderId}`, title: '✅ Mark complete' }),
+};
+
 /**
  * Proactive visibility for staff still watching WhatsApp when someone
- * actions an order through the dashboard instead. Without this, the
- * original new-order-alert message (with live Accept/Reject/Edit
- * buttons — WhatsApp never grays these out) just sits there unchanged;
- * another staff member has no way to know the order was already
- * handled until they tap one of those buttons themselves and get
- * handleOrderCommand's "someone may have already updated it" bounce.
- * That reactive guard was already correct, this adds the proactive half.
+ * actions an order through the dashboard (or an item edit) instead.
+ * Without this, the original new-order-alert message (with live
+ * Accept/Reject/Edit buttons — WhatsApp never grays these out) just
+ * sits there unchanged; another staff member has no way to know the
+ * order was already handled until they tap one of those buttons
+ * themselves and get handleOrderCommand's "someone may have already
+ * updated it" bounce. That reactive guard was already correct, this
+ * adds the proactive half.
+ *
+ * `via` names what actually triggered this for the confirmation text —
+ * defaults to "the dashboard" (the original caller, the order-status
+ * PATCH route); an item edit passes its own phrasing instead, since
+ * "via the dashboard" would be actively wrong when the edit came from
+ * the no-login WhatsApp-linked edit page rather than a dashboard login.
  *
  * Deliberately notifies every active staff phone, including whoever
- * actually took the dashboard action — there's no reliable way to map a
- * dashboard login back to one specific WhatsApp number, and re-informing
- * your own action is a much smaller cost than leaving a teammate
- * out of the loop.
+ * actually took the action — there's no reliable way to map a dashboard
+ * login (or a signed edit link) back to one specific WhatsApp number,
+ * and re-informing your own action is a much smaller cost than leaving
+ * a teammate out of the loop.
  */
-async function notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason) {
+async function notifyStaffOfDashboardStatusChange(orderId, shopId, status, actorName, reason, via = 'the dashboard') {
   const supabase = getSupabase();
   if (!supabase) return;
 
@@ -377,12 +398,18 @@ async function notifyStaffOfDashboardStatusChange(orderId, shopId, status, actor
     return;
   }
 
-  const byLine = actorName ? ` via the dashboard by ${actorName}` : ' via the dashboard';
+  const byLine = actorName ? ` via ${via} by ${actorName}` : ` via ${via}`;
   const reasonLine = reason ? `\nReason: ${reason}` : '';
   const text = `${label.emoji} Order *${order.order_number}* was ${label.verb}${byLine}.${reasonLine}`;
 
   const phones = await getActiveStaffPhones(shopId);
-  await Promise.all(phones.map((phone) => sendWhatsAppMessage(phone, text)));
+  const nextStepButton = NEXT_STEP_STAFF_BUTTON[status]?.(orderId);
+
+  if (nextStepButton) {
+    await Promise.all(phones.map((phone) => sendButtonMessage(phone, text, [nextStepButton])));
+  } else {
+    await Promise.all(phones.map((phone) => sendWhatsAppMessage(phone, text)));
+  }
 }
 
 const NEW_ORDER_SELECT =

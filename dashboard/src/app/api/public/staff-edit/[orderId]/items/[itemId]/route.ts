@@ -202,6 +202,22 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
           if (!res.ok) console.error('wa-bot rejected the accept notify:', res.status, await res.text().catch(() => ''))
         })
         .catch((err) => console.error('Failed to notify wa-bot of order auto-accept:', err))
+
+      // Staff-facing confirmation + "Mark ready" button — without this,
+      // the shop had no visible sign the order was accepted at all, and
+      // no way to advance it to ready/complete short of typing a raw
+      // WhatsApp command they'd have no reason to know existed. No
+      // actorName here — this route has no logged-in user, just a
+      // signed link.
+      fetch(`${base}/internal/orders/${orderId}/notify-staff`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
+        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id, via: 'an item edit' }),
+      })
+        .then(async (res) => {
+          if (!res.ok) console.error('wa-bot rejected the staff notify:', res.status, await res.text().catch(() => ''))
+        })
+        .catch((err) => console.error('Failed to notify wa-bot staff of order auto-accept:', err))
     }
 
     // Best-effort: same "here's what changed" WhatsApp message every
