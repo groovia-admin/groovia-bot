@@ -3,7 +3,9 @@ import { requireShopRole } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'
 
 const SETTINGS_COLUMNS =
-  'shop_id, order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, created_at, updated_at'
+  'shop_id, order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time, created_at, updated_at'
+
+const TIME_HHMM_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
 const PAYMENT_METHOD_VALUES = new Set(['cash', 'upi', 'online', 'pay_later'])
 
@@ -89,7 +91,7 @@ export async function PATCH(request: Request) {
 
   const changes: Record<string, unknown> = {}
 
-  const booleanFields = ['order_acceptance_enabled', 'allow_pickup', 'allow_delivery', 'auto_accept_orders', 'tax_enabled', 'reminder_enabled']
+  const booleanFields = ['order_acceptance_enabled', 'allow_pickup', 'allow_delivery', 'auto_accept_orders', 'tax_enabled', 'reminder_enabled', 'daily_summary_enabled']
   for (const field of booleanFields) {
     if (has(field)) {
       if (!isBoolean(body[field])) {
@@ -134,6 +136,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'business_hours must be an object or null' }, { status: 400 })
     }
     changes.business_hours = body.business_hours
+  }
+
+  if (has('daily_summary_time')) {
+    if (typeof body.daily_summary_time !== 'string' || !TIME_HHMM_PATTERN.test(body.daily_summary_time)) {
+      return NextResponse.json({ error: 'daily_summary_time must be in HH:MM (24-hour) format' }, { status: 400 })
+    }
+    changes.daily_summary_time = body.daily_summary_time
   }
 
   if (Object.keys(changes).length === 0) {
