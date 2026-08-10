@@ -73,3 +73,4 @@
 | #108 | Rebrand dashboard to the new teal palette (cosmetic only) | dashboard | @groovia-admin | @groovia-admin | 2026-08-09 07:38 UTC | 0d 0h 0m |
 | #109 | Fix order_reminder silently failing (#132001) via language fallback | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-09 13:50 UTC | 0d 0h 17m |
 | #111 | Daily summary: orders/revenue/top-products each morning, on/off + time configurable | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 01:47 UTC | 0d 0h 0m |
+| #112 | Global UI polish (dropdowns, checkboxes, focus/hover states) + fix st… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 01:48 UTC | 0d 0h 0m |
