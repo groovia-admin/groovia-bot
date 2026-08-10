@@ -300,7 +300,11 @@ async function sendEditPrompt(from, shopId, orderId) {
     return;
   }
 
-  if (loaded.order.status !== 'pending') {
+  // 'accepted' stays editable too — editing a 'pending' order now
+  // auto-accepts it on the first change (see the item-edit API routes),
+  // so this can't require 'pending' specifically without locking staff
+  // out of any further edits right after that first one.
+  if (loaded.order.status !== 'pending' && loaded.order.status !== 'accepted') {
     await sendWhatsAppMessage(from, `⚠️ Order *${loaded.order.order_number}* can no longer be edited (already ${loaded.order.status}).`);
     return;
   }

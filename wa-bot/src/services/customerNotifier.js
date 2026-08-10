@@ -281,11 +281,15 @@ async function sendCompletionInvoice(orderId, shopId, phone) {
 }
 
 /**
- * Tells the customer what actually changed when staff edits a pending
- * order (a quantity reduced because only 1 of the 2 they ordered was in
- * stock, an item dropped entirely). Without this, the only signal a
- * customer ever got was a total that quietly didn't match what they
- * remembered ordering, with no explanation. Plain text, not a template
+ * Tells the customer what actually changed when staff edits an order (a
+ * quantity reduced because only 1 of the 2 they ordered was in stock, an
+ * item dropped entirely). Without this, the only signal a customer ever
+ * got was a total that quietly didn't match what they remembered
+ * ordering, with no explanation. Reported as still too vague even with
+ * the diff line alone (no context for what the *rest* of the order
+ * still looks like) -- now includes the full current item list, not
+ * just what changed, matching the same itemized-list-then-total shape
+ * the receipt/invoice already use elsewhere. Plain text, not a template
  * — the order was placed recently enough that the shop is still
  * actively working it, well inside the 24h customer-service window.
  * Best-effort and not retried, same reasoning as the receipt: this is
@@ -297,7 +301,11 @@ async function notifyCustomerOfOrderEdit(orderId, shopId, diffLines, newTotal) {
 
   const { data: order, error } = await supabase
     .from('orders')
-    .select('order_number, order_customer_details ( customer_phone_snapshot )')
+    .select(
+      `order_number, shops ( currency_code ),
+       order_customer_details ( customer_phone_snapshot ),
+       order_items ( product_name_snapshot, unit_snapshot, quantity, subtotal )`
+    )
     .eq('id', orderId)
     .eq('shop_id', shopId)
     .maybeSingle();
@@ -307,6 +315,7 @@ async function notifyCustomerOfOrderEdit(orderId, shopId, diffLines, newTotal) {
     return false;
   }
 
+  const shop = Array.isArray(order.shops) ? order.shops[0] : order.shops;
   const details = Array.isArray(order.order_customer_details)
     ? order.order_customer_details[0]
     : order.order_customer_details;
@@ -317,10 +326,16 @@ async function notifyCustomerOfOrderEdit(orderId, shopId, diffLines, newTotal) {
     return false;
   }
 
+  const currencyCode = shop?.currency_code;
+  const itemLines = (order.order_items || [])
+    .map((item) => `${item.product_name_snapshot} × ${item.quantity} (${item.unit_snapshot}) — ${fmtMoney(item.subtotal, currencyCode)}`)
+    .join('\n');
+
   const text =
     `📝 Your order *${order.order_number}* was updated by the shop:\n\n` +
     diffLines.join('\n') +
-    `\n\nNew total: ₹${Number(newTotal).toFixed(2)}\n\nWe'll notify you once it's ready.`;
+    `\n\nYour order now:\n${itemLines}\n\n` +
+    `*New total: ${fmtMoney(newTotal, currencyCode)}*\n\nWe'll notify you once it's ready.`;
 
   const sent = await sendWhatsAppMessage(phone, text);
   if (sent) {
