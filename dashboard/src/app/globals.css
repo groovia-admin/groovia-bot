@@ -38,6 +38,53 @@
   ::-webkit-scrollbar-track { background: var(--surface-card); }
   ::-webkit-scrollbar-thumb { background: var(--surface-border); border-radius: 3px; }
   ::-webkit-scrollbar-thumb:hover { background: #CFD4D8; }
+
+  /* ── Global interactive-state polish ──
+     Most of the dashboard's forms/tables/buttons are inline-styled (see
+     dashboardStyles.ts's S object), which means they can't express :focus,
+     :hover, or :checked states at all — every text input, checkbox, and
+     button in the app was falling back to each browser's own default
+     appearance for those states (a blue focus outline that clashes with
+     the brand, an unstyled OS checkbox, buttons with zero hover feedback).
+     These are global element-selector rules specifically so that gap
+     closes everywhere at once, without touching every inline-styled file. */
+
+  input[type="checkbox"], input[type="radio"] {
+    accent-color: var(--brand);
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+  }
+
+  input:not([type="checkbox"]):not([type="radio"]):focus,
+  select:focus,
+  textarea:focus {
+    outline: none;
+    /* Inline styles set `border` as a shorthand, which normal-specificity
+       CSS can never win against — !important is the only way to express
+       "on focus" for markup that can't carry a :focus rule of its own. */
+    border-color: var(--brand-dark) !important;
+    box-shadow: 0 0 0 3px rgba(0, 104, 95, 0.15);
+  }
+
+  button:not(:disabled):hover { filter: brightness(0.96); }
+  button:not(:disabled):active { filter: brightness(0.9); transform: translateY(0.5px); }
+
+  table tr:hover td { background-color: var(--surface-hover); }
+
+  /* Native <select> kept (free keyboard nav, mobile picker, accessibility)
+     but reskinned: the OS's own arrow glyph is the single biggest "looks
+     unfinished" tell on an otherwise custom-styled page, so it's replaced
+     with one that matches the app's own chevron icons. */
+  select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%233D4947' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 32px !important;
+    cursor: pointer;
+  }
 }
 
 @layer components {
