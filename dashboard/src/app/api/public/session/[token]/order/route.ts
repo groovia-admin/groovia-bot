@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { consumeOrderSession } from '@/lib/orderSession'
+import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
-import type { SubmitOrderBody } from '@/lib/storefront/types'
+import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
 
 function generateOrderNumber() {
   return `ORD-${randomBytes(4).toString('hex').toUpperCase()}`
@@ -50,6 +50,53 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
 
   const adminClient = createAdminClient()
+
+  // Reported gap: nothing anywhere validated a cart quantity against
+  // products.stock_quantity, so a customer could order more than a shop
+  // actually had on the shelf. Checked here against a non-destructive
+  // read of the session (before consuming it) specifically so a
+  // rejected order doesn't burn the customer's one-time link — they can
+  // adjust quantities and resubmit against the same still-active
+  // session. This is a check-then-act against current stock, not a row
+  // lock — a concurrent purchase between this check and the order
+  // actually being created could still theoretically slip through, same
+  // tolerance most storefronts accept without full inventory reservation.
+  const { data: peekedSession } = await adminClient
+    .from('order_sessions')
+    .select('cart_snapshot')
+    .eq('token_hash', hashSessionToken(token))
+    .eq('status', 'active')
+    .maybeSingle()
+
+  const cartItemsPreview: CartItem[] = peekedSession?.cart_snapshot?.items ?? []
+  if (cartItemsPreview.length > 0) {
+    const { data: stockRows, error: stockError } = await adminClient
+      .from('products')
+      .select('id, name, stock_quantity')
+      .in('id', cartItemsPreview.map((i) => i.product_id))
+
+    if (stockError) {
+      console.error('Failed to check stock before order submission:', stockError)
+      return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
+    }
+
+    const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]))
+    const shortages = cartItemsPreview
+      .map((item) => {
+        const product = stockById.get(item.product_id)
+        const available = product?.stock_quantity ?? 0
+        return item.quantity > available ? { name: product?.name ?? item.name, available } : null
+      })
+      .filter((s): s is { name: string; available: number } => s !== null)
+
+    if (shortages.length > 0) {
+      const detail = shortages.map((s) => `${s.name} (only ${s.available} left)`).join(', ')
+      return NextResponse.json(
+        { success: false, error: `Not enough stock for: ${detail}. Please adjust the quantity and try again.` },
+        { status: 409 }
+      )
+    }
+  }
 
   // Single-use from here on — a retry after this point (network blip,
   // double-tap) must fail cleanly rather than place a second order.

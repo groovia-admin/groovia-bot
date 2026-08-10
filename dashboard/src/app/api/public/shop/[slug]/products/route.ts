@@ -3,12 +3,13 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 // Only browse-relevant fields — cost_price, sku, low_stock_threshold,
 // last_updated_source/by are internal and never leave the authenticated
-// /api/shop/* routes. Stock-level enforcement (is this actually still
-// in stock right now) happens at order submission (Phase 6), not here —
-// is_available is the shop owner's own manual on/off toggle, which is
-// enough for a browsing catalog to hide something that shouldn't be
-// orderable at all.
-const PRODUCT_COLUMNS = 'id, category_id, name, description, unit, price, image_url'
+// /api/shop/* routes. is_available is the shop owner's own manual
+// on/off toggle, enough to hide something that shouldn't be orderable
+// at all; stock_quantity is included so the webview can cap the
+// quantity stepper at what's actually on the shelf (order submission
+// re-validates this server-side too — see order/route.ts — since stock
+// can change between browsing and checkout).
+const PRODUCT_COLUMNS = 'id, category_id, name, description, unit, price, image_url, stock_quantity'
 
 export async function GET(
   request: Request,

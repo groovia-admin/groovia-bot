@@ -79,3 +79,4 @@
 | #114 | Fix Settings grid runaway columns, add product search/pagination, sid… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 09:20 UTC | 0d 0h 0m |
 | #116 | No-login mobile order-edit page + single-page cart/checkout redesign | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 09:46 UTC | 0d 0h 0m |
 | #115 | Fix two production-blocking gaps: fonts never loaded, zero mobile sup… | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 10:01 UTC | 0d 0h 18m |
+| #117 | Enforce stock limits on orders; fix staff edit page stuck after Done | dashboard | @groovia-admin | @groovia-admin | 2026-08-10 14:36 UTC | 0d 0h 0m |

@@ -22,6 +22,7 @@ type Props = {
   form: CheckoutFormState
   onFormChange: (updater: (prev: CheckoutFormState) => CheckoutFormState) => void
   onQuantityChange: (productId: string, quantity: number) => void
+  stockByProductId: Record<string, number>
   canCheckout: boolean
   onBack: () => void
   onAddItems: () => void
@@ -44,6 +45,7 @@ export function CheckoutView({
   form,
   onFormChange,
   onQuantityChange,
+  stockByProductId,
   canCheckout,
   onBack,
   onAddItems,
@@ -162,38 +164,45 @@ export function CheckoutView({
         ) : (
           <div>
             <div className="card divide-y divide-surface-border p-0 overflow-hidden">
-              {items.map((item) => (
-                <div key={item.product_id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-ink truncate">{item.name}</p>
-                    <p className="text-xs text-ink-muted">
-                      {item.unit} · {formatMoney(item.unit_price)} each
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3 flex-shrink-0">
-                    <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
-                      <button
-                        className="text-white p-1"
-                        onClick={() => onQuantityChange(item.product_id, item.quantity - 1)}
-                        aria-label={`Decrease ${item.name} quantity`}
-                        disabled={submitting}
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
-                      <button
-                        className="text-white p-1"
-                        onClick={() => onQuantityChange(item.product_id, item.quantity + 1)}
-                        aria-label={`Increase ${item.name} quantity`}
-                        disabled={submitting}
-                      >
-                        <Plus size={14} />
-                      </button>
+              {items.map((item) => {
+                const stock = stockByProductId[item.product_id]
+                const atStockLimit = stock != null && item.quantity >= stock
+                return (
+                  <div key={item.product_id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink truncate">{item.name}</p>
+                        <p className="text-xs text-ink-muted">
+                          {item.unit} · {formatMoney(item.unit_price)} each
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
+                          <button
+                            className="text-white p-1"
+                            onClick={() => onQuantityChange(item.product_id, item.quantity - 1)}
+                            aria-label={`Decrease ${item.name} quantity`}
+                            disabled={submitting}
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
+                          <button
+                            className="text-white p-1 disabled:opacity-40"
+                            onClick={() => onQuantityChange(item.product_id, item.quantity + 1)}
+                            aria-label={`Increase ${item.name} quantity`}
+                            disabled={submitting || atStockLimit}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                        <span className="text-sm font-semibold text-ink w-16 text-right">{formatMoney(item.subtotal)}</span>
+                      </div>
                     </div>
-                    <span className="text-sm font-semibold text-ink w-16 text-right">{formatMoney(item.subtotal)}</span>
+                    {atStockLimit && <p className="text-[11px] text-ink-faint mt-1">Only {stock} left</p>}
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <button
