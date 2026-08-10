@@ -73,7 +73,7 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(420px, 1fr))', gap: 16, alignItems: 'start' }}>
       {context.kind === 'shop_user' && isOwner && (
         <div style={cardStyle}>
           <h2 style={cardTitleStyle}>Shop Profile</h2>
