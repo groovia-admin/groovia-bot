@@ -9,7 +9,7 @@ const {
   getShopDisplayPhone,
 } = require('./shopResolver');
 const { sendWhatsAppMessage, sendCatalogMessage, sendButtonMessage, sendListMessage, sendCtaUrlMessage } = require('./whatsappClient');
-const { notifyCustomer, notifyCustomerOfOrderEdit } = require('./customerNotifier');
+const { notifyCustomer } = require('./customerNotifier');
 const { logMessage } = require('./conversationLogger');
 const { getSession, createSession, updateSession, deleteSession } = require('./sessionStore');
 // Aliased — sessionStore.js's createSession (above) is the existing
@@ -24,17 +24,7 @@ const {
   sendNewOrderAlertTemplateFallback,
   buildOrderPlacedPayload,
 } = require('./orderCreator');
-const {
-  getEditSession,
-  startEditSession,
-  endEditSession,
-  setPendingItem,
-  getOrderWithItems,
-  formatItemList,
-  removeItems,
-  adjustItemQuantity,
-  buildEditDiffSummary,
-} = require('./orderEditor');
+const { getOrderWithItems } = require('./orderEditor');
 const deliveryTracker = require('./deliveryTracker');
 
 // ── Dynamic hourly pickup slots ──────────────────────────────────
@@ -139,6 +129,8 @@ function parseCommand(text) {
   if (completeMatch) return { command: 'COMPLETE', orderNumber: completeMatch[1].toUpperCase() };
 
   if (['HELP', 'HI', 'HELLO', 'START'].includes(upper)) return { command: 'HELP' };
+
+  if (['CATALOG', 'PRODUCTS', 'STOCK'].includes(upper)) return { command: 'CATALOG' };
 
   return null;
 }
@@ -259,12 +251,6 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     logger.error({ err, orderNumber: order.order_number, command }, 'Customer notify failed');
   }
 
-  // Clear any lingering edit session — e.g. staff tapped Accept/Reject
-  // straight from the button message instead of typing "done" first.
-  // Harmless no-op if none exists; without this a stale session would
-  // hijack the next unrelated text message as if it were edit input.
-  await endEditSession(shopId, from);
-
   // Confirm to shopkeeper
   const replies = {
     ACCEPT:   `✅ Order *${order.order_number}* accepted!\nCustomer will be notified.`,
@@ -296,56 +282,15 @@ const STAFF_BUTTON_COMMANDS = {
   complete: 'COMPLETE',
 };
 
-// Re-sent after every edit (an item removed, or "done") so staff always
-// see the current total and can Accept/Reject/keep Editing — same three
-// actions offered on the original new-order notification.
-async function sendOrderActionButtons(from, order, items) {
-  const body =
-    `📋 *Order ${order.order_number}* — ₹${Number(order.total_amount).toFixed(2)}\n\n` +
-    `Items:\n${formatItemList(items)}`;
-
-  await sendButtonMessage(from, body, [
-    { id: `accept_${order.id}`, title: '✅ Accept' },
-    { id: `reject_${order.id}`, title: '❌ Reject' },
-    { id: `edit_${order.id}`, title: '✏️ Edit' },
-  ]);
-}
-
-// WhatsApp list messages cap at 10 rows total — one is reserved for the
-// "Done" row, so at most 9 items can be listed. Orders bigger than that
-// fall back to the reply-with-a-number flow, which has no such limit.
-const MAX_EDIT_LIST_ITEMS = 9;
-
-// Tapping an item opens a quantity prompt rather than removing it
-// outright — "deliver 1 of the 2 ordered" (a real availability case, not
-// just "keep or drop") needs a number, not a single tap. Row id kept as
-// `adjust_` rather than the old `remove_` to name what actually happens
-// now.
-function buildEditListSections(order, items) {
-  const rows = items.map((item) => ({
-    id: `adjust_${item.id}`,
-    title: item.product_name_snapshot.slice(0, 24),
-    description: `Qty ${item.quantity} — ₹${Number(item.subtotal).toFixed(2)}`.slice(0, 72),
-  }));
-
-  rows.push({
-    id: `edit_done_${order.id}`,
-    title: '✅ Done',
-    description: 'Keep the rest, back to Accept/Reject',
-  });
-
-  return [{ title: 'Order items', rows }];
-}
-
-async function sendEditListPrompt(from, order, items) {
-  const body =
-    `✏️ *Editing ${order.order_number}*\n\n` +
-    `Total: ₹${Number(order.total_amount).toFixed(2)}\n\n` +
-    `Tap an item to change its quantity or remove it, or "Done" to keep the rest.`;
-
-  await sendListMessage(from, body, 'Select item', buildEditListSections(order, items));
-}
-
+// Replaces the old chat-based flow (a tap-to-adjust list, or a >9-item
+// text fallback of "reply with item numbers" / "edit N" / "done") —
+// reported as clunky and hard to use. The dashboard already has a real
+// item editor (OrderItemsEditor.tsx: a proper +/- stepper and remove
+// button, already wired to notify the customer on any change via
+// notifyCustomerOfOrderEdit through /internal/orders/:orderId/notify-edit)
+// so this just hands staff a direct link to it instead of re-implementing
+// the same capability worse in chat. Reuses webviewBaseUrl — the
+// dashboard and the customer webview are the same Next.js deployment.
 async function sendEditPrompt(from, shopId, orderId) {
   const loaded = await getOrderWithItems(orderId, shopId);
   if (!loaded) {
@@ -358,94 +303,38 @@ async function sendEditPrompt(from, shopId, orderId) {
     return;
   }
 
-  // Snapshotted now, kept for the whole session — finishEditSession
-  // diffs against this at "done" to tell the customer what actually
-  // changed, not just the final state.
-  const itemsSnapshot = loaded.items.map((item) => ({
-    id: item.id,
-    product_name_snapshot: item.product_name_snapshot,
-    quantity: item.quantity,
-  }));
-
-  const started = await startEditSession(shopId, from, orderId, itemsSnapshot);
-  if (!started) {
-    await sendWhatsAppMessage(from, '⚠️ Could not start editing right now. Please try again, or Accept/Reject as-is.');
+  if (!config.webviewBaseUrl) {
+    logger.warn({ shopId, orderId }, 'WEBVIEW_BASE_URL not configured — cannot send the dashboard edit link');
+    await sendWhatsAppMessage(from, '⚠️ Order editing isn\'t set up yet — please contact support.');
     return;
   }
 
-  if (loaded.items.length > MAX_EDIT_LIST_ITEMS) {
-    await sendWhatsAppMessage(from,
-      `✏️ *Editing ${loaded.order.order_number}*\n\n${formatItemList(loaded.items)}\n\n` +
-      `Reply with the item number(s) to remove (e.g. "2" or "1,3"), *edit N* to change one item's quantity (e.g. "edit 2"), or type *done* when finished.`
-    );
-    return;
-  }
+  const link = `${config.webviewBaseUrl}/dashboard/orders/${orderId}`;
+  const text = `✏️ Adjust items for order *${loaded.order.order_number}* — tap below. The customer is notified automatically once you save.`;
 
-  await sendEditListPrompt(from, loaded.order, loaded.items);
+  await sendCtaUrlMessage(from, text, 'Edit Order', link);
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
 }
 
-// Shared by both the list-tap "Done" row and the text "done" reply —
-// tells the customer what changed (if anything did) before closing out
-// the session, so this can't drift into only firing from one path.
-async function finishEditSession(from, shopId, editSession, loaded) {
-  const diff = buildEditDiffSummary(editSession.original_items_snapshot, loaded.items);
-
-  if (diff.changed) {
-    try {
-      await notifyCustomerOfOrderEdit(editSession.order_id, shopId, diff.lines, loaded.order.total_amount);
-    } catch (err) {
-      logger.error({ err, orderId: editSession.order_id }, 'Failed to notify customer of order edit');
-    }
-  }
-
-  await endEditSession(shopId, from);
-  await sendOrderActionButtons(from, loaded.order, loaded.items);
-}
-
-// ── Staff list-tap handler (the edit flow's item-quantity/removal UI) ──
-// Only reached while a staff_order_edits row exists — mirrors
-// handleStaffEditReply's text-based equivalent, which stays in place
-// both as the >9-item fallback and as a safety net if someone types
-// instead of tapping.
-async function handleStaffListReply(from, shopId, listReplyId) {
-  const editSession = await getEditSession(shopId, from);
-  if (!editSession) {
-    // Tapping a stale item list (session already ended via "Done", or
-    // the order moved on some other way) used to be silent —
-    // indistinguishable from the tap being lost. WhatsApp never expires
-    // a message on its own, so the reply has to explain why the tap no
-    // longer does anything.
-    await sendWhatsAppMessage(from, `⚠️ This edit session has ended (already finished, or the order moved on). Tap *Edit* again on the order if you still need to change it.`);
+// Same link-out pattern as sendEditPrompt above — no chat-based product
+// add/edit flow, since the dashboard's own products page (name, price,
+// stock, photo, categories) already does this well and building an
+// equivalent in WhatsApp text messages would mean re-typing all of that
+// through chat, badly. /dashboard/products specifically, not
+// /dashboard/catalog — the latter is the super-admin-only master
+// catalog, not a shop's own product list.
+async function sendCatalogLinkMessage(from, shopId) {
+  if (!config.webviewBaseUrl) {
+    logger.warn({ shopId }, 'WEBVIEW_BASE_URL not configured — cannot send the dashboard catalog link');
+    await sendWhatsAppMessage(from, '⚠️ Catalog editing isn\'t set up yet — please contact support.');
     return;
   }
 
-  const doneMatch = /^edit_done_(.+)$/.exec(listReplyId || '');
-  if (doneMatch) {
-    const loaded = await getOrderWithItems(editSession.order_id, shopId);
-    if (loaded) await finishEditSession(from, shopId, editSession, loaded);
-    return;
-  }
+  const link = `${config.webviewBaseUrl}/dashboard/products`;
+  const text = `🛒 Add, edit, or restock products — tap below.`;
 
-  const adjustMatch = /^adjust_(.+)$/.exec(listReplyId || '');
-  if (!adjustMatch) {
-    await sendWhatsAppMessage(from, `⚠️ Didn't recognize that. Tap an item to change its quantity or remove it, or "Done" to keep the rest.`);
-    return;
-  }
-
-  const loaded = await getOrderWithItems(editSession.order_id, shopId);
-  const item = loaded?.items.find((i) => i.id === adjustMatch[1]);
-
-  if (!loaded || !item) {
-    await endEditSession(shopId, from);
-    await sendWhatsAppMessage(from, '❌ Order not found. Edit cancelled.');
-    return;
-  }
-
-  await setPendingItem(shopId, from, item.id);
-  await sendWhatsAppMessage(from,
-    `*${item.product_name_snapshot}* — current quantity: ${item.quantity} (${item.unit_snapshot}).\n\n` +
-    `Reply with the new quantity (0 to remove this item), or *cancel*.`
-  );
+  await sendCtaUrlMessage(from, text, 'Open Catalog', link);
+  logMessage(shopId, from, 'outbound', 'system', 'interactive', text);
 }
 
 async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
@@ -466,123 +355,6 @@ async function handleStaffButtonReply(from, shopId, shopUser, buttonId) {
     { command, orderId, reason: 'Rejected by shopkeeper' },
     shopId,
     shopUser
-  );
-}
-
-// ── Staff order-edit reply handler ────────────────────────────────
-// Only reached while a staff_order_edits row exists for this phone —
-// see handleIncomingMessage, which checks for one before falling through
-// to the normal ACCEPT/REJECT/... command parser.
-async function handleStaffEditReply(from, shopId, editSession, text) {
-  const loaded = await getOrderWithItems(editSession.order_id, shopId);
-  if (!loaded) {
-    await endEditSession(shopId, from);
-    await sendWhatsAppMessage(from, '❌ Order not found. Edit cancelled.');
-    return;
-  }
-
-  const trimmed = (text || '').trim().toLowerCase();
-
-  // Answering a "what's the new quantity" prompt takes priority over
-  // every other interpretation of a text reply while one is pending —
-  // this is what a list-tap's quantity question (or "edit N" below)
-  // actually waits for.
-  if (editSession.pending_item_id) {
-    const pendingItem = loaded.items.find((i) => i.id === editSession.pending_item_id);
-
-    if (trimmed === 'cancel' || !pendingItem) {
-      await setPendingItem(shopId, from, null);
-      await sendEditListPrompt(from, loaded.order, loaded.items);
-      return;
-    }
-
-    const newQuantity = Number(trimmed);
-    if (!Number.isInteger(newQuantity) || newQuantity < 0) {
-      await sendWhatsAppMessage(from,
-        `Reply with a number — the new quantity for *${pendingItem.product_name_snapshot}* (0 to remove it), or *cancel*.`
-      );
-      return;
-    }
-
-    const result = await adjustItemQuantity(editSession.order_id, pendingItem.id, newQuantity);
-    await setPendingItem(shopId, from, null);
-
-    if (!result) {
-      await sendWhatsAppMessage(from, '⚠️ Something went wrong updating that. Please try again.');
-      return;
-    }
-
-    if (result.blocked) {
-      await sendWhatsAppMessage(from,
-        `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
-      );
-      return;
-    }
-
-    const updated = await getOrderWithItems(editSession.order_id, shopId);
-    await sendWhatsAppMessage(from,
-      newQuantity === 0
-        ? `Removed. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\nReply with more item number(s), *edit N*, or type *done* when finished.`
-        : `Updated. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\nReply with more changes, or type *done* when finished.`
-    );
-    return;
-  }
-
-  if (trimmed === 'done') {
-    await finishEditSession(from, shopId, editSession, loaded);
-    return;
-  }
-
-  // "edit N" — the text-fallback's equivalent of tapping an item in the
-  // list flow: asks for a new quantity rather than removing outright.
-  const editOneMatch = /^edit\s+(\d+)$/.exec(trimmed);
-  if (editOneMatch) {
-    const n = Number(editOneMatch[1]);
-    if (!Number.isInteger(n) || n < 1 || n > loaded.items.length) {
-      await sendWhatsAppMessage(from, `That's not a valid item number.`);
-      return;
-    }
-    const item = loaded.items[n - 1];
-    await setPendingItem(shopId, from, item.id);
-    await sendWhatsAppMessage(from,
-      `*${item.product_name_snapshot}* — current quantity: ${item.quantity} (${item.unit_snapshot}).\n\n` +
-      `Reply with the new quantity (0 to remove this item), or *cancel*.`
-    );
-    return;
-  }
-
-  // Parse "2" / "1,3" / "1, 3, 4" into 1-based item numbers (removal).
-  const numbers = trimmed
-    .split(',')
-    .map((part) => Number(part.trim()))
-    .filter((n) => Number.isInteger(n) && n >= 1 && n <= loaded.items.length);
-
-  if (numbers.length === 0) {
-    await sendWhatsAppMessage(from,
-      `Didn't catch that. Reply with the item number(s) to remove (e.g. "2" or "1,3"), *edit N* to change one item's quantity, or type *done*.`
-    );
-    return;
-  }
-
-  const itemIdsToRemove = numbers.map((n) => loaded.items[n - 1].id);
-  const result = await removeItems(editSession.order_id, itemIdsToRemove);
-
-  if (!result) {
-    await sendWhatsAppMessage(from, '⚠️ Something went wrong removing that. Please try again.');
-    return;
-  }
-
-  if (result.blocked) {
-    await sendWhatsAppMessage(from,
-      `⚠️ Can't remove every item — an order needs at least one. Use *Reject* instead if none of these are available.`
-    );
-    return;
-  }
-
-  const updated = await getOrderWithItems(editSession.order_id, shopId);
-  await sendWhatsAppMessage(from,
-    `Removed. New total: ₹${result.total.toFixed(2)}\n\n${formatItemList(updated.items)}\n\n` +
-    `Reply with more item number(s) to remove, *edit N* to change a quantity, or type *done* when finished.`
   );
 }
 
@@ -1108,22 +880,6 @@ async function handleStaffMessage(message, value, staffMatch) {
     return;
   }
 
-  if (type === 'interactive' && message.interactive?.type === 'list_reply') {
-    await handleStaffListReply(from, shopId, message.interactive.list_reply.id);
-    return;
-  }
-
-  // If this staff member is mid-edit on an order, any text reply is
-  // interpreted as edit input (item numbers / "done"), not a command —
-  // must be checked before the command parser below.
-  if (type === 'text') {
-    const editSession = await getEditSession(shopId, from);
-    if (editSession) {
-      await handleStaffEditReply(from, shopId, editSession, message.text?.body || '');
-      return;
-    }
-  }
-
   if (type !== 'text') {
     await sendWhatsAppMessage(from,
       `Hi ${name}! 👋 I only understand text commands right now.\nReply *HELP* to see what I can do.`
@@ -1144,6 +900,7 @@ async function handleStaffMessage(message, value, staffMatch) {
       `*REJECT ORD-XXXX reason* — Reject with reason\n` +
       `*READY ORD-XXXX* — Mark ready for pickup\n` +
       `*COMPLETE ORD-XXXX* — Mark completed\n` +
+      `*CATALOG* — Add or edit products\n` +
       `*HELP* — Show this menu\n\n` +
       `_Groovia_ 🛒`
     );
@@ -1157,8 +914,14 @@ async function handleStaffMessage(message, value, staffMatch) {
       `*REJECT ORD-XXXX [reason]*\nReject with optional reason\n\n` +
       `*READY ORD-XXXX*\nMark order ready for pickup\n\n` +
       `*COMPLETE ORD-XXXX*\nMark as completed\n\n` +
+      `*CATALOG*\nAdd or edit products\n\n` +
       `_Need help? admin@groovia.co.in_`
     );
+    return;
+  }
+
+  if (parsed.command === 'CATALOG') {
+    await sendCatalogLinkMessage(from, shopId);
     return;
   }
 
