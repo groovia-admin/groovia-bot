@@ -5,17 +5,11 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { normalizeIndianPhone } from '@/lib/phone'
 import { logAuthEvent } from '@/lib/auth/log-auth-event'
-import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield, MessageSquare, PackageCheck, Store } from 'lucide-react'
+import { Mail, Lock, ArrowRight, Eye, EyeOff, Phone, Shield, Check, TrendingUp, MessageCircle } from 'lucide-react'
 import GrooviaMark from '@/components/ui/GrooviaMark'
 
 type Method = 'password' | 'phone'
 type PhoneStep = 'input' | 'otp'
-
-const FEATURES = [
-  { icon: MessageSquare, text: 'Orders arrive straight from WhatsApp' },
-  { icon: PackageCheck, text: 'Real-time order and inventory tracking' },
-  { icon: Store, text: 'Built for Indian kirana and grocery shops' },
-]
 
 export default function LoginPage() {
   const router = useRouter()
@@ -172,58 +166,10 @@ export default function LoginPage() {
           .login-form-side { flex: 1; }
         }
         .glow { position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none; }
+        .float-card { position: absolute; background: #fff; border-radius: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.3); }
       `}</style>
 
-      {/* Left showcase panel — hidden below 960px, form-only on mobile/tablet.
-          100% height of the flex row (itself min-height: 100dvh), not a
-          fixed pixel value, so it always fills the viewport exactly. */}
-      <div
-        className="login-showcase"
-        style={{
-          flex: 1,
-          position: 'relative',
-          overflow: 'hidden',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          padding: '56px',
-          background: 'linear-gradient(160deg, #00685F 0%, #004B44 65%, #00332E 100%)',
-        }}
-      >
-        <div className="glow" style={{ width: 420, height: 420, background: '#89F5E7', opacity: 0.18, top: -140, left: -100 }} />
-        <div className="glow" style={{ width: 320, height: 320, background: '#6BD8CB', opacity: 0.14, bottom: -80, right: -60 }} />
-
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <GrooviaMark size={30} variant="white" />
-          <span style={{ color: '#fff', fontSize: "var(--text-md)", fontWeight: 800, letterSpacing: '-0.01em' }}>GrooVia</span>
-        </div>
-
-        <div style={{ position: 'relative', maxWidth: '440px' }}>
-          <h1 style={{ color: '#fff', fontSize: '34px', fontWeight: 800, lineHeight: 1.25, letterSpacing: '-0.01em', margin: '0 0 16px' }}>
-            Run your shop from wherever you are.
-          </h1>
-          <p style={{ color: 'rgba(255,255,255,0.75)', fontSize: "var(--text-md)", lineHeight: 1.6, margin: 0 }}>
-            The admin dashboard behind your WhatsApp storefront — orders, inventory and customers, all in one place.
-          </p>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '32px' }}>
-            {FEATURES.map((f) => (
-              <div key={f.text} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '9px', background: 'rgba(255,255,255,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <f.icon size={15} color="#89F5E7" />
-                </div>
-                <span style={{ color: 'rgba(255,255,255,0.9)', fontSize: "var(--text-base)", fontWeight: 500 }}>{f.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p style={{ position: 'relative', color: 'rgba(255,255,255,0.45)', fontSize: "var(--text-xs)", margin: 0 }}>
-          © {new Date().getFullYear()} GrooVia · Built for India's neighborhood stores
-        </p>
-      </div>
-
-      {/* Right side — the existing login form, unchanged, just no longer
-          centered full-width. */}
+      {/* Left — the login form. */}
       <div className="login-form-side" style={{ flex: '0 0 auto', width: '100%', maxWidth: '520px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'var(--surface)' }}>
         <div className="login-card-wrap" style={{ width: '100%', maxWidth: '380px' }}>
 
@@ -409,6 +355,93 @@ export default function LoginPage() {
             Powered by{' '}
             <span style={{ color: 'var(--brand-dark)', fontWeight: 700 }}>GrooVia</span>
           </p>
+        </div>
+      </div>
+
+      {/* Right — a real shop photo (not stock, not illustrated) with floating
+          cards showing the product in motion: an order arriving over
+          WhatsApp, that same order landing in the dashboard. 48px of teal
+          shows around the photo on every side — it's a framed card, not a
+          full-bleed background — and the photo fills that frame completely
+          (no inner max-width cap), so it reads as large rather than an
+          image floating in empty space. */}
+      <div
+        className="login-showcase"
+        style={{
+          flex: 1,
+          position: 'relative',
+          overflow: 'hidden',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '48px',
+          background: 'linear-gradient(160deg, #00685F 0%, #004B44 65%, #00332E 100%)',
+        }}
+      >
+        <div className="glow" style={{ width: 420, height: 420, background: '#89F5E7', opacity: 0.15, top: -140, left: -100 }} />
+        <div className="glow" style={{ width: 320, height: 320, background: '#6BD8CB', opacity: 0.12, bottom: -80, right: -60 }} />
+
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '3 / 4', borderRadius: 24, overflow: 'hidden', boxShadow: '0 30px 70px rgba(0,0,0,0.4)' }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/login-shop-photo.webp" alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,20,18,0.05) 0%, rgba(0,15,13,0.4) 100%)' }} />
+
+          <div className="float-card" style={{ top: -14, left: -18, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px 10px 10px' }}>
+            <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#DCF8C6', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--brand-dark)', flexShrink: 0 }}>
+              <Check size={14} strokeWidth={3} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>New Order Received</div>
+              <div style={{ fontSize: 10.5, color: 'var(--ink-muted)' }}>via chat · just now</div>
+            </div>
+          </div>
+
+          <div className="float-card" style={{ top: -10, right: -14, background: 'var(--ink)', borderRadius: 999, padding: '7px 14px 7px 10px', display: 'flex', alignItems: 'center', gap: 7 }}>
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#89F5E7', flexShrink: 0 }}>
+              <TrendingUp size={11} />
+            </div>
+            <div>
+              <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.6)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>This Month</div>
+              <div style={{ fontSize: 13.5, color: '#fff', fontWeight: 800 }}>₹3.2L</div>
+            </div>
+          </div>
+
+          <div className="float-card" style={{ top: 90, right: -22, width: 190, padding: 11 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7 }}>
+              <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}>
+                <MessageCircle size={10} />
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--ink)' }}>Priya Sharma</div>
+            </div>
+            <div style={{ background: '#DCF8C6', borderRadius: '8px 8px 8px 2px', padding: '7px 9px', fontSize: 11, color: 'var(--ink)', lineHeight: 1.4 }}>
+              2x Amul Milk, 1x Bread — ready by 6pm?
+            </div>
+            <div style={{ textAlign: 'right', marginTop: 4, fontSize: 9, color: 'var(--ink-faint)' }}>7:42 PM ✓✓</div>
+          </div>
+
+          <div className="float-card" style={{ bottom: -20, left: -22, width: 230, padding: 15 }}>
+            <div style={{ fontSize: 9, color: 'var(--ink-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today</div>
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--ink)', margin: '2px 0 9px' }}>Live Orders</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 7, marginBottom: 9 }}>
+              <div style={{ borderRadius: 9, padding: 8, background: 'var(--surface)' }}>
+                <div style={{ fontSize: 9, color: 'var(--ink-muted)' }}>Orders</div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--ink)', margin: '2px 0' }}>47</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: 'var(--brand-dark)' }}>↗ +12%</div>
+              </div>
+              <div style={{ borderRadius: 9, padding: 8, background: 'var(--brand)', color: '#fff' }}>
+                <div style={{ fontSize: 9, opacity: 0.8 }}>Revenue</div>
+                <div style={{ fontSize: 15, fontWeight: 800, margin: '2px 0' }}>₹18,240</div>
+                <div style={{ fontSize: 9, fontWeight: 700 }}>↗ +28%</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderTop: '1px solid var(--surface-border)', fontSize: 11, color: 'var(--ink)' }}>
+              <span>Rajesh K.</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: 'rgba(0,104,95,0.12)', color: 'var(--brand-dark)' }}>NEW</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', borderTop: '1px solid var(--surface-border)', fontSize: 11, color: 'var(--ink)' }}>
+              <span>Anita D.</span>
+              <span style={{ fontSize: 8.5, fontWeight: 700, padding: '2px 6px', borderRadius: 999, background: 'rgba(245,158,11,0.15)', color: '#B7791F' }}>READY</span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
