@@ -1,9 +1,10 @@
 // Branded loading indicator — a cart running continuously along a road,
-// same motif as the login page's logo animation, reused here so "the app
-// is thinking" always looks like the same app rather than a generic
-// spinner. Used both as a full route-level loading.tsx screen and inline
-// wherever a fetch is in flight (e.g. the storefront's initial catalog
-// load).
+// reused here so "the app is thinking" always looks like the same app
+// rather than a generic spinner. Used as a full route-level loading.tsx
+// screen, inline wherever a fetch is in flight (e.g. the storefront's
+// initial catalog load), and on the login page's own submit buttons —
+// the same component everywhere rather than a bespoke look-alike per
+// page.
 //
 // Continuous one-direction loop: the cart exits the right edge and
 // re-enters from the left (clipped by the track, so the reset is
@@ -12,7 +13,7 @@
 export default function CartLoader({ label, size = "page" }: { label?: string; size?: "page" | "inline" }) {
   const trackWidth = size === "page" ? 140 : 84;
   const cart = size === "page" ? 30 : 19;
-  const duration = 1.5;
+  const duration = 0.75; // 2x the original 1.5s
 
   return (
     <div
@@ -24,6 +25,14 @@ export default function CartLoader({ label, size = "page" }: { label?: string; s
         gap: 14,
         padding: size === "page" ? "80px 20px" : "20px",
         width: "100%",
+        // Page-level usage (route loading.tsx files) previously just sat
+        // wherever the page's normal content flow put it, rarely actually
+        // centered on the visible screen since justifyContent:center does
+        // nothing without a meaningful height to center within. minHeight
+        // gives it one; inline usage (embedded inside existing content,
+        // e.g. StorefrontApp's catalog load) is left alone since it should
+        // stay in its own flow, not force extra page height.
+        minHeight: size === "page" ? "60vh" : undefined,
       }}
     >
       <style>{`
