@@ -26,6 +26,7 @@ export default async function SettingsPage() {
   let shopProfile: {
     name: string
     description: string | null
+    area: string | null
     address_line_1: string | null
     address_line_2: string | null
     city: string | null
@@ -46,7 +47,7 @@ export default async function SettingsPage() {
         .maybeSingle(),
       adminClient
         .from('shops')
-        .select('slug, name, description, address_line_1, address_line_2, city, state, postal_code')
+        .select('slug, name, description, area, address_line_1, address_line_2, city, state, postal_code')
         .eq('id', context.shopId)
         .maybeSingle(),
       adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', context.shopId).maybeSingle(),
@@ -63,6 +64,7 @@ export default async function SettingsPage() {
       ? {
           name: shopData.name,
           description: shopData.description,
+          area: shopData.area,
           address_line_1: shopData.address_line_1,
           address_line_2: shopData.address_line_2,
           city: shopData.city,

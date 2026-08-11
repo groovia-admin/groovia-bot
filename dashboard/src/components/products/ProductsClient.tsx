@@ -235,9 +235,19 @@ export default function ProductsClient({
     if (!productForm.category_id) missing.push("Category");
     if (!productForm.unit.trim()) missing.push("Unit");
     if (!productForm.price) missing.push("Price");
+    if (!productForm.stock_quantity.trim()) missing.push("Stock qty");
 
     if (missing.length > 0) {
       return `${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} required`;
+    }
+
+    const duplicate = products.some(
+      (p) =>
+        p.name.trim().toLowerCase() === productForm.name.trim().toLowerCase() &&
+        p.unit.trim().toLowerCase() === productForm.unit.trim().toLowerCase()
+    );
+    if (duplicate) {
+      return `A product named "${productForm.name.trim()}" with unit "${productForm.unit.trim()}" already exists`;
     }
 
     return null;
@@ -533,7 +543,7 @@ export default function ProductsClient({
               />
             </div>
             <div>
-              <label style={S.label}>Stock qty</label>
+              <label style={S.label}>Stock qty *</label>
               <input
                 style={S.input}
                 type="number"

@@ -6,7 +6,7 @@ import { logAuditEvent } from '@/lib/audit/log'
 // (shopResolver.js resolveShopByPhoneNumberId/findShopBySlug) — keeping
 // this route's shape in sync with that is what lets an owner see and
 // edit exactly what a customer will be shown.
-const PROFILE_COLUMNS = 'id, name, description, address_line_1, address_line_2, city, state, postal_code'
+const PROFILE_COLUMNS = 'id, name, description, area, address_line_1, address_line_2, city, state, postal_code'
 
 type UpdateProfileBody = Record<string, unknown>
 
@@ -69,7 +69,7 @@ export async function PATCH(request: Request) {
     changes.name = body.name.trim()
   }
 
-  const nullableStringFields = ['description', 'address_line_1', 'address_line_2', 'city', 'state', 'postal_code']
+  const nullableStringFields = ['description', 'area', 'address_line_1', 'address_line_2', 'city', 'state', 'postal_code']
   for (const field of nullableStringFields) {
     if (has(field)) {
       if (!isNullableString(body[field])) {

@@ -74,7 +74,6 @@ export async function POST(request: Request) {
   const unit = getText(body.unit)
   const categoryId = getText(body.category_id)
   const price = Number(body.price)
-  const stockQuantity = Number(body.stock_quantity ?? 0)
   const lowStockThreshold = Number(body.low_stock_threshold ?? 5)
   const costPrice = body.cost_price === undefined || body.cost_price === '' || body.cost_price === null
     ? null
@@ -86,6 +85,11 @@ export async function POST(request: Request) {
       { status: 400 }
     )
   }
+
+  if (body.stock_quantity === undefined || body.stock_quantity === null || body.stock_quantity === '') {
+    return NextResponse.json({ error: 'Stock quantity is required' }, { status: 400 })
+  }
+  const stockQuantity = Number(body.stock_quantity)
 
   if (!Number.isFinite(price) || price < 0) {
     return NextResponse.json({ error: 'Enter a valid price' }, { status: 400 })
@@ -113,6 +117,30 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Category not found' }, { status: 404 })
   }
 
+  // Case-insensitive duplicate check within this shop — the DB-level unique
+  // index (see migration) is the real guard against a race between two
+  // concurrent requests; this is just for a clean error message in the
+  // common case.
+  const { data: existingProduct, error: duplicateError } = await adminClient
+    .from('products')
+    .select('id')
+    .eq('shop_id', shopId)
+    .ilike('name', name)
+    .ilike('unit', unit)
+    .maybeSingle()
+
+  if (duplicateError) {
+    console.error('Duplicate product check failed:', duplicateError)
+    return NextResponse.json({ error: 'Unable to validate product' }, { status: 500 })
+  }
+
+  if (existingProduct) {
+    return NextResponse.json(
+      { error: `A product named "${name}" with unit "${unit}" already exists` },
+      { status: 409 }
+    )
+  }
+
   const { data: product, error } = await adminClient
     .from('products')
     .insert({
@@ -136,6 +164,12 @@ export async function POST(request: Request) {
     .single()
 
   if (error) {
+    if (error.code === '23505') {
+      return NextResponse.json(
+        { error: `A product named "${name}" with unit "${unit}" already exists` },
+        { status: 409 }
+      )
+    }
     console.error('Failed to create product:', error)
     return NextResponse.json({ error: 'Failed to create product' }, { status: 500 })
   }

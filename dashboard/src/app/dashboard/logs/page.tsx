@@ -21,7 +21,7 @@ export default async function LogsPage() {
 
   const isSuperAdmin = context.kind === 'super_admin'
 
-  const [{ data: logs, error }, shopsResult] = await Promise.all([
+  const [{ data: logs, error }, shopsResult, movementsResult] = await Promise.all([
     // Owners/managers see only their own shop's actors — platform-admin
     // actions (e.g. a super admin changing this shop's subscription) stay
     // out of the tenant-facing log, even when they touched this shop_id.
@@ -31,6 +31,16 @@ export default async function LogsPage() {
     isSuperAdmin
       ? adminClient.from('shops').select('id, name').order('name', { ascending: true })
       : Promise.resolve({ data: null, error: null }),
+    // Stock movements live here now instead of on the Inventory page —
+    // shop-scoped only, same as the activity log itself.
+    isSuperAdmin
+      ? Promise.resolve({ data: null, error: null })
+      : adminClient
+          .from('inventory_movements')
+          .select('id, quantity_delta, movement_type, notes, created_at, products ( name )')
+          .eq('shop_id', context.shopId)
+          .order('created_at', { ascending: false })
+          .limit(200),
   ])
 
   if (error) {
@@ -40,6 +50,23 @@ export default async function LogsPage() {
   if (shopsResult.error) {
     console.error('Failed to load shops for log filter:', shopsResult.error)
   }
+
+  if (movementsResult.error) {
+    console.error('Failed to load inventory movements:', movementsResult.error)
+  }
+
+  const movementRows = (movementsResult.data ?? []).map((m) => {
+    const productRef = m.products as { name: string } | { name: string }[] | null
+    const productName = Array.isArray(productRef) ? productRef[0]?.name : productRef?.name
+    return {
+      id: m.id,
+      product_name: productName ?? null,
+      quantity_delta: m.quantity_delta,
+      movement_type: m.movement_type,
+      notes: m.notes,
+      created_at: m.created_at,
+    }
+  })
 
   const rows = (logs ?? []).map((log) => {
     const shop = Array.isArray(log.shops) ? log.shops[0] : log.shops
@@ -63,6 +90,7 @@ export default async function LogsPage() {
       initialLogs={rows}
       showShopColumn={isSuperAdmin}
       shops={isSuperAdmin ? (shopsResult.data ?? []) : null}
+      movements={isSuperAdmin ? null : movementRows}
     />
   )
 }
