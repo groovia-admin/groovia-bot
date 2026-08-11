@@ -26,6 +26,20 @@ export type StorefrontProduct = {
   stock_quantity: number
 }
 
+// Derived client-side (see groupProductsByName in StorefrontApp.tsx), not
+// something the API returns — products sharing the same shop + name are
+// treated as one item with multiple units ("Tata Salt" 250g/500g/1kg),
+// same way the dashboard's Add Product form creates them. `variants` is
+// always sorted by price ascending; a name with only one product still
+// gets a group of length 1, so the grid can render both cases uniformly.
+export type StorefrontProductGroup = {
+  key: string
+  name: string
+  description: string | null
+  image_url: string | null
+  variants: StorefrontProduct[]
+}
+
 export type StorefrontCategory = {
   id: string
   name: string
