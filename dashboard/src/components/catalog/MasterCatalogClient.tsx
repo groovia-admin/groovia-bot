@@ -44,6 +44,14 @@ interface ShopCategoryEnablement {
   master_category_id: string
 }
 
+interface ShopProductEnablement {
+  shop_id: string
+  master_product_id: string
+  is_enabled: boolean
+}
+
+type VariantRow = { unit: string; base_price: string }
+
 interface ProductRequest {
   id: string
   shop_id: string
@@ -89,6 +97,9 @@ export default function MasterCatalogClient() {
   const [categories, setCategories] = useState<MasterCategory[]>([])
   const [shops, setShops] = useState<Shop[]>([])
   const [enablements, setEnablements] = useState<ShopCategoryEnablement[]>([]) // ALL shops, loaded once
+  const [productEnablements, setProductEnablements] = useState<ShopProductEnablement[]>([]) // ALL shops, loaded once
+  const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(new Set())
+  const [bulkBusyProductId, setBulkBusyProductId] = useState<string | null>(null)
   const [requests, setRequests] = useState<ProductRequest[]>([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
@@ -116,7 +127,13 @@ export default function MasterCatalogClient() {
   const [saving, setSaving] = useState(false)
 
   const [categoryForm, setCategoryForm] = useState({ name: '', slug: '', image_url: '' })
-  const [productForm, setProductForm] = useState({ name: '', brand: '', unit: '', base_price: '', image_url: '' })
+  const EMPTY_MASTER_VARIANT: VariantRow = { unit: '', base_price: '' }
+  const [productForm, setProductForm] = useState({
+    name: '',
+    brand: '',
+    image_url: '',
+    variants: [{ ...EMPTY_MASTER_VARIANT }] as VariantRow[],
+  })
 
   function showToast(msg: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current)
@@ -131,7 +148,7 @@ export default function MasterCatalogClient() {
 
   async function loadAll() {
     setLoading(true)
-    const [catsRes, shopsRes, requestsRes, enablementsRes] = await Promise.all([
+    const [catsRes, shopsRes, requestsRes, enablementsRes, productEnablementsRes] = await Promise.all([
       supabase.from('master_categories').select('*, master_products(*)').order('display_order'),
       supabase.from('shops').select('id, name, city, is_active').order('name'),
       supabase.from('product_requests').select('*, shops(name)').eq('status', 'pending').order('created_at', { ascending: false }),
@@ -139,6 +156,7 @@ export default function MasterCatalogClient() {
       // the bulk enable/disable and per-category coverage counts both need to see
       // every shop's enablement state at once, not just one shop at a time.
       supabase.from('shop_master_categories').select('shop_id, master_category_id'),
+      supabase.from('shop_master_products').select('shop_id, master_product_id, is_enabled'),
     ])
 
     if (catsRes.data) {
@@ -148,6 +166,7 @@ export default function MasterCatalogClient() {
     if (shopsRes.data) setShops(shopsRes.data as Shop[])
     if (requestsRes.data) setRequests(requestsRes.data as ProductRequest[])
     if (enablementsRes.data) setEnablements(enablementsRes.data)
+    if (productEnablementsRes.data) setProductEnablements(productEnablementsRes.data as ShopProductEnablement[])
     setLoading(false)
   }
 
@@ -242,6 +261,117 @@ export default function MasterCatalogClient() {
     setBulkBusyCategoryId(null)
   }
 
+  function enabledProductShopCount(productId: string) {
+    return productEnablements.filter((e) => e.master_product_id === productId && e.is_enabled).length
+  }
+
+  function toggleCategoryExpanded(catId: string) {
+    setExpandedCategoryIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(catId)) next.delete(catId)
+      else next.add(catId)
+      return next
+    })
+  }
+
+  // Item-level enablement — a shop can have a category enabled but only
+  // some of its products (e.g. the master category is enabled but a
+  // discontinued item within it shouldn't sync). Independent of
+  // bulkToggleCategory above, though enabling a product here also ensures
+  // the category's own shop_master_categories bookkeeping row exists (a
+  // product can't really be "enabled" for a shop that doesn't have the
+  // category at all), and syncs just that one product via
+  // sync-master-category's masterProductId param rather than the whole
+  // category.
+  async function bulkToggleProduct(productId: string, categoryId: string, enable: boolean) {
+    if (selectedShopIds.size === 0) {
+      showToast('Select at least one shop first')
+      return
+    }
+    setBulkBusyProductId(productId)
+
+    const targetShopIds = Array.from(selectedShopIds)
+
+    if (!enable) {
+      const { error } = await supabase
+        .from('shop_master_products')
+        .update({ is_enabled: false })
+        .eq('master_product_id', productId)
+        .in('shop_id', targetShopIds)
+
+      if (error) {
+        showToast(`Error: ${error.message}`)
+      } else {
+        setProductEnablements((prev) =>
+          prev.map((e) => (e.master_product_id === productId && targetShopIds.includes(e.shop_id) ? { ...e, is_enabled: false } : e))
+        )
+        showToast(`Product disabled for ${targetShopIds.length} shop${targetShopIds.length > 1 ? 's' : ''}`)
+      }
+      setBulkBusyProductId(null)
+      return
+    }
+
+    const catRows = targetShopIds.map((shopId) => ({ shop_id: shopId, master_category_id: categoryId }))
+    const { error: catError } = await supabase
+      .from('shop_master_categories')
+      .upsert(catRows, { onConflict: 'shop_id,master_category_id', ignoreDuplicates: true })
+
+    if (catError) {
+      showToast(`Error: ${catError.message}`)
+      setBulkBusyProductId(null)
+      return
+    }
+
+    setEnablements((prev) => {
+      const existingKeys = new Set(prev.map((e) => `${e.shop_id}:${e.master_category_id}`))
+      const additions = catRows.filter((r) => !existingKeys.has(`${r.shop_id}:${r.master_category_id}`))
+      return [...prev, ...additions]
+    })
+
+    const productRows = targetShopIds.map((shopId) => ({
+      shop_id: shopId,
+      master_product_id: productId,
+      stock_quantity: 0,
+      is_available: true,
+      is_enabled: true,
+    }))
+    const { error } = await supabase.from('shop_master_products').upsert(productRows, { onConflict: 'shop_id,master_product_id' })
+
+    if (error) {
+      showToast(`Error: ${error.message}`)
+      setBulkBusyProductId(null)
+      return
+    }
+
+    setProductEnablements((prev) => {
+      const existingKeys = new Set(prev.map((e) => `${e.shop_id}:${e.master_product_id}`))
+      const additions = productRows
+        .filter((r) => !existingKeys.has(`${r.shop_id}:${r.master_product_id}`))
+        .map((r) => ({ shop_id: r.shop_id, master_product_id: r.master_product_id, is_enabled: true }))
+      const updated = prev.map((e) => (e.master_product_id === productId && targetShopIds.includes(e.shop_id) ? { ...e, is_enabled: true } : e))
+      return [...updated, ...additions]
+    })
+
+    const syncResults = await Promise.all(
+      targetShopIds.map((shopId) =>
+        fetch(`/api/admin/shops/${shopId}/sync-master-category`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ masterCategoryId: categoryId, masterProductId: productId }),
+        }).then((r) => r.json().then((data) => ({ ok: r.ok, data })))
+      )
+    )
+    const totalCreated = syncResults.reduce((sum, r) => sum + (r.ok ? r.data.productsCreated ?? 0 : 0), 0)
+    const failures = syncResults.filter((r) => !r.ok).length
+
+    showToast(
+      failures > 0
+        ? `Enabled for ${targetShopIds.length} shop(s), but syncing failed for ${failures} of them`
+        : `Enabled for ${targetShopIds.length} shop(s) — ${totalCreated} added`
+    )
+    setBulkBusyProductId(null)
+  }
+
   // ── Category CRUD ───────────────────────────────────────────────────────────
   async function toggleCategoryActive(cat: MasterCategory) {
     const { error } = await supabase.from('master_categories').update({ is_active: !cat.is_active }).eq('id', cat.id)
@@ -312,33 +442,68 @@ export default function MasterCatalogClient() {
     )
   }
 
+  function updateProductVariant(index: number, field: keyof VariantRow, value: string) {
+    setProductForm((f) => ({ ...f, variants: f.variants.map((v, i) => (i === index ? { ...v, [field]: value } : v)) }))
+  }
+
+  function addProductVariantRow() {
+    setProductForm((f) => ({ ...f, variants: [...f.variants, { ...EMPTY_MASTER_VARIANT }] }))
+  }
+
+  function removeProductVariantRow(index: number) {
+    setProductForm((f) => ({ ...f, variants: f.variants.filter((_, i) => i !== index) }))
+  }
+
+  // Same grouping convention as the shop-level Products page: a second
+  // variant row under one Name is a second unit, not a separate product —
+  // "Tata Salt" 250g/500g/1kg become three master_products rows sharing a
+  // name. Uniqueness is enforced per category (client-side here; a DB
+  // unique index on (master_category_id, lower(name), lower(unit)) backs
+  // it up against races).
   async function handleAddProduct(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedCategoryId) return
+
+    const existing = categories.find((c) => c.id === selectedCategoryId)?.master_products ?? []
+    for (const v of productForm.variants) {
+      if (!v.unit.trim()) { showToast('Every variant needs a unit'); return }
+      const dup = existing.some(
+        (p) => p.name.trim().toLowerCase() === productForm.name.trim().toLowerCase() && p.unit.trim().toLowerCase() === v.unit.trim().toLowerCase()
+      )
+      if (dup) { showToast(`"${productForm.name}" with unit "${v.unit}" already exists in this category`); return }
+    }
+    const seenUnits = new Set<string>()
+    for (const v of productForm.variants) {
+      const key = v.unit.trim().toLowerCase()
+      if (seenUnits.has(key)) { showToast(`Two variants both use unit "${v.unit}"`); return }
+      seenUnits.add(key)
+    }
+
     setSaving(true)
 
     const { data, error } = await supabase
       .from('master_products')
-      .insert({
-        master_category_id: selectedCategoryId,
-        name: productForm.name,
-        brand: productForm.brand || null,
-        unit: productForm.unit,
-        image_url: productForm.image_url || null,
-        base_price: productForm.base_price ? parseFloat(productForm.base_price) : null,
-      })
+      .insert(
+        productForm.variants.map((v) => ({
+          master_category_id: selectedCategoryId,
+          name: productForm.name,
+          brand: productForm.brand || null,
+          unit: v.unit,
+          image_url: productForm.image_url || null,
+          base_price: v.base_price ? parseFloat(v.base_price) : null,
+        }))
+      )
       .select()
-      .single()
 
     if (error) {
       showToast(`Error: ${error.message}`)
     } else {
       setCategories((prev) =>
-        prev.map((c) => (c.id === selectedCategoryId ? { ...c, master_products: [...(c.master_products ?? []), data as MasterProduct] } : c))
+        prev.map((c) => (c.id === selectedCategoryId ? { ...c, master_products: [...(c.master_products ?? []), ...(data as MasterProduct[])] } : c))
       )
       setShowAddProduct(false)
-      setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' })
-      showToast('Product added to master catalog')
+      setProductForm({ name: '', brand: '', image_url: '', variants: [{ ...EMPTY_MASTER_VARIANT }] })
+      showToast(data.length > 1 ? `"${productForm.name}" added — ${data.length} sizes` : 'Product added to master catalog')
     }
     setSaving(false)
   }
@@ -348,12 +513,13 @@ export default function MasterCatalogClient() {
     if (!editingProduct) return
     setSaving(true)
 
+    const variant = productForm.variants[0]
     const changes = {
       name: productForm.name,
       brand: productForm.brand || null,
-      unit: productForm.unit,
+      unit: variant.unit,
       image_url: productForm.image_url || null,
-      base_price: productForm.base_price ? parseFloat(productForm.base_price) : null,
+      base_price: variant.base_price ? parseFloat(variant.base_price) : null,
     }
 
     const { error } = await supabase.from('master_products').update(changes).eq('id', editingProduct.id)
@@ -543,7 +709,7 @@ export default function MasterCatalogClient() {
                     {selectedCategory.is_active ? 'Deactivate' : 'Activate'}
                   </button>
                   <button
-                    onClick={() => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) }}
+                    onClick={() => { setProductForm({ name: '', brand: '', image_url: '', variants: [{ ...EMPTY_MASTER_VARIANT }] }); setShowAddProduct(true) }}
                     className="btn-primary btn-sm"
                   >
                     <Plus className="w-3.5 h-3.5" /> Add product
@@ -559,7 +725,7 @@ export default function MasterCatalogClient() {
                     description="Add the first product to this category."
                     action={{
                       label: 'Add product',
-                      onClick: () => { setProductForm({ name: '', brand: '', unit: '', base_price: '', image_url: '' }); setShowAddProduct(true) },
+                      onClick: () => { setProductForm({ name: '', brand: '', image_url: '', variants: [{ ...EMPTY_MASTER_VARIANT }] }); setShowAddProduct(true) },
                     }}
                   />
                 ) : (
@@ -597,7 +763,7 @@ export default function MasterCatalogClient() {
                           </td>
                           <td style={{ textAlign: 'right' }}>
                             <button
-                              onClick={() => { setProductForm({ name: product.name, brand: product.brand ?? '', unit: product.unit, base_price: product.base_price?.toString() ?? '', image_url: product.image_url ?? '' }); setEditingProduct(product) }}
+                              onClick={() => { setProductForm({ name: product.name, brand: product.brand ?? '', image_url: product.image_url ?? '', variants: [{ unit: product.unit, base_price: product.base_price?.toString() ?? '' }] }); setEditingProduct(product) }}
                               className="btn-ghost btn-sm"
                             >
                               <Pencil className="w-3.5 h-3.5" />
@@ -655,33 +821,87 @@ export default function MasterCatalogClient() {
             {categories.map((cat) => {
               const coverage = enabledShopCount(cat.id)
               const busy = bulkBusyCategoryId === cat.id
+              const expanded = expandedCategoryIds.has(cat.id)
+              const products = cat.master_products ?? []
               return (
-                <div key={cat.id} className="card flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <Thumb src={cat.image_url} alt={cat.name} size={34} />
-                    <div>
-                      <p className="font-medium text-ink text-sm">{cat.name}</p>
-                      <p className="text-xs text-ink-muted">{cat.master_products?.length ?? 0} products · enabled in {coverage} of {shops.length} shops</p>
+                <div key={cat.id} className="card" style={{ padding: 0 }}>
+                  <div className="flex items-center justify-between" style={{ padding: 16 }}>
+                    <button
+                      type="button"
+                      onClick={() => products.length > 0 && toggleCategoryExpanded(cat.id)}
+                      className="flex items-center gap-3 text-left"
+                      style={{ background: 'none', border: 'none', cursor: products.length > 0 ? 'pointer' : 'default', padding: 0 }}
+                    >
+                      {products.length > 0 && (
+                        <ChevronRight className="w-4 h-4 text-ink-faint" style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s', flexShrink: 0 }} />
+                      )}
+                      <Thumb src={cat.image_url} alt={cat.name} size={34} />
+                      <div>
+                        <p className="font-medium text-ink text-sm">{cat.name}</p>
+                        <p className="text-xs text-ink-muted">{products.length} products · enabled in {coverage} of {shops.length} shops</p>
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        disabled={busy || selectedShopIds.size === 0}
+                        onClick={() => bulkToggleCategory(cat.id, true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                        style={{ color: 'var(--brand-dark)', background: 'rgba(0,104,95,0.1)' }}
+                      >
+                        <Check className="w-3.5 h-3.5" /> Enable all
+                      </button>
+                      <button
+                        disabled={busy || selectedShopIds.size === 0}
+                        onClick={() => bulkToggleCategory(cat.id, false)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
+                        style={{ color: 'var(--error)', background: 'rgba(186,26,26,0.08)' }}
+                      >
+                        <X className="w-3.5 h-3.5" /> Disable all
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      disabled={busy || selectedShopIds.size === 0}
-                      onClick={() => bulkToggleCategory(cat.id, true)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
-                      style={{ color: 'var(--brand-dark)', background: 'rgba(0,104,95,0.1)' }}
-                    >
-                      <Check className="w-3.5 h-3.5" /> Enable
-                    </button>
-                    <button
-                      disabled={busy || selectedShopIds.size === 0}
-                      onClick={() => bulkToggleCategory(cat.id, false)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-40"
-                      style={{ color: 'var(--error)', background: 'rgba(186,26,26,0.08)' }}
-                    >
-                      <X className="w-3.5 h-3.5" /> Disable
-                    </button>
-                  </div>
+
+                  {expanded && products.length > 0 && (
+                    <div style={{ borderTop: '1px solid var(--surface-border)' }}>
+                      {products.map((product) => {
+                        const productCoverage = enabledProductShopCount(product.id)
+                        const productBusy = bulkBusyProductId === product.id
+                        return (
+                          <div
+                            key={product.id}
+                            className="flex items-center justify-between"
+                            style={{ padding: '10px 16px 10px 44px', borderTop: '1px solid var(--surface)' }}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Thumb src={product.image_url} alt={product.name} size={26} />
+                              <div className="min-w-0">
+                                <p className="text-ink text-sm truncate">{product.name} <span className="text-ink-faint">· {product.unit}</span></p>
+                                <p className="text-xs text-ink-muted">enabled for {productCoverage} of {shops.length} shops</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button
+                                disabled={productBusy || selectedShopIds.size === 0}
+                                onClick={() => bulkToggleProduct(product.id, cat.id, true)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium disabled:opacity-40"
+                                style={{ color: 'var(--brand-dark)', background: 'rgba(0,104,95,0.1)' }}
+                              >
+                                <Check className="w-3 h-3" /> Enable
+                              </button>
+                              <button
+                                disabled={productBusy || selectedShopIds.size === 0}
+                                onClick={() => bulkToggleProduct(product.id, cat.id, false)}
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium disabled:opacity-40"
+                                style={{ color: 'var(--error)', background: 'rgba(186,26,26,0.08)' }}
+                              >
+                                <X className="w-3 h-3" /> Disable
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -789,28 +1009,59 @@ export default function MasterCatalogClient() {
                   <label className="block text-xs font-medium text-ink-muted mb-1.5">Product name *</label>
                   <input value={productForm.name} onChange={(e) => setProductForm((f) => ({ ...f, name: e.target.value }))} placeholder="Amul Butter" required className="input" />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-medium text-ink-muted mb-1.5">Brand</label>
-                    <input value={productForm.brand} onChange={(e) => setProductForm((f) => ({ ...f, brand: e.target.value }))} placeholder="Amul" className="input" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-medium text-ink-muted mb-1.5">Unit *</label>
-                    <input value={productForm.unit} onChange={(e) => setProductForm((f) => ({ ...f, unit: e.target.value }))} placeholder="100g / 1L / piece" required className="input" />
-                  </div>
-                </div>
                 <div>
-                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Base price (₹)</label>
-                  <input type="number" value={productForm.base_price} onChange={(e) => setProductForm((f) => ({ ...f, base_price: e.target.value }))} placeholder="52" className="input" />
-                  <p className="text-xs text-ink-faint mt-1">Shopkeepers can override this price</p>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">Brand</label>
+                  <input value={productForm.brand} onChange={(e) => setProductForm((f) => ({ ...f, brand: e.target.value }))} placeholder="Amul" className="input" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-ink-muted mb-1.5">Image URL (optional)</label>
                   <input value={productForm.image_url} onChange={(e) => setProductForm((f) => ({ ...f, image_url: e.target.value }))} placeholder="https://…" className="input" />
                 </div>
+
+                <div style={{ borderTop: '1px solid var(--surface-border)', paddingTop: 12 }}>
+                  <label className="block text-xs font-medium text-ink-muted mb-1.5">
+                    {productForm.variants.length > 1 ? 'Variants' : 'Unit & base price'}
+                  </label>
+                  {!editingProduct && (
+                    <p className="text-xs text-ink-faint mb-2">Add another unit to sell this in multiple sizes — each becomes its own entry, grouped by name.</p>
+                  )}
+                  <div className="space-y-2">
+                    {productForm.variants.map((v, i) => (
+                      <div key={i} className="grid gap-2" style={{ gridTemplateColumns: editingProduct ? '1fr 1fr' : '1fr 1fr auto' }}>
+                        <input
+                          value={v.unit}
+                          onChange={(e) => updateProductVariant(i, 'unit', e.target.value)}
+                          placeholder="100g / 1L / piece"
+                          required
+                          className="input"
+                        />
+                        <input
+                          type="number"
+                          value={v.base_price}
+                          onChange={(e) => updateProductVariant(i, 'base_price', e.target.value)}
+                          placeholder="Base price ₹"
+                          className="input"
+                        />
+                        {!editingProduct && productForm.variants.length > 1 && (
+                          <button type="button" onClick={() => removeProductVariantRow(i)} className="btn-ghost btn-sm" aria-label={`Remove ${v.unit || 'variant'}`}>
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  {!editingProduct && (
+                    <button type="button" onClick={addProductVariantRow} className="text-xs font-semibold mt-2" style={{ color: 'var(--brand-dark)' }}>
+                      + Add another unit
+                    </button>
+                  )}
+                  <p className="text-xs text-ink-faint mt-2">Shopkeepers can override this price</p>
+                </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => { setShowAddProduct(false); setEditingProduct(null) }} className="btn-secondary flex-1 justify-center">Cancel</button>
-                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">{saving ? 'Saving…' : editingProduct ? 'Save' : 'Add Product'}</button>
+                  <button type="submit" disabled={saving} className="btn-primary flex-1 justify-center">
+                    {saving ? 'Saving…' : editingProduct ? 'Save' : productForm.variants.length > 1 ? `Add — ${productForm.variants.length} sizes` : 'Add Product'}
+                  </button>
                 </div>
               </form>
             </div>

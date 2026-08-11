@@ -8,6 +8,10 @@ type RouteContext = {
 
 type SyncBody = {
   masterCategoryId?: unknown
+  // When set, only this one product from the category is synced — used by
+  // the item-level enable toggle so enabling a single product doesn't pull
+  // in the rest of its category.
+  masterProductId?: unknown
 }
 
 // Enabling a master category for a shop (see MasterCatalogClient) previously
@@ -38,6 +42,7 @@ export async function POST(request: Request, { params }: RouteContext) {
   }
 
   const masterCategoryId = typeof body.masterCategoryId === 'string' ? body.masterCategoryId : ''
+  const masterProductId = typeof body.masterProductId === 'string' ? body.masterProductId : null
 
   if (!masterCategoryId) {
     return NextResponse.json({ error: 'masterCategoryId is required' }, { status: 400 })
@@ -105,11 +110,13 @@ export async function POST(request: Request, { params }: RouteContext) {
     categoryId = newCategory.id
   }
 
-  const masterProducts = masterCategory.master_products ?? []
+  const masterProducts = masterProductId
+    ? (masterCategory.master_products ?? []).filter((p) => p.id === masterProductId)
+    : (masterCategory.master_products ?? [])
 
   const { data: existingProducts, error: existingProductsError } = await adminClient
     .from('products')
-    .select('id, name')
+    .select('id, name, unit')
     .eq('shop_id', shopId)
     .eq('category_id', categoryId)
 
@@ -118,8 +125,12 @@ export async function POST(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'Failed to sync products' }, { status: 500 })
   }
 
-  const existingNames = new Set((existingProducts ?? []).map((p) => p.name.trim().toLowerCase()))
-  const toCreate = masterProducts.filter((p) => !existingNames.has(p.name.trim().toLowerCase()))
+  // Name+unit, not name alone — a master category can list "Tata Salt" in
+  // more than one unit (variants), and matching by name only would treat
+  // the shop already having ONE size as reason to skip creating the rest.
+  const productKey = (name: string, unit: string) => `${name.trim().toLowerCase()}::${unit.trim().toLowerCase()}`
+  const existingKeys = new Set((existingProducts ?? []).map((p) => productKey(p.name, p.unit)))
+  const toCreate = masterProducts.filter((p) => !existingKeys.has(productKey(p.name, p.unit)))
 
   let createdCount = 0
 
@@ -153,7 +164,7 @@ export async function POST(request: Request, { params }: RouteContext) {
     shopId,
     actorUserId: userId,
     actorType: 'super_admin',
-    action: 'catalog.master_category_synced',
+    action: masterProductId ? 'catalog.master_product_synced' : 'catalog.master_category_synced',
     entityType: 'category',
     entityId: categoryId,
     newValues: { master_category: masterCategory.name, products_created: createdCount },

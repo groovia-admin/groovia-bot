@@ -80,20 +80,53 @@ export async function PATCH(request: Request) {
     }
   }
 
-  if (Object.keys(changes).length === 0) {
+  // Not a `shops` column — the customer-facing number the shop owner can
+  // edit lives on `whatsapp_connections` (phone_number_id / business
+  // account stay super-admin-only, changed elsewhere). Only ever sent by
+  // the client when a connection already exists, but harmless (updates
+  // zero rows) if one doesn't.
+  const hasWaNumber = has('whatsapp_display_number')
+  if (hasWaNumber && !isNullableString(body.whatsapp_display_number)) {
+    return NextResponse.json({ error: 'whatsapp_display_number must be a string or null' }, { status: 400 })
+  }
+
+  if (Object.keys(changes).length === 0 && !hasWaNumber) {
     return NextResponse.json({ error: 'Provide at least one field to update' }, { status: 400 })
   }
 
-  const { data: shop, error } = await adminClient
-    .from('shops')
-    .update(changes)
-    .eq('id', shopId)
-    .select(PROFILE_COLUMNS)
-    .single()
+  let shop = null
+  if (Object.keys(changes).length > 0) {
+    const { data, error } = await adminClient
+      .from('shops')
+      .update(changes)
+      .eq('id', shopId)
+      .select(PROFILE_COLUMNS)
+      .single()
 
-  if (error) {
-    console.error('Failed to save shop profile:', error)
-    return NextResponse.json({ error: 'Failed to save shop profile' }, { status: 500 })
+    if (error) {
+      console.error('Failed to save shop profile:', error)
+      return NextResponse.json({ error: 'Failed to save shop profile' }, { status: 500 })
+    }
+    shop = data
+  } else {
+    const { data, error } = await adminClient.from('shops').select(PROFILE_COLUMNS).eq('id', shopId).maybeSingle()
+    if (error) {
+      console.error('Failed to load shop profile:', error)
+      return NextResponse.json({ error: 'Failed to save shop profile' }, { status: 500 })
+    }
+    shop = data
+  }
+
+  if (hasWaNumber) {
+    const { error: waError } = await adminClient
+      .from('whatsapp_connections')
+      .update({ display_phone_number: body.whatsapp_display_number })
+      .eq('shop_id', shopId)
+
+    if (waError) {
+      console.error('Failed to save WhatsApp display number:', waError)
+      return NextResponse.json({ error: 'Failed to save WhatsApp number' }, { status: 500 })
+    }
   }
 
   await logAuditEvent({
@@ -103,7 +136,7 @@ export async function PATCH(request: Request) {
     action: 'shop.profile_updated',
     entityType: 'shop',
     entityId: shopId,
-    newValues: changes,
+    newValues: hasWaNumber ? { ...changes, whatsapp_display_number: body.whatsapp_display_number } : changes,
     metadata: { actor_name: actorName },
   })
 
