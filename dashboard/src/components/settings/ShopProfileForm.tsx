@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { inputStyle, labelStyle, saveButtonStyle, errorStyle, successStyle } from "./settingsStyles";
 import { useToast } from "@/components/ui/ToastProvider";
+import { normalizeIndianPhone } from "@/lib/phone";
 
 export type ShopProfile = {
   name: string;
@@ -32,6 +33,11 @@ export default function ShopProfileForm({
   const [city, setCity] = useState(initial.city ?? "");
   const [state, setState] = useState(initial.state ?? "");
   const [postalCode, setPostalCode] = useState(initial.postal_code ?? "");
+  // Only meaningful once a WhatsApp Business connection exists (whatsappNumber
+  // !== null) — the connection itself (phone_number_id, business account)
+  // stays super-admin-only, this just updates the number shown to customers
+  // and used to build the QR/"message us" link.
+  const [waNumber, setWaNumber] = useState(whatsappNumber ?? "");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -43,6 +49,15 @@ export default function ShopProfileForm({
     if (!name.trim()) {
       setError("Shop name cannot be empty");
       return;
+    }
+
+    let normalizedWaNumber: string | null = null;
+    if (whatsappNumber !== null) {
+      normalizedWaNumber = normalizeIndianPhone(waNumber);
+      if (!normalizedWaNumber) {
+        setError("Enter a valid 10-digit Indian WhatsApp number");
+        return;
+      }
     }
 
     setSaving(true);
@@ -62,6 +77,7 @@ export default function ShopProfileForm({
           city: city || null,
           state: state || null,
           postal_code: postalCode || null,
+          ...(whatsappNumber !== null ? { whatsapp_display_number: normalizedWaNumber } : {}),
         }),
       });
 
@@ -150,9 +166,15 @@ export default function ShopProfileForm({
 
       <div>
         <label style={labelStyle}>WhatsApp number</label>
-        <input style={{ ...inputStyle, background: "#F7F8FA", color: "var(--ink-muted)" }} value={whatsappNumber ?? "Not connected"} disabled />
+        {whatsappNumber === null ? (
+          <input style={{ ...inputStyle, background: "#F7F8FA", color: "var(--ink-muted)" }} value="Not connected" disabled />
+        ) : (
+          <input style={inputStyle} value={waNumber} onChange={(e) => setWaNumber(e.target.value)} placeholder="98765 43210" />
+        )}
         <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: "6px 0 0" }}>
-          Shown to customers automatically — set up under your WhatsApp connection, not editable here.
+          {whatsappNumber === null
+            ? "Set up a WhatsApp connection first — contact support to get connected."
+            : "The number customers message and scan your QR to reach. Must match the number actually connected via WhatsApp Business — changing this doesn't reconnect your bot to a different number, only updates what's shown here."}
         </p>
       </div>
 
