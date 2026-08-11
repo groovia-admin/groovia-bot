@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/ToastProvider";
 export type ShopProfile = {
   name: string;
   description: string | null;
+  area: string | null;
   address_line_1: string | null;
   address_line_2: string | null;
   city: string | null;
@@ -25,6 +26,7 @@ export default function ShopProfileForm({
 
   const [name, setName] = useState(initial.name);
   const [description, setDescription] = useState(initial.description ?? "");
+  const [area, setArea] = useState(initial.area ?? "");
   const [addressLine1, setAddressLine1] = useState(initial.address_line_1 ?? "");
   const [addressLine2, setAddressLine2] = useState(initial.address_line_2 ?? "");
   const [city, setCity] = useState(initial.city ?? "");
@@ -54,6 +56,7 @@ export default function ShopProfileForm({
         body: JSON.stringify({
           name,
           description: description || null,
+          area: area || null,
           address_line_1: addressLine1 || null,
           address_line_2: addressLine2 || null,
           city: city || null,
@@ -97,6 +100,16 @@ export default function ShopProfileForm({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           placeholder="What you sell, in a few words"
+        />
+      </div>
+
+      <div>
+        <label style={labelStyle}>Area / Locality (optional)</label>
+        <input
+          style={inputStyle}
+          value={area}
+          onChange={(e) => setArea(e.target.value)}
+          placeholder="Satellite"
         />
       </div>
 

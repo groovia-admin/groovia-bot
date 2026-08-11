@@ -33,6 +33,8 @@ type Product = {
   categories?: { name: string } | { name: string }[] | null;
 };
 
+type VariantRow = { unit: string; price: string; cost_price: string; stock_quantity: string };
+
 function categoryName(product: Product): string {
   const cat = Array.isArray(product.categories) ? product.categories[0] : product.categories;
   return cat?.name ?? "—";
@@ -58,13 +60,11 @@ export default function ProductsClient({
   const [deletingCategoryId, setDeletingCategoryId] = useState<string | null>(null);
 
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const EMPTY_VARIANT: VariantRow = { unit: "", price: "", cost_price: "", stock_quantity: "" };
   const [productForm, setProductForm] = useState({
     name: "",
     category_id: "",
-    unit: "",
-    price: "",
-    cost_price: "",
-    stock_quantity: "",
+    variants: [{ ...EMPTY_VARIANT }] as VariantRow[],
   });
   const [savingProduct, setSavingProduct] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -229,15 +229,60 @@ export default function ProductsClient({
     }
   }
 
+  function updateVariant(index: number, field: keyof VariantRow, value: string) {
+    setProductForm((f) => ({
+      ...f,
+      variants: f.variants.map((v, i) => (i === index ? { ...v, [field]: value } : v)),
+    }));
+  }
+
+  function addVariantRow() {
+    setProductForm((f) => ({ ...f, variants: [...f.variants, { ...EMPTY_VARIANT }] }));
+  }
+
+  function removeVariantRow(index: number) {
+    setProductForm((f) => ({ ...f, variants: f.variants.filter((_, i) => i !== index) }));
+  }
+
+  // A second (or third…) variant row under the same Name is how a product
+  // gets multiple units — e.g. "Tata Salt" with 250g/500g/1kg rows — rather
+  // than a separate variant concept in the schema. Same name + different
+  // unit is already allowed by the shop-scoped uniqueness constraint on
+  // (name, unit); the storefront groups by matching name at read time.
   function validateProductForm(): string | null {
     const missing: string[] = [];
     if (!productForm.name.trim()) missing.push("Name");
     if (!productForm.category_id) missing.push("Category");
-    if (!productForm.unit.trim()) missing.push("Unit");
-    if (!productForm.price) missing.push("Price");
+
+    productForm.variants.forEach((v, i) => {
+      const label = productForm.variants.length > 1 ? `Variant ${i + 1}` : "Unit/Price/Stock qty";
+      if (!v.unit.trim()) missing.push(`${label}: Unit`);
+      if (!v.price) missing.push(`${label}: Price`);
+      if (!v.stock_quantity.trim()) missing.push(`${label}: Stock qty`);
+    });
 
     if (missing.length > 0) {
       return `${missing.join(", ")} ${missing.length > 1 ? "are" : "is"} required`;
+    }
+
+    const seenUnits = new Set<string>();
+    for (const v of productForm.variants) {
+      const key = v.unit.trim().toLowerCase();
+      if (seenUnits.has(key)) {
+        return `Two variants both use unit "${v.unit.trim()}" — each unit under "${productForm.name.trim()}" must be different`;
+      }
+      seenUnits.add(key);
+    }
+
+    for (const v of productForm.variants) {
+      const duplicate = products.some(
+        (p) =>
+          p.name.trim().toLowerCase() === productForm.name.trim().toLowerCase() &&
+          p.unit.trim().toLowerCase() === v.unit.trim().toLowerCase()
+      );
+      if (duplicate) {
+        return `A product named "${productForm.name.trim()}" with unit "${v.unit.trim()}" already exists`;
+      }
     }
 
     return null;
@@ -255,37 +300,58 @@ export default function ProductsClient({
 
     setSavingProduct(true);
 
-    try {
-      const response = await fetch("/api/shop/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: productForm.name,
-          category_id: productForm.category_id,
-          unit: productForm.unit,
-          price: Number(productForm.price),
-          cost_price: productForm.cost_price ? Number(productForm.cost_price) : null,
-          stock_quantity: Number(productForm.stock_quantity || 0),
-        }),
-      });
-      const data = await response.json();
+    // Sequential, not Promise.all — so a failure partway through (e.g. the
+    // 2nd of 3 sizes hits a validation error) stops cleanly, keeps whatever
+    // already saved in the list, and reports exactly which variant failed
+    // instead of a confusing mixed-result race.
+    const created: Product[] = [];
+    let failedAt: { variant: VariantRow; message: string } | null = null;
 
-      if (!response.ok) {
-        setError(data.error || "Failed to add product");
-        toast(data.error || "Failed to add product", "error");
-        return;
+    for (const variant of productForm.variants) {
+      try {
+        const response = await fetch("/api/shop/products", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: productForm.name,
+            category_id: productForm.category_id,
+            unit: variant.unit,
+            price: Number(variant.price),
+            cost_price: variant.cost_price ? Number(variant.cost_price) : null,
+            stock_quantity: Number(variant.stock_quantity || 0),
+          }),
+        });
+        const data = await response.json();
+
+        if (!response.ok) {
+          failedAt = { variant, message: data.error || "Failed to add product" };
+          break;
+        }
+
+        created.push(data.product);
+      } catch {
+        failedAt = { variant, message: "Failed to add product. Please try again." };
+        break;
       }
-
-      setProducts((prev) => [data.product, ...prev]);
-      setProductForm({ name: "", category_id: "", unit: "", price: "", cost_price: "", stock_quantity: "" });
-      setShowAddProduct(false);
-      toast(`"${data.product.name}" added`);
-    } catch {
-      setError("Failed to add product. Please try again.");
-      toast("Failed to add product", "error");
-    } finally {
-      setSavingProduct(false);
     }
+
+    if (created.length > 0) {
+      setProducts((prev) => [...created, ...prev]);
+    }
+
+    if (failedAt) {
+      setError(`"${productForm.name}" (${failedAt.variant.unit}): ${failedAt.message}`);
+      toast(failedAt.message, "error");
+      // Drop the rows that already saved so retrying only resubmits what's left.
+      setProductForm((f) => ({ ...f, variants: f.variants.filter((v) => !created.some((c) => c.unit === v.unit)) }));
+      setSavingProduct(false);
+      return;
+    }
+
+    setProductForm({ name: "", category_id: "", variants: [{ ...EMPTY_VARIANT }] });
+    setShowAddProduct(false);
+    toast(created.length > 1 ? `"${productForm.name}" added — ${created.length} sizes` : `"${created[0].name}" added`);
+    setSavingProduct(false);
   }
 
   async function toggleAvailability(product: Product) {
@@ -473,14 +539,14 @@ export default function ProductsClient({
 
       {canManage && showAddProduct && (
         <form onSubmit={handleAddProduct} style={{ ...S.card, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: 14 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 14 }}>
             <div>
               <label style={S.label}>Name *</label>
               <input
                 style={S.input}
                 value={productForm.name}
                 onChange={(e) => setProductForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Amul Milk"
+                placeholder="Tata Salt"
               />
             </div>
             <div>
@@ -498,55 +564,100 @@ export default function ProductsClient({
                 ))}
               </select>
             </div>
-            <div>
-              <label style={S.label}>Unit *</label>
-              <input
-                style={S.input}
-                value={productForm.unit}
-                onChange={(e) => setProductForm((f) => ({ ...f, unit: e.target.value }))}
-                placeholder="500ml, 1kg, pc"
-              />
-            </div>
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
-            <div>
-              <label style={S.label}>Selling price (₹) *</label>
-              <input
-                style={S.input}
-                type="number"
-                min="0"
-                step="0.01"
-                value={productForm.price}
-                onChange={(e) => setProductForm((f) => ({ ...f, price: e.target.value }))}
-              />
+
+          <div style={{ borderTop: "1px solid var(--surface-border)", paddingTop: 14 }}>
+            <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--ink)" }}>
+              {productForm.variants.length > 1 ? "Variants" : "Unit, price & stock"}
             </div>
-            <div>
-              <label style={S.label}>Purchase price (₹)</label>
-              <input
-                style={S.input}
-                type="number"
-                min="0"
-                step="0.01"
-                value={productForm.cost_price}
-                onChange={(e) => setProductForm((f) => ({ ...f, cost_price: e.target.value }))}
-                placeholder="What you paid"
-              />
+            <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-muted)", margin: "2px 0 12px" }}>
+              Add another unit to sell "{productForm.name.trim() || "this product"}" in multiple sizes — customers pick
+              one at checkout.
+            </p>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {productForm.variants.map((variant, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1.2fr 1fr 1fr 1fr auto",
+                    gap: 10,
+                    alignItems: "end",
+                    background: productForm.variants.length > 1 ? "var(--surface)" : "transparent",
+                    borderRadius: 8,
+                    padding: productForm.variants.length > 1 ? 10 : 0,
+                  }}
+                >
+                  <div>
+                    <label style={S.label}>Unit *</label>
+                    <input
+                      style={S.input}
+                      value={variant.unit}
+                      onChange={(e) => updateVariant(i, "unit", e.target.value)}
+                      placeholder="500ml, 1kg, pc"
+                    />
+                  </div>
+                  <div>
+                    <label style={S.label}>Selling price (₹) *</label>
+                    <input
+                      style={S.input}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.price}
+                      onChange={(e) => updateVariant(i, "price", e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label style={S.label}>Purchase price (₹)</label>
+                    <input
+                      style={S.input}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={variant.cost_price}
+                      onChange={(e) => updateVariant(i, "cost_price", e.target.value)}
+                      placeholder="What you paid"
+                    />
+                  </div>
+                  <div>
+                    <label style={S.label}>Stock qty *</label>
+                    <input
+                      style={S.input}
+                      type="number"
+                      min="0"
+                      value={variant.stock_quantity}
+                      onChange={(e) => updateVariant(i, "stock_quantity", e.target.value)}
+                    />
+                  </div>
+                  {productForm.variants.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeVariantRow(i)}
+                      aria-label={`Remove ${variant.unit || "variant"} row`}
+                      style={{ ...S.btn("var(--surface-hover)", "var(--ink-muted)"), padding: "9px 10px" }}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
-            <div>
-              <label style={S.label}>Stock qty</label>
-              <input
-                style={S.input}
-                type="number"
-                min="0"
-                value={productForm.stock_quantity}
-                onChange={(e) => setProductForm((f) => ({ ...f, stock_quantity: e.target.value }))}
-              />
-            </div>
+
+            <button
+              type="button"
+              onClick={addVariantRow}
+              style={{ marginTop: 10, background: "none", border: "none", cursor: "pointer", fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--brand-dark)", padding: 0 }}
+            >
+              + Add another unit
+            </button>
           </div>
+
           <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-muted)", margin: 0 }}>* Required</p>
           <div style={{ display: "flex", gap: 10 }}>
             <button type="submit" disabled={savingProduct} style={{ ...S.btn("var(--brand)", "#fff"), opacity: savingProduct ? 0.5 : 1 }}>
-              {savingProduct ? "Adding…" : "Add product"}
+              {savingProduct ? "Adding…" : productForm.variants.length > 1 ? `Add product — ${productForm.variants.length} sizes` : "Add product"}
             </button>
             <button type="button" style={S.btn("var(--surface-hover)", "var(--ink)")} onClick={() => setShowAddProduct(false)}>
               Cancel

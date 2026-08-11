@@ -1736,6 +1736,23 @@ export default function ShopsClient({
                   />
                 </div>
 
+                <div>
+                  <label style={S.label}>Address line 2 (optional)</label>
+
+                  <input
+                    style={S.input}
+                    value={form.address_line_2}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        address_line_2: event.target.value,
+                      }))
+                    }
+                    placeholder="Landmark, area"
+                    disabled={saving}
+                  />
+                </div>
+
                 <div
                   style={{
                     borderTop: "1px solid var(--surface-border)",

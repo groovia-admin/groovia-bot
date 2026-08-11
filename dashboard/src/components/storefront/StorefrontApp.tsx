@@ -8,6 +8,7 @@ import ProductImage from './ProductImage'
 import type {
   CartItem,
   StorefrontProduct,
+  StorefrontProductGroup,
   StorefrontCategory,
   StorefrontSettings,
   CheckoutFormState,
@@ -64,6 +65,8 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
   const [searchQuery, setSearchQuery] = useState('')
   const [cart, setCart] = useState<Record<string, CartItem>>({})
   const [view, setView] = useState<'browse' | 'checkout' | 'placed'>('browse')
+  const [variantPicker, setVariantPicker] = useState<StorefrontProductGroup | null>(null)
+  const [pickedVariantId, setPickedVariantId] = useState<string | null>(null)
   const [placedOrderNumber, setPlacedOrderNumber] = useState<string | null>(null)
   // Lifted up here (not local to CheckoutView) so it survives the
   // customer navigating back to browse for a forgotten item and
@@ -299,6 +302,44 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     .filter((p) => !activeCategoryId || p.category_id === activeCategoryId)
     .filter((p) => !searchQuery.trim() || p.name.toLowerCase().includes(searchQuery.trim().toLowerCase()))
 
+  // Products sharing the same name become one card with a size picker —
+  // the same grouping the dashboard's Add Product "variants" rows create
+  // (same name, different unit). A name with only one product still gets
+  // a group of length 1, so the card below can render both cases the same
+  // way. Not memoized, matching visibleProducts above — cheap at this
+  // catalog scale.
+  const visibleGroups: StorefrontProductGroup[] = []
+  const groupIndexByKey = new Map<string, number>()
+  for (const p of visibleProducts) {
+    const key = p.name.trim().toLowerCase()
+    const idx = groupIndexByKey.get(key)
+    if (idx !== undefined) {
+      visibleGroups[idx].variants.push(p)
+    } else {
+      groupIndexByKey.set(key, visibleGroups.length)
+      visibleGroups.push({ key, name: p.name, description: p.description, image_url: p.image_url, variants: [p] })
+    }
+  }
+  for (const group of visibleGroups) {
+    group.variants.sort((a, b) => a.price - b.price)
+  }
+
+  function openVariantPicker(group: StorefrontProductGroup) {
+    const inCartVariant = group.variants.find((v) => cart[v.id])
+    const firstInStock = group.variants.find((v) => v.stock_quantity > 0)
+    setPickedVariantId((inCartVariant ?? firstInStock ?? group.variants[0]).id)
+    setVariantPicker(group)
+  }
+
+  function confirmVariantPick() {
+    if (!variantPicker || !pickedVariantId) return
+    const variant = variantPicker.variants.find((v) => v.id === pickedVariantId)
+    if (!variant) return
+    const existingQty = cart[variant.id]?.quantity ?? 0
+    setQuantity(variant, existingQty + 1)
+    setVariantPicker(null)
+  }
+
   if (view === 'checkout' && token) {
     return (
       <CheckoutView
@@ -441,51 +482,85 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
           <div className="col-span-2">
             <CartLoader label="Loading the shop…" size="inline" />
           </div>
-        ) : visibleProducts.length === 0 ? (
+        ) : visibleGroups.length === 0 ? (
           <p className="col-span-2 text-center py-12 text-sm text-ink-muted">
             {searchQuery ? `No products match "${searchQuery}".` : 'Nothing here yet.'}
           </p>
         ) : (
-          visibleProducts.map((product) => {
-            const inCart = cart[product.id]
-            return (
-              <div key={product.id} className="card flex flex-col">
-                <ProductImage src={product.image_url} alt={product.name} />
-                <h3 className="text-sm font-medium leading-tight text-ink">{product.name}</h3>
-                <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
-                <div className="mt-auto pt-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-ink">{formatMoney(product.price)}</span>
-                  {product.stock_quantity <= 0 ? (
-                    <span className="text-xs font-medium text-ink-faint">Out of stock</span>
-                  ) : inCart ? (
-                    <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
-                      <button className="text-white p-1" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
-                        <Minus size={14} />
-                      </button>
-                      <span className="text-white text-sm font-medium w-4 text-center">{inCart.quantity}</span>
+          visibleGroups.map((group) => {
+            // Single-unit product — unchanged from before.
+            if (group.variants.length === 1) {
+              const product = group.variants[0]
+              const inCart = cart[product.id]
+              return (
+                <div key={group.key} className="card flex flex-col">
+                  <ProductImage src={product.image_url} alt={product.name} />
+                  <h3 className="text-sm font-medium leading-tight text-ink">{product.name}</h3>
+                  <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
+                  <div className="mt-auto pt-2 flex items-center justify-between">
+                    <span className="text-sm font-semibold text-ink">{formatMoney(product.price)}</span>
+                    {product.stock_quantity <= 0 ? (
+                      <span className="text-xs font-medium text-ink-faint">Out of stock</span>
+                    ) : inCart ? (
+                      <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
+                        <button className="text-white p-1" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
+                          <Minus size={14} />
+                        </button>
+                        <span className="text-white text-sm font-medium w-4 text-center">{inCart.quantity}</span>
+                        <button
+                          className="text-white p-1 disabled:opacity-40"
+                          onClick={() => setQuantity(product, inCart.quantity + 1)}
+                          aria-label="Increase quantity"
+                          disabled={inCart.quantity >= product.stock_quantity}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
+                    ) : (
                       <button
-                        className="text-white p-1 disabled:opacity-40"
-                        onClick={() => setQuantity(product, inCart.quantity + 1)}
-                        aria-label="Increase quantity"
-                        disabled={inCart.quantity >= product.stock_quantity}
+                        className="rounded-lg px-2.5 py-1.5 text-white bg-brand"
+                        onClick={() => setQuantity(product, 1)}
+                        aria-label={`Add ${product.name}`}
                       >
-                        <Plus size={14} />
+                        <Plus size={16} />
                       </button>
-                    </div>
-                  ) : (
-                    <button
-                      className="rounded-lg px-2.5 py-1.5 text-white bg-brand"
-                      onClick={() => setQuantity(product, 1)}
-                      aria-label={`Add ${product.name}`}
-                    >
-                      <Plus size={16} />
-                    </button>
+                    )}
+                  </div>
+                  {inCart && inCart.quantity >= product.stock_quantity && (
+                    <p className="text-[11px] text-ink-faint mt-1">Only {product.stock_quantity} left</p>
                   )}
                 </div>
-                {inCart && inCart.quantity >= product.stock_quantity && (
-                  <p className="text-[11px] text-ink-faint mt-1">Only {product.stock_quantity} left</p>
-                )}
-              </div>
+              )
+            }
+
+            // Multiple units under one name — a size picker instead of a
+            // direct add, since tapping "+" here wouldn't know which unit
+            // the customer means.
+            const cheapest = group.variants[0]
+            const cartQty = group.variants.reduce((sum, v) => sum + (cart[v.id]?.quantity ?? 0), 0)
+            const anyInStock = group.variants.some((v) => v.stock_quantity > 0)
+            return (
+              <button
+                key={group.key}
+                type="button"
+                className="card flex flex-col text-left"
+                onClick={() => anyInStock && openVariantPicker(group)}
+                disabled={!anyInStock}
+              >
+                <ProductImage src={group.image_url} alt={group.name} />
+                <h3 className="text-sm font-medium leading-tight text-ink">{group.name}</h3>
+                <p className="text-xs mt-0.5 text-ink-muted">{group.variants.length} sizes available</p>
+                <div className="mt-auto pt-2 flex items-center justify-between">
+                  <span className="text-sm font-semibold text-ink">
+                    {anyInStock ? `From ${formatMoney(cheapest.price)}` : 'Out of stock'}
+                  </span>
+                  {anyInStock && (
+                    <span className="text-xs font-semibold text-brand-dark flex items-center gap-1">
+                      {cartQty > 0 ? `${cartQty} in cart` : 'Choose size'} ›
+                    </span>
+                  )}
+                </div>
+              </button>
             )
           })
         )}
@@ -499,6 +574,52 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             </span>
             <span>View order · {formatMoney(cartTotal)}</span>
           </button>
+        </div>
+      )}
+
+      {variantPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center" role="dialog" aria-label={`Choose a size for ${variantPicker.name}`}>
+          <div className="absolute inset-0 bg-ink/40" onClick={() => setVariantPicker(null)} />
+          <div className="relative w-full max-w-2xl bg-surface-card rounded-t-2xl px-4 pt-3 pb-5 max-h-[80vh] overflow-y-auto">
+            <div className="w-9 h-1 rounded-full bg-surface-border mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-ink">{variantPicker.name}</h3>
+            <p className="text-xs text-ink-muted mb-2">Choose a size to add to cart</p>
+            <div className="flex flex-col">
+              {variantPicker.variants.map((v, i) => {
+                const outOfStock = v.stock_quantity <= 0
+                const selected = pickedVariantId === v.id
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    disabled={outOfStock}
+                    onClick={() => setPickedVariantId(v.id)}
+                    className={`flex items-center justify-between py-3 text-left disabled:opacity-40 ${i > 0 ? 'border-t border-surface-hover' : ''}`}
+                  >
+                    <span className="flex items-center gap-2.5">
+                      <span
+                        className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${selected ? 'border-brand bg-brand' : 'border-surface-border'}`}
+                        style={selected ? { boxShadow: 'inset 0 0 0 2px #fff' } : undefined}
+                      />
+                      <span>
+                        <span className="block text-sm text-ink">{v.unit}</span>
+                        <span className="block text-[11px] text-ink-faint">
+                          {outOfStock ? 'Out of stock' : `${v.stock_quantity} in stock`}
+                        </span>
+                      </span>
+                    </span>
+                    <span className="text-sm font-semibold text-ink">{formatMoney(v.price)}</span>
+                  </button>
+                )
+              })}
+            </div>
+            <button className="btn-primary w-full mt-3" onClick={confirmVariantPick} disabled={!pickedVariantId}>
+              {(() => {
+                const picked = variantPicker.variants.find((v) => v.id === pickedVariantId)
+                return picked ? `Add to cart — ${formatMoney(picked.price)}` : 'Add to cart'
+              })()}
+            </button>
+          </div>
         </div>
       )}
     </main>

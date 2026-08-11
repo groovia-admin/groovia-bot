@@ -12,6 +12,7 @@ type CreateShopBody = {
   city?: unknown
   state?: unknown
   address?: unknown
+  address_line_2?: unknown
   ownerName?: unknown
   ownerEmail?: unknown
   ownerPhone?: unknown
@@ -20,6 +21,7 @@ type CreateShopBody = {
   postalCode?: unknown
   postal_code?: unknown
   area?: unknown
+  country?: unknown
 }
 
 type UpdateShopBody = {
@@ -166,6 +168,8 @@ export async function POST(
 
   const postalCode = getText(body.postalCode ?? body.postal_code)
   const area = getText(body.area)
+  const addressLine2 = getText(body.address_line_2)
+  const country = getText(body.country)
 
   const rawOwnerPhone = getText(
     body.ownerPhone ??
@@ -522,6 +526,14 @@ export async function POST(
 
   if (postalCode) {
     shopUpdates.postal_code = postalCode
+  }
+
+  if (addressLine2) {
+    shopUpdates.address_line_2 = addressLine2
+  }
+
+  if (country) {
+    shopUpdates.country = country
   }
 
   if (Object.keys(shopUpdates).length > 0) {

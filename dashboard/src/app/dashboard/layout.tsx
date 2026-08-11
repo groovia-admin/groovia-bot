@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/ui/ToastProvider'
 import NotificationBell from '@/components/notifications/NotificationBell'
 import GlobalSearch from '@/components/search/GlobalSearch'
 import OrderAlertListener from '@/components/orders/OrderAlertListener'
+import IdleLogout from '@/components/auth/IdleLogout'
 
 type ShopUserForSidebar = {
   role: string
@@ -43,6 +44,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       />
       <main className="flex-1 overflow-y-auto">
         <ToastProvider>
+          <IdleLogout />
           {!isSuperAdmin && <OrderAlertListener />}
           {!isSuperAdmin && (
             <div style={{ padding: '14px 24px 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>

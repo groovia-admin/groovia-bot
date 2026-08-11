@@ -26,6 +26,7 @@ export default async function SettingsPage() {
   let shopProfile: {
     name: string
     description: string | null
+    area: string | null
     address_line_1: string | null
     address_line_2: string | null
     city: string | null
@@ -46,7 +47,7 @@ export default async function SettingsPage() {
         .maybeSingle(),
       adminClient
         .from('shops')
-        .select('slug, name, description, address_line_1, address_line_2, city, state, postal_code')
+        .select('slug, name, description, area, address_line_1, address_line_2, city, state, postal_code')
         .eq('id', context.shopId)
         .maybeSingle(),
       adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', context.shopId).maybeSingle(),
@@ -63,6 +64,7 @@ export default async function SettingsPage() {
       ? {
           name: shopData.name,
           description: shopData.description,
+          area: shopData.area,
           address_line_1: shopData.address_line_1,
           address_line_2: shopData.address_line_2,
           city: shopData.city,
@@ -73,67 +75,81 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div className="grid-2up">
-      {context.kind === 'shop_user' && isOwner && (
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>Shop Profile</h2>
-          <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
-          <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
-        </div>
-      )}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }} className="settings-columns">
+      {/* Left column — compact, lighter-weight cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {context.kind === 'shop_user' && isOwner && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Shop Profile</h2>
+            <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
+            <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+          </div>
+        )}
 
-      {context.kind === 'shop_user' && isOwner && shopProfile && (
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>Shop Details</h2>
-          <p style={cardSubStyle}>Name, address, and phone shown to customers in the WhatsApp order link.</p>
-          <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
-        </div>
-      )}
+        {context.kind === 'shop_user' && isOwner && shopProfile && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Shop Details</h2>
+            <p style={cardSubStyle}>Name, address, and phone shown to customers in the WhatsApp order link.</p>
+            <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
+          </div>
+        )}
 
-      {context.kind === 'shop_user' && (
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>Store QR Code</h2>
-          <p style={cardSubStyle}>Print or share this so customers can start ordering by scanning it.</p>
-          <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
-        </div>
-      )}
+        {context.kind === 'shop_user' && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Store QR Code</h2>
+            <p style={cardSubStyle}>Print or share this so customers can start ordering by scanning it.</p>
+            <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
+          </div>
+        )}
 
-      {context.kind === 'shop_user' && (
-        <>
+        {context.kind === 'shop_user' && (
           <div style={cardStyle}>
             <h2 style={cardTitleStyle}>Bot Behavior</h2>
             <p style={cardSubStyle}>Control what the WhatsApp bot says and how it handles new orders.</p>
             <BotBehaviorSettingsForm initial={settings} />
           </div>
+        )}
+      </div>
 
+      {/* Right column — feature-heavy cards with their own enable/reveal toggles */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {context.kind === 'shop_user' && (
           <div style={cardStyle}>
             <h2 style={cardTitleStyle}>Order &amp; Delivery</h2>
             <p style={cardSubStyle}>Pickup/delivery availability, fees, and tax.</p>
             <DeliverySettingsForm initial={settings} />
           </div>
+        )}
 
+        {context.kind === 'shop_user' && isOwner && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Payment</h2>
+            <p style={cardSubStyle}>UPI details and accepted payment methods.</p>
+            <PaymentSettingsForm initial={settings} />
+          </div>
+        )}
+
+        {context.kind === 'shop_user' && (
           <div style={cardStyle}>
             <h2 style={cardTitleStyle}>Daily Summary</h2>
             <p style={cardSubStyle}>A morning WhatsApp recap of yesterday&apos;s orders, revenue, and top products.</p>
             <DailySummarySettingsForm initial={settings} />
           </div>
+        )}
 
-          {isOwner && (
-            <div style={cardStyle}>
-              <h2 style={cardTitleStyle}>Payment</h2>
-              <p style={cardSubStyle}>UPI details and accepted payment methods.</p>
-              <PaymentSettingsForm initial={settings} />
-            </div>
-          )}
-        </>
-      )}
+        {isOwner && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Payout &amp; Banking</h2>
+            <p style={cardSubStyle}>Payout settings placeholder (owner only).</p>
+          </div>
+        )}
+      </div>
 
-      {isOwner && (
-        <div style={cardStyle}>
-          <h2 style={cardTitleStyle}>Payout &amp; Banking</h2>
-          <p style={cardSubStyle}>Payout settings placeholder (owner only).</p>
-        </div>
-      )}
+      <style>{`
+        @media (max-width: 900px) {
+          .settings-columns { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </div>
   );
 }

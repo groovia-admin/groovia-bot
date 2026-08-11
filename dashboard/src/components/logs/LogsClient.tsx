@@ -1,8 +1,8 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { format } from "date-fns";
-import { ChevronDown, ChevronRight, ScrollText, Search } from "lucide-react";
+import { format, isToday, isYesterday } from "date-fns";
+import { ChevronDown, ChevronRight, ScrollText, Search, Boxes } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
 import { ACTION_LABEL, ACTOR_BADGE, actorLabel, type ActorType } from "@/lib/auditLabels";
@@ -20,6 +20,98 @@ type LogRow = {
   metadata: Record<string, unknown>;
   created_at: string;
 };
+
+type MovementRow = {
+  id: string;
+  product_name: string | null;
+  quantity_delta: number;
+  movement_type: string;
+  notes: string | null;
+  created_at: string;
+};
+
+const MOVEMENT_LABEL: Record<string, string> = {
+  initial_stock: "Initial stock",
+  sale: "Sold (order accepted)",
+  restock: "Restocked",
+  manual_adjustment: "Manual edit",
+  damaged: "Damaged/written off",
+  returned: "Returned",
+  cancelled_order: "Order cancelled — stock restored",
+};
+
+function dayLabel(dateStr: string): string {
+  const d = new Date(dateStr);
+  if (isToday(d)) return "Today";
+  if (isYesterday(d)) return "Yesterday";
+  return format(d, "MMMM d, yyyy");
+}
+
+function InventoryMovements({ movements }: { movements: MovementRow[] }) {
+  const groups = useMemo(() => {
+    const out: { label: string; items: MovementRow[] }[] = [];
+    for (const m of movements) {
+      const label = dayLabel(m.created_at);
+      const last = out[out.length - 1];
+      if (last && last.label === label) {
+        last.items.push(m);
+      } else {
+        out.push({ label, items: [m] });
+      }
+    }
+    return out;
+  }, [movements]);
+
+  if (groups.length === 0) {
+    return (
+      <div style={S.card}>
+        <EmptyState icon={Boxes} title="No stock movements yet" description="Sales, restocks, and manual edits will show up here." compact />
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 18 }}>
+      {groups.map((group) => (
+        <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            {group.label}
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {group.items.map((m, i) => {
+              const positive = m.quantity_delta > 0;
+              return (
+                <div
+                  key={m.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    padding: "8px 4px",
+                    borderTop: i > 0 ? "1px solid var(--surface)" : "none",
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: "var(--text-base)", color: "var(--ink)", fontWeight: 500 }}>{m.product_name ?? "Unknown product"}</div>
+                    <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
+                      {MOVEMENT_LABEL[m.movement_type] ?? m.movement_type} · {format(new Date(m.created_at), "HH:mm")}
+                      {m.notes ? ` · ${m.notes}` : ""}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: positive ? "var(--brand-dark)" : "var(--error)", whiteSpace: "nowrap" }}>
+                    {positive ? "+" : ""}
+                    {m.quantity_delta}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return "—";
@@ -62,10 +154,12 @@ export default function LogsClient({
   initialLogs,
   showShopColumn,
   shops,
+  movements,
 }: {
   initialLogs: LogRow[];
   showShopColumn: boolean;
   shops?: ShopOption[] | null;
+  movements?: MovementRow[] | null;
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [shopFilter, setShopFilter] = useState<string>("all");
@@ -73,6 +167,9 @@ export default function LogsClient({
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [view, setView] = useState<"activity" | "inventory">("activity");
+
+  const hasInventoryTab = movements !== undefined && movements !== null;
 
   const logs = useMemo(
     () =>
@@ -117,13 +214,46 @@ export default function LogsClient({
             {showShopColumn ? "Audit Logs" : "Activity Logs"}
           </h1>
           <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
-            {showShopColumn
+            {view === "inventory"
+              ? "Every change to stock — sales, restocks, manual edits, and cancellations."
+              : showShopColumn
               ? "Platform-wide record of shop and staff changes."
               : "Record of staff and account changes for this shop."}
           </p>
         </div>
 
-        {showShopColumn && (
+        {hasInventoryTab && (
+          <div style={{ display: "flex", borderRadius: 8, padding: 3, background: "var(--surface)", border: "1px solid var(--surface-border)", gap: 2 }}>
+            {(
+              [
+                { value: "activity", label: "Activity" },
+                { value: "inventory", label: "Inventory" },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setView(opt.value)}
+                style={{
+                  padding: "6px 14px",
+                  borderRadius: 6,
+                  fontSize: "var(--text-sm)",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  border: "none",
+                  background: view === opt.value ? "#FFFFFF" : "transparent",
+                  color: view === opt.value ? "var(--brand-dark)" : "var(--ink-muted)",
+                  boxShadow: view === opt.value ? "0 1px 3px rgba(11,28,48,0.08)" : "none",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {view === "activity" && showShopColumn && (
           <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
             <div>
               <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>
@@ -192,6 +322,10 @@ export default function LogsClient({
         )}
       </div>
 
+      {view === "inventory" ? (
+        <InventoryMovements movements={movements ?? []} />
+      ) : (
+        <>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
         <div style={{ position: "relative", flex: "1 1 260px", maxWidth: 340 }}>
           <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>Search</label>
@@ -310,6 +444,8 @@ export default function LogsClient({
           </table>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
