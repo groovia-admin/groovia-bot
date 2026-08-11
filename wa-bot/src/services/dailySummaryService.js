@@ -9,14 +9,18 @@ const { sendWhatsAppTemplateWithFallback } = require('./whatsappClient');
 // send would silently fail outside that window on exactly the shops
 // least actively using WhatsApp that morning.
 //
-// NOT YET CREATED IN META — this name/shape is what the code expects;
-// an actual template matching it still needs to be submitted and
-// approved in WhatsApp Manager before this can send anything in
-// production (same manual step order_reminder/appointment_reminder
-// needed). Fixed-shape body: WhatsApp templates can't render a
-// dynamic-length list, so "top products" is always exactly 3 numbered
-// lines, with unused slots filled with "—" rather than omitted.
-//   Category: Utility, Language: en_US
+// Approved in Meta as Language "en" (plain English), not "en_US" — the
+// code originally assumed en_US matching every other template's default;
+// confirmed directly against the actual approved template via the Graph
+// API's message_templates listing rather than guessed. Sent via
+// sendWhatsAppTemplateWithFallback below regardless, same as every
+// other template, so this would have kept working either way (the
+// fallback list tries 'en' too) — corrected the primary language anyway
+// so the first attempt succeeds instead of wasting one on 'en_US' first.
+// Fixed-shape body: WhatsApp templates can't render a dynamic-length
+// list, so "top products" is always exactly 3 numbered lines, with
+// unused slots filled with "—" rather than omitted.
+//   Category: Utility, Language: en
 //   Body:
 //     "📊 Yesterday's summary for *{{1}}*
 //
@@ -30,7 +34,7 @@ const { sendWhatsAppTemplateWithFallback } = require('./whatsappClient');
 //      3. {{7}}
 //
 //      Have a great day! 🙏"
-const DAILY_SUMMARY_TEMPLATE = { name: 'daily_summary', language: 'en_US' };
+const DAILY_SUMMARY_TEMPLATE = { name: 'daily_summary', language: 'en' };
 const TOP_PRODUCTS_SLOTS = 3;
 
 // 'YYYY-MM-DD' for `date` as it reads on a wall clock in `timezone` —

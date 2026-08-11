@@ -144,8 +144,6 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   // it silently stayed 'pending' with no formal confirmation reaching
   // the customer. Auto-accepts on the first edit only, guarded by
   // .eq('status','pending') so two racing edits can't both "win" this.
-  // Deliberately NOT tied to stock decrement here — see the dashboard
-  // route's twin of this comment for why.
   let autoAccepted = false
   if (wasPending) {
     const { error: acceptError } = await adminClient
@@ -158,6 +156,47 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
       console.error('Failed to auto-accept order on edit:', acceptError)
     } else {
       autoAccepted = true
+    }
+  }
+
+  // Same decrement the WhatsApp ACCEPT command and the dashboard's own
+  // status-PATCH route both already do on acceptance — see the
+  // dashboard item-edit route's twin of this comment for the known,
+  // accepted imprecision (only fires once, on whichever edit triggers
+  // the accept; always errs toward under-representing stock, never
+  // overselling).
+  if (autoAccepted) {
+    const { data: itemsForStock, error: itemsForStockError } = await adminClient
+      .from('order_items')
+      .select('product_id, product_name_snapshot, quantity')
+      .eq('order_id', orderId)
+
+    if (itemsForStockError) {
+      console.error('Failed to load order items for stock decrement:', itemsForStockError)
+    } else {
+      for (const stockItem of itemsForStock ?? []) {
+        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
+
+        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
+          p_product_id: stockItem.product_id,
+          p_delta: -stockItem.quantity,
+        })
+
+        if (rpcError) {
+          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
+          continue
+        }
+
+        await adminClient.from('inventory_movements').insert({
+          shop_id: link.shop_id,
+          product_id: stockItem.product_id,
+          quantity_delta: -stockItem.quantity,
+          movement_type: 'sale',
+          reference_id: orderId,
+          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
+          created_by: null, // no Supabase auth user for a WhatsApp-driven action
+        })
+      }
     }
   }
 
