@@ -178,20 +178,28 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  // Validate status transition
+  // Validate status transition. `from` is a list, not a single value —
+  // the dashboard has its own 'preparing' stage between accepted and
+  // ready (ALLOWED_TRANSITIONS in /api/shop/orders/[id]/route.ts) that
+  // this WhatsApp flow has no command for at all. Confirmed real: an
+  // order moved to 'preparing' from the dashboard used to leave READY
+  // rejecting every attempt with "must be ACCEPTED", permanently
+  // stranding that order on the WhatsApp side until someone went back
+  // to the dashboard to finish it. READY now accepts either.
   const validTransitions = {
-    ACCEPT:   { from: 'pending',  to: 'accepted'  },
-    REJECT:   { from: 'pending',  to: 'rejected'  },
-    READY:    { from: 'accepted', to: 'ready'     },
-    COMPLETE: { from: 'ready',    to: 'completed' },
+    ACCEPT:   { from: ['pending'],             to: 'accepted'  },
+    REJECT:   { from: ['pending'],             to: 'rejected'  },
+    READY:    { from: ['accepted', 'preparing'], to: 'ready'   },
+    COMPLETE: { from: ['ready'],               to: 'completed' },
   };
 
   const transition = validTransitions[command];
-  if (order.status !== transition.from) {
+  if (!transition.from.includes(order.status)) {
+    const validFromLabel = transition.from.map((s) => s.toUpperCase()).join(' or ');
     await sendWhatsAppMessage(from,
       `⚠️ Cannot ${command.toLowerCase()} order *${order.order_number}*.\n` +
       `Current status: *${order.status.toUpperCase()}*\n` +
-      `It must be *${transition.from.toUpperCase()}* for this action — someone may have already updated it.`
+      `It must be *${validFromLabel}* for this action — someone may have already updated it.`
     );
     return;
   }

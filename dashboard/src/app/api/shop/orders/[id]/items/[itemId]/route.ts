@@ -153,10 +153,6 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   // the customer. Auto-accepts on the first edit only (order.status
   // captured before this request's own change, guarded again here by
   // .eq('status','pending') so two racing edits can't both "win" this).
-  // Deliberately NOT tied to stock decrement here — that's the existing
-  // accept-flow's job, and doing it correctly for a live per-tap editing
-  // UX (several edits arriving as separate requests) needs its own
-  // careful pass rather than reusing this one blindly.
   let autoAccepted = false
   if (wasPending) {
     const { error: acceptError } = await adminClient
@@ -169,6 +165,59 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
       console.error('Failed to auto-accept order on edit:', acceptError)
     } else {
       autoAccepted = true
+    }
+  }
+
+  // Same decrement the WhatsApp ACCEPT command and the dashboard's own
+  // status-PATCH route both already do on acceptance — reads whatever
+  // order_items currently look like (including the change just applied
+  // above), not a stale pre-edit snapshot. Deliberately reloaded fresh
+  // here rather than reusing `allItems`/`remaining` from earlier in this
+  // request, since neither of those carries product_id.
+  //
+  // Known imprecision, accepted rather than solved: this only runs once,
+  // on whichever edit happens to be the one that flips 'pending' to
+  // 'accepted'. If staff then keep editing other items afterward (order
+  // is 'accepted' by then, so this block doesn't run again), stock for
+  // those later-edited items gets decremented by their pre-edit
+  // quantity, not their final one. That error always lands on the
+  // conservative side — stock ends up showing less available than is
+  // actually true, never more — so it can't cause overselling, just an
+  // occasional premature "out of stock." Judged an acceptable tradeoff
+  // against the alternative of not decrementing stock for edited orders
+  // at all.
+  if (autoAccepted) {
+    const { data: itemsForStock, error: itemsForStockError } = await adminClient
+      .from('order_items')
+      .select('product_id, product_name_snapshot, quantity')
+      .eq('order_id', orderId)
+
+    if (itemsForStockError) {
+      console.error('Failed to load order items for stock decrement:', itemsForStockError)
+    } else {
+      for (const stockItem of itemsForStock ?? []) {
+        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
+
+        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
+          p_product_id: stockItem.product_id,
+          p_delta: -stockItem.quantity,
+        })
+
+        if (rpcError) {
+          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
+          continue
+        }
+
+        await adminClient.from('inventory_movements').insert({
+          shop_id: shopId,
+          product_id: stockItem.product_id,
+          quantity_delta: -stockItem.quantity,
+          movement_type: 'sale',
+          reference_id: orderId,
+          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
+          created_by: authorization.userId,
+        })
+      }
     }
   }
 
