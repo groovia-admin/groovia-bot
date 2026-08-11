@@ -85,3 +85,4 @@
 | #120 | Auto-accept an order on first edit + notify customer; less-vague edit message | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 15:11 UTC | 0d 0h 0m |
 | #121 | Staff confirmation + Mark-ready button when an edit auto-accepts an order | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-10 16:31 UTC | 0d 0h 0m |
 | #123 | Decrement stock on WhatsApp order acceptance (this path never touched stock) | wa-bot | @groovia-admin | @groovia-admin | 2026-08-11 12:42 UTC | 0d 0h 0m |
+| #122 | Idle logout, move inventory logs into Logs, product validation, addre… | dashboard | @groovia-admin | @groovia-admin | 2026-08-11 13:00 UTC | 0d 0h 25m |
