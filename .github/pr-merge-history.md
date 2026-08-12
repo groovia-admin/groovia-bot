@@ -88,3 +88,4 @@
 | #122 | Idle logout, move inventory logs into Logs, product validation, addre… | dashboard | @groovia-admin | @groovia-admin | 2026-08-11 13:00 UTC | 0d 0h 25m |
 | #124 | Master Catalog variant/dedup parity, item-level shop enablement, edit… | dashboard | @groovia-admin | @groovia-admin | 2026-08-11 14:46 UTC | 0d 0h 0m |
 | #125 | Fix 'preparing' status breaking WhatsApp; decrement stock on edit-tri… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-11 15:50 UTC | 0d 0h 1m |
+| #126 | Inventory movements as a table, and a full login page redesign | dashboard | @groovia-admin | @groovia-admin | 2026-08-12 09:14 UTC | 0d 0h 0m |
