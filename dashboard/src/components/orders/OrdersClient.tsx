@@ -12,12 +12,11 @@ import { useToast } from "@/components/ui/ToastProvider";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
 import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
+import { NEXT_ACTIONS, type OrderStatus } from "@/components/orders/OrderActions";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
-
-type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
 
 type OrderRow = {
   id: string;
@@ -69,6 +68,8 @@ export default function OrdersClient({
   const [orders, setOrders] = useState<OrderRow[]>(initialOrders);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "all">("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
@@ -139,6 +140,11 @@ export default function OrdersClient({
     const q = search.trim().toLowerCase();
     return orders.filter((o) => {
       if (statusFilter !== "all" && o.status !== statusFilter) return false;
+
+      const rowDate = o.created_at.slice(0, 10);
+      if (dateFrom && rowDate < dateFrom) return false;
+      if (dateTo && rowDate > dateTo) return false;
+
       if (!q) return true;
       return (
         o.order_number.toLowerCase().includes(q) ||
@@ -146,7 +152,7 @@ export default function OrdersClient({
         (o.customer_phone ?? "").toLowerCase().includes(q)
       );
     });
-  }, [orders, search, statusFilter]);
+  }, [orders, search, statusFilter, dateFrom, dateTo]);
 
   // Bulk actions only ever apply to pending orders — accepting is the only
   // status change safe to fire off in a batch without per-order context
@@ -191,6 +197,45 @@ export default function OrdersClient({
       window.dispatchEvent(new Event("groovia:pending-orders-changed"));
     } catch {
       toast("Failed to accept order. Please try again.", "error");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Inline status change from the list row's dropdown — same endpoint and
+  // transition rules OrderActions.tsx uses on the detail page (NEXT_ACTIONS
+  // is shared from there), just without navigating away first.
+  async function updateStatus(id: string, nextStatus: OrderStatus, needsReason?: boolean) {
+    let reason: string | undefined;
+    if (needsReason) {
+      const input = window.prompt(`Reason for marking this order ${nextStatus}:`);
+      if (input === null) return;
+      if (!input.trim()) {
+        toast("A reason is required", "error");
+        return;
+      }
+      reason = input.trim();
+    }
+
+    setBusyId(id);
+    try {
+      const response = await fetch(`/api/shop/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus, reason }),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        toast(data.error || "Failed to update order", "error");
+        return;
+      }
+
+      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: nextStatus } : o)));
+      toast(`Order marked ${nextStatus}`);
+      window.dispatchEvent(new Event("groovia:pending-orders-changed"));
+    } catch {
+      toast("Failed to update order. Please try again.", "error");
     } finally {
       setBusyId(null);
     }
@@ -305,6 +350,36 @@ export default function OrdersClient({
             placeholder="Search order #, customer name or phone…"
             style={{ ...S.input, paddingLeft: 30 }}
           />
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+          <div>
+            <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
+            />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: "var(--text-xs)", color: "var(--ink-muted)", marginBottom: 4, fontWeight: 600 }}>To</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
+            />
+          </div>
+          {(dateFrom || dateTo) && (
+            <button
+              type="button"
+              onClick={() => { setDateFrom(""); setDateTo(""); }}
+              style={S.btn("var(--surface-hover)", "var(--ink)")}
+            >
+              Clear dates
+            </button>
+          )}
         </div>
 
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -469,9 +544,39 @@ export default function OrdersClient({
                             </Link>
                           </div>
                         ) : (
-                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
-                            View
-                          </Link>
+                          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
+                            {canManage && NEXT_ACTIONS[o.status].length > 0 && (
+                              <select
+                                value=""
+                                disabled={busy}
+                                aria-label={`Change status for order ${o.order_number}`}
+                                onChange={(e) => {
+                                  const nextStatus = e.target.value as OrderStatus;
+                                  const action = NEXT_ACTIONS[o.status].find((a) => a.status === nextStatus);
+                                  e.target.value = "";
+                                  if (action) updateStatus(o.id, action.status, action.needsReason);
+                                }}
+                                style={{
+                                  fontSize: "var(--text-sm)",
+                                  padding: "5px 8px",
+                                  borderRadius: 6,
+                                  border: "1px solid var(--surface-border)",
+                                  background: "#FFFFFF",
+                                  color: "var(--ink-muted)",
+                                  fontFamily: "inherit",
+                                  cursor: busy ? "default" : "pointer",
+                                }}
+                              >
+                                <option value="" disabled>Change status…</option>
+                                {NEXT_ACTIONS[o.status].map((action) => (
+                                  <option key={action.status} value={action.status}>{action.label}</option>
+                                ))}
+                              </select>
+                            )}
+                            <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
+                              View
+                            </Link>
+                          </div>
                         )}
                       </td>
                     </tr>

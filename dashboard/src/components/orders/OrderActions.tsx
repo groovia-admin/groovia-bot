@@ -6,9 +6,13 @@ import { Check, X, ChefHat, PackageCheck, CircleCheckBig, Ban } from "lucide-rea
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 
-type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
+export type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
 
-const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; icon: React.ElementType; bg: string; color: string; needsReason?: boolean }[]> = {
+// Exported so the orders list page can offer the same transitions inline
+// (a dropdown per row) without duplicating this table — the server route
+// (api/shop/orders/[id]/route.ts) is still the actual source of truth/
+// enforcement, this only drives which options make sense to show.
+export const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: string; icon: React.ElementType; bg: string; color: string; needsReason?: boolean }[]> = {
   pending: [
     { status: "accepted", label: "Accept order", icon: Check, bg: "var(--brand)", color: "#fff" },
     { status: "rejected", label: "Reject order", icon: X, bg: "rgba(239,68,68,0.12)", color: "var(--error)", needsReason: true },
