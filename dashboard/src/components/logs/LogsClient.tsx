@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { format, isToday, isYesterday } from "date-fns";
+import { format } from "date-fns";
 import { ChevronDown, ChevronRight, ScrollText, Search, Boxes } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
@@ -40,29 +40,8 @@ const MOVEMENT_LABEL: Record<string, string> = {
   cancelled_order: "Order cancelled — stock restored",
 };
 
-function dayLabel(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (isToday(d)) return "Today";
-  if (isYesterday(d)) return "Yesterday";
-  return format(d, "MMMM d, yyyy");
-}
-
 function InventoryMovements({ movements }: { movements: MovementRow[] }) {
-  const groups = useMemo(() => {
-    const out: { label: string; items: MovementRow[] }[] = [];
-    for (const m of movements) {
-      const label = dayLabel(m.created_at);
-      const last = out[out.length - 1];
-      if (last && last.label === label) {
-        last.items.push(m);
-      } else {
-        out.push({ label, items: [m] });
-      }
-    }
-    return out;
-  }, [movements]);
-
-  if (groups.length === 0) {
+  if (movements.length === 0) {
     return (
       <div style={S.card}>
         <EmptyState icon={Boxes} title="No stock movements yet" description="Sales, restocks, and manual edits will show up here." compact />
@@ -71,44 +50,47 @@ function InventoryMovements({ movements }: { movements: MovementRow[] }) {
   }
 
   return (
-    <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 18 }}>
-      {groups.map((group) => (
-        <div key={group.label} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ fontSize: "var(--text-sm)", fontWeight: 700, color: "var(--ink-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            {group.label}
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {group.items.map((m, i) => {
+    <div style={S.card}>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              <th style={S.th}>When</th>
+              <th style={S.th}>Product</th>
+              <th style={S.th}>Type</th>
+              <th style={S.th}>Notes</th>
+              <th style={{ ...S.th, textAlign: "right" }}>Change</th>
+            </tr>
+          </thead>
+          <tbody>
+            {movements.map((m) => {
               const positive = m.quantity_delta > 0;
               return (
-                <div
-                  key={m.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    padding: "8px 4px",
-                    borderTop: i > 0 ? "1px solid var(--surface)" : "none",
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: "var(--text-base)", color: "var(--ink)", fontWeight: 500 }}>{m.product_name ?? "Unknown product"}</div>
-                    <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-faint)" }}>
-                      {MOVEMENT_LABEL[m.movement_type] ?? m.movement_type} · {format(new Date(m.created_at), "HH:mm")}
-                      {m.notes ? ` · ${m.notes}` : ""}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: positive ? "var(--brand-dark)" : "var(--error)", whiteSpace: "nowrap" }}>
+                <tr key={m.id}>
+                  <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--ink-muted)" }}>
+                    {format(new Date(m.created_at), "MMM d, HH:mm:ss")}
+                  </td>
+                  <td style={{ ...S.td, color: "var(--ink)" }}>{m.product_name ?? "Unknown product"}</td>
+                  <td style={S.td}>{MOVEMENT_LABEL[m.movement_type] ?? m.movement_type}</td>
+                  <td style={{ ...S.td, color: "var(--ink-faint)" }}>{m.notes ?? "—"}</td>
+                  <td
+                    style={{
+                      ...S.td,
+                      textAlign: "right",
+                      fontWeight: 700,
+                      color: positive ? "var(--brand-dark)" : "var(--error)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
                     {positive ? "+" : ""}
                     {m.quantity_delta}
-                  </div>
-                </div>
+                  </td>
+                </tr>
               );
             })}
-          </div>
-        </div>
-      ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
