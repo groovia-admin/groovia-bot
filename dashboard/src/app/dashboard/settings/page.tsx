@@ -137,10 +137,10 @@ export default async function SettingsPage() {
           </div>
         )}
 
-        {isOwner && (
+        {context.kind === 'super_admin' && (
           <div style={cardStyle}>
             <h2 style={cardTitleStyle}>Payout &amp; Banking</h2>
-            <p style={cardSubStyle}>Payout settings placeholder (owner only).</p>
+            <p style={cardSubStyle}>Payout settings placeholder (platform admin only — hidden from shop owners).</p>
           </div>
         )}
       </div>

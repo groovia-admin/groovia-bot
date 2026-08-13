@@ -35,3 +35,14 @@ export function startOfTodayUtc(timeZone: string): string {
   const localMidnightAsUtc = Date.UTC(year, month - 1, day, 0, 0, 0)
   return new Date(localMidnightAsUtc - offsetMs).toISOString()
 }
+
+// The current hour (0-23) in the given IANA timezone — `new Date().getHours()`
+// resolves in whatever timezone the server/edge process runs in (typically
+// UTC), not the shop's actual local time, which is wrong for anything
+// time-of-day-dependent (e.g. a "Good afternoon" greeting shown at what's
+// actually evening in IST).
+export function getLocalHour(timeZone: string): number {
+  const hourStr = new Intl.DateTimeFormat('en-US', { timeZone, hour: '2-digit', hour12: false }).format(new Date())
+  // "24" shows up for midnight in some locales/environments instead of "00".
+  return Number(hourStr) % 24
+}

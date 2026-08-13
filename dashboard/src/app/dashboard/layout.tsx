@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
@@ -7,6 +8,14 @@ import NotificationBell from '@/components/notifications/NotificationBell'
 import GlobalSearch from '@/components/search/GlobalSearch'
 import OrderAlertListener from '@/components/orders/OrderAlertListener'
 import IdleLogout from '@/components/auth/IdleLogout'
+import StaffMobileBlocked from '@/components/auth/StaffMobileBlocked'
+
+// Broad on purpose (also catches tablets) — staff dashboard access is meant
+// to be a desktop/laptop tool; role resolution already requires a DB round
+// trip via getViewerContext() below, so this rides along with that instead
+// of adding a separate check in middleware (which deliberately avoids DB
+// queries — see middleware.ts).
+const MOBILE_UA_REGEX = /Mobi|Android|iPhone|iPad|iPod|Windows Phone/i
 
 type ShopUserForSidebar = {
   role: string
@@ -21,6 +30,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const context = await getViewerContext()
   if (context.kind === 'unauthenticated') redirect('/login')
+
+  if (context.kind === 'shop_user' && context.role === 'staff') {
+    const userAgent = (await headers()).get('user-agent') ?? ''
+    if (MOBILE_UA_REGEX.test(userAgent)) {
+      return <StaffMobileBlocked />
+    }
+  }
 
   const isSuperAdmin = context.kind === 'super_admin'
 
