@@ -1,0 +1,952 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  Download, TrendingUp, TrendingDown, Minus, ShoppingBag, Package, XCircle,
+  PiggyBank, Clock, Boxes, MessageCircle, Layers, Users, UserCog, AlertTriangle,
+} from "lucide-react";
+import { S } from "@/lib/ui/dashboardStyles";
+import EmptyState from "@/components/ui/EmptyState";
+import { toCsv, downloadCsv } from "@/lib/csv";
+import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from "@/lib/orderAging";
+
+type OrderRow = {
+  id: string;
+  order_number: string;
+  status: string;
+  order_type: string;
+  payment_method: string | null;
+  total_amount: number;
+  subtotal: number;
+  created_via: string | null;
+  last_updated_via: string | null;
+  customer_id: string | null;
+  created_at: string;
+  accepted_at: string | null;
+  preparing_at: string | null;
+  ready_at: string | null;
+  completed_at: string | null;
+  rejected_at: string | null;
+  cancelled_at: string | null;
+  rejection_reason: string | null;
+  cancellation_reason: string | null;
+};
+
+type OrderItemRow = {
+  product_id: string | null;
+  product_name_snapshot: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  order_status: string | null;
+  order_created_at: string | null;
+};
+
+type ProductRow = {
+  id: string;
+  name: string;
+  category_id: string | null;
+  unit: string;
+  cost_price: number | null;
+  stock_quantity: number;
+  low_stock_threshold: number;
+};
+
+type CategoryRow = { id: string; name: string };
+
+type MovementRow = {
+  id: string;
+  product_id: string | null;
+  quantity_delta: number;
+  movement_type: string;
+  notes: string | null;
+  created_at: string;
+  created_by: string | null;
+};
+
+type AuditLogRow = {
+  id: string;
+  actor_type: string;
+  action: string;
+  entity_type: string;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+};
+
+type CustomerRow = { id: string; full_name: string | null; phone: string };
+
+type Props = {
+  showRevenue: boolean;
+  windowDays: number;
+  orders: OrderRow[];
+  orderItems: OrderItemRow[];
+  products: ProductRow[];
+  categories: CategoryRow[];
+  movements: MovementRow[];
+  auditLogs: AuditLogRow[];
+  customers: CustomerRow[];
+};
+
+type ReportId =
+  | "sales-summary" | "pending-orders" | "low-stock" | "stock-movements" | "channel-split"
+  | "sales-trend" | "top-products" | "category-performance" | "fulfillment-speed"
+  | "cancellation-reasons" | "customer-activity" | "gross-margin" | "staff-activity";
+
+type ReportMeta = { id: ReportId; label: string; tier: 1 | 2; ownerOnly?: boolean; rangeIndependent?: boolean };
+
+const REPORTS: ReportMeta[] = [
+  { id: "sales-summary", label: "Sales Summary", tier: 1 },
+  { id: "pending-orders", label: "Pending & Aging Orders", tier: 1, rangeIndependent: true },
+  { id: "low-stock", label: "Low Stock & Out of Stock", tier: 1, rangeIndependent: true },
+  { id: "stock-movements", label: "Stock Movements", tier: 1 },
+  { id: "channel-split", label: "Order Channel Split", tier: 1 },
+  { id: "sales-trend", label: "Sales Trend", tier: 2 },
+  { id: "top-products", label: "Top & Bottom Products", tier: 2 },
+  { id: "category-performance", label: "Category Performance", tier: 2 },
+  { id: "fulfillment-speed", label: "Fulfillment Speed", tier: 2 },
+  { id: "cancellation-reasons", label: "Cancellation & Rejection Reasons", tier: 2 },
+  { id: "customer-activity", label: "Customer Activity", tier: 2 },
+  { id: "gross-margin", label: "Gross Margin", tier: 2, ownerOnly: true },
+  { id: "staff-activity", label: "Staff Activity", tier: 2 },
+];
+
+const MOVEMENT_LABEL: Record<string, string> = {
+  initial_stock: "Initial stock",
+  sale: "Sold (order accepted)",
+  restock: "Restocked",
+  manual_adjustment: "Manual edit",
+  damaged: "Damaged/written off",
+  returned: "Returned",
+  cancelled_order: "Order cancelled — stock restored",
+};
+
+type Preset = "today" | "yesterday" | "7d" | "30d" | "90d" | "custom";
+
+function isoDate(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+function todayStr(): string {
+  return isoDate(new Date());
+}
+function daysAgoStr(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return isoDate(d);
+}
+function fmtMoney(n: number): string {
+  return `₹${n.toFixed(0)}`;
+}
+
+function ExportButton<T extends Record<string, unknown>>({
+  rows,
+  columns,
+  filename,
+}: {
+  rows: T[];
+  columns: { key: keyof T; label: string }[];
+  filename: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => downloadCsv(filename, toCsv(rows, columns))}
+      disabled={rows.length === 0}
+      style={{ ...S.btn("var(--surface)", "var(--ink-muted)"), opacity: rows.length === 0 ? 0.5 : 1, border: "1px solid var(--surface-border)" }}
+    >
+      <Download size={13} />
+      Export CSV
+    </button>
+  );
+}
+
+function ReportHeader({ title, subtitle, exportNode }: { title: string; subtitle: string; exportNode?: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
+      <div>
+        <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>{title}</h2>
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 3 }}>{subtitle}</p>
+      </div>
+      {exportNode}
+    </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  accent,
+  prevValue,
+  rawValue,
+  invertDelta,
+  hint,
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  accent?: string;
+  prevValue?: number;
+  rawValue?: number;
+  invertDelta?: boolean;
+  hint?: string;
+}) {
+  const current = rawValue ?? Number(value.replace(/[^0-9.-]/g, ""));
+  const hasComparison = prevValue !== undefined;
+  const delta = hasComparison && prevValue! > 0 ? ((current - prevValue!) / prevValue!) * 100 : null;
+  const noChange = hasComparison && prevValue === 0 && current === 0;
+  const isGood = delta === null ? null : invertDelta ? delta < 0 : delta > 0;
+
+  return (
+    <div style={S.card} title={hint} aria-label={hint}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+        <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>{label}</span>
+        <Icon size={15} color={accent ?? "var(--ink-faint)"} />
+      </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <div style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: accent ?? "var(--ink)" }}>{value}</div>
+        {hasComparison && (
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 2, fontSize: "var(--text-xs)", fontWeight: 700, color: noChange || delta === null ? "var(--ink-faint)" : isGood ? "var(--brand-dark)" : "var(--error)" }}>
+            {noChange || delta === null ? <Minus size={11} /> : delta > 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+            {noChange ? "—" : delta === null ? "new" : `${Math.abs(delta).toFixed(0)}%`}
+          </span>
+        )}
+      </div>
+      {hasComparison && <div style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", marginTop: 2 }}>vs {prevValue} previous period</div>}
+    </div>
+  );
+}
+
+export default function ReportsClient({ showRevenue, windowDays, orders, orderItems, products, categories, movements, auditLogs, customers }: Props) {
+  const [reportId, setReportId] = useState<ReportId>("sales-summary");
+  const [preset, setPreset] = useState<Preset>("today");
+  const [rangeFrom, setRangeFrom] = useState(todayStr());
+  const [rangeTo, setRangeTo] = useState(todayStr());
+
+  const visibleReports = REPORTS.filter((r) => !r.ownerOnly || showRevenue);
+  const activeMeta = REPORTS.find((r) => r.id === reportId)!;
+
+  function applyPreset(p: Preset) {
+    setPreset(p);
+    if (p === "today") { setRangeFrom(todayStr()); setRangeTo(todayStr()); }
+    else if (p === "yesterday") { const y = daysAgoStr(1); setRangeFrom(y); setRangeTo(y); }
+    else if (p === "7d") { setRangeFrom(daysAgoStr(6)); setRangeTo(todayStr()); }
+    else if (p === "30d") { setRangeFrom(daysAgoStr(29)); setRangeTo(todayStr()); }
+    else if (p === "90d") { setRangeFrom(daysAgoStr(windowDays - 1)); setRangeTo(todayStr()); }
+  }
+
+  const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const customerById = useMemo(() => new Map(customers.map((c) => [c.id, c])), [customers]);
+
+  const inRange = (dateStr: string | null) => {
+    if (!dateStr) return false;
+    const d = dateStr.slice(0, 10);
+    return d >= rangeFrom && d <= rangeTo;
+  };
+
+  const filteredOrders = useMemo(() => orders.filter((o) => inRange(o.created_at)), [orders, rangeFrom, rangeTo]);
+  const filteredItems = useMemo(() => orderItems.filter((i) => inRange(i.order_created_at)), [orderItems, rangeFrom, rangeTo]);
+  const filteredMovements = useMemo(() => movements.filter((m) => inRange(m.created_at)), [movements, rangeFrom, rangeTo]);
+  const filteredAuditLogs = useMemo(() => auditLogs.filter((a) => inRange(a.created_at)), [auditLogs, rangeFrom, rangeTo]);
+
+  // Equal-length window immediately preceding the selected range, for the
+  // vs-previous-period deltas on Sales Summary — same idea as the old
+  // Analytics page's fixed 30-vs-30, just generalized to whatever range
+  // is currently picked.
+  const prevRange = useMemo(() => {
+    const spanDays = Math.round((new Date(rangeTo).getTime() - new Date(rangeFrom).getTime()) / 86400000) + 1;
+    const prevTo = new Date(rangeFrom); prevTo.setDate(prevTo.getDate() - 1);
+    const prevFrom = new Date(prevTo); prevFrom.setDate(prevFrom.getDate() - (spanDays - 1));
+    return { from: isoDate(prevFrom), to: isoDate(prevTo) };
+  }, [rangeFrom, rangeTo]);
+  const prevOrders = useMemo(
+    () => orders.filter((o) => { const d = o.created_at.slice(0, 10); return d >= prevRange.from && d <= prevRange.to; }),
+    [orders, prevRange]
+  );
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+      <div>
+        <h1 style={{ fontSize: "var(--text-xl)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Reports</h1>
+        <p style={{ fontSize: "var(--text-base)", color: "var(--ink-muted)", marginTop: 4 }}>
+          Daily operations and business performance, from real order and stock data — last {windowDays} days available.
+        </p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 12 }}>
+          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "4px 8px" }}>
+            Daily operations
+          </div>
+          {visibleReports.filter((r) => r.tier === 1).map((r) => (
+            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
+          ))}
+          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "12px 8px 4px" }}>
+            Business performance
+          </div>
+          {visibleReports.filter((r) => r.tier === 2).map((r) => (
+            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 16, minWidth: 0 }}>
+          {activeMeta.rangeIndependent ? (
+            <div style={{ fontSize: "var(--text-sm)", color: "var(--ink-faint)", background: "var(--surface)", border: "1px solid var(--surface-border)", borderRadius: 8, padding: "8px 12px" }}>
+              This report always shows current data — the date range below doesn&apos;t apply to it.
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              {([
+                ["today", "Today"], ["yesterday", "Yesterday"], ["7d", "Last 7 days"], ["30d", "Last 30 days"], ["90d", `Last ${windowDays} days`],
+              ] as [Preset, string][]).map(([p, label]) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => applyPreset(p)}
+                  style={{
+                    padding: "6px 12px", borderRadius: 999, fontSize: "var(--text-sm)", fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    border: "1px solid " + (preset === p ? "var(--brand)" : "var(--surface-border)"),
+                    background: preset === p ? "var(--brand-light)" : "#FFFFFF",
+                    color: preset === p ? "var(--brand-dark)" : "var(--ink-muted)",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+              <input
+                type="date"
+                value={rangeFrom}
+                max={rangeTo}
+                onChange={(e) => { setRangeFrom(e.target.value); setPreset("custom"); }}
+                style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--surface-border)", fontSize: "var(--text-sm)", fontFamily: "inherit" }}
+              />
+              <span style={{ color: "var(--ink-faint)", fontSize: "var(--text-sm)" }}>to</span>
+              <input
+                type="date"
+                value={rangeTo}
+                min={rangeFrom}
+                max={todayStr()}
+                onChange={(e) => { setRangeTo(e.target.value); setPreset("custom"); }}
+                style={{ padding: "6px 10px", borderRadius: 8, border: "1px solid var(--surface-border)", fontSize: "var(--text-sm)", fontFamily: "inherit" }}
+              />
+            </div>
+          )}
+
+          {reportId === "sales-summary" && (
+            <SalesSummaryReport orders={filteredOrders} prevOrders={prevOrders} showRevenue={showRevenue} rangeFrom={rangeFrom} rangeTo={rangeTo} />
+          )}
+          {reportId === "pending-orders" && <PendingOrdersReport orders={orders} />}
+          {reportId === "low-stock" && <LowStockReport products={products} categoryById={categoryById} />}
+          {reportId === "stock-movements" && <StockMovementsReport movements={filteredMovements} productById={productById} />}
+          {reportId === "channel-split" && <ChannelSplitReport orders={filteredOrders} showRevenue={showRevenue} />}
+          {reportId === "sales-trend" && <SalesTrendReport orders={filteredOrders} rangeFrom={rangeFrom} rangeTo={rangeTo} showRevenue={showRevenue} />}
+          {reportId === "top-products" && <TopProductsReport items={filteredItems} showRevenue={showRevenue} />}
+          {reportId === "category-performance" && <CategoryPerformanceReport items={filteredItems} productById={productById} categoryById={categoryById} showRevenue={showRevenue} />}
+          {reportId === "fulfillment-speed" && <FulfillmentSpeedReport orders={filteredOrders} />}
+          {reportId === "cancellation-reasons" && <CancellationReasonsReport orders={filteredOrders} />}
+          {reportId === "customer-activity" && <CustomerActivityReport orders={filteredOrders} customerById={customerById} showRevenue={showRevenue} />}
+          {reportId === "gross-margin" && showRevenue && <GrossMarginReport items={filteredItems} productById={productById} />}
+          {reportId === "staff-activity" && <StaffActivityReport auditLogs={filteredAuditLogs} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportNavItem({ meta, active, onClick }: { meta: ReportMeta; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        textAlign: "left", padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit",
+        fontSize: "var(--text-sm)", fontWeight: active ? 700 : 500,
+        background: active ? "var(--brand-light)" : "transparent",
+        color: active ? "var(--brand-dark)" : "var(--ink-muted)",
+      }}
+    >
+      {meta.label}
+    </button>
+  );
+}
+
+// ── Tier 1 ──────────────────────────────────────────────────────────────
+
+function SalesSummaryReport({ orders, prevOrders, showRevenue, rangeFrom, rangeTo }: { orders: OrderRow[]; prevOrders: OrderRow[]; showRevenue: boolean; rangeFrom: string; rangeTo: string }) {
+  const completed = orders.filter((o) => o.status === "completed");
+  const failed = orders.filter((o) => o.status === "rejected" || o.status === "cancelled");
+  const revenue = completed.reduce((s, o) => s + Number(o.total_amount), 0);
+  const aov = completed.length > 0 ? revenue / completed.length : 0;
+
+  const prevCompleted = prevOrders.filter((o) => o.status === "completed");
+  const prevFailed = prevOrders.filter((o) => o.status === "rejected" || o.status === "cancelled");
+  const prevRevenue = prevCompleted.reduce((s, o) => s + Number(o.total_amount), 0);
+  const prevAov = prevCompleted.length > 0 ? prevRevenue / prevCompleted.length : 0;
+
+  const rows = orders.map((o) => ({
+    order_number: o.order_number,
+    status: o.status,
+    total: Number(o.total_amount).toFixed(2),
+    placed_at: o.created_at,
+  }));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <ReportHeader
+        title="Sales Summary"
+        subtitle={`${rangeFrom} to ${rangeTo}, vs the same-length period before it`}
+        exportNode={<ExportButton rows={rows} columns={[{ key: "order_number", label: "Order #" }, { key: "status", label: "Status" }, { key: "total", label: "Total (₹)" }, { key: "placed_at", label: "Placed at" }]} filename={`sales-summary-${rangeFrom}-to-${rangeTo}.csv`} />}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14 }}>
+        <StatCard icon={ShoppingBag} label="Orders" value={String(orders.length)} prevValue={prevOrders.length} />
+        <StatCard icon={Package} label="Completed" value={String(completed.length)} prevValue={prevCompleted.length} />
+        <StatCard icon={XCircle} label="Rejected / cancelled" value={String(failed.length)} prevValue={prevFailed.length} accent="var(--error)" invertDelta />
+        {showRevenue && <StatCard icon={TrendingUp} label="Revenue" value={fmtMoney(revenue)} prevValue={prevRevenue} rawValue={revenue} accent="var(--brand-dark)" />}
+        {showRevenue && <StatCard icon={TrendingUp} label="Avg order value" value={fmtMoney(aov)} prevValue={prevAov} rawValue={aov} />}
+      </div>
+      {orders.length === 0 && <EmptyState icon={ShoppingBag} title="No orders in this period" compact />}
+    </div>
+  );
+}
+
+function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
+  const pending = orders
+    .filter((o) => o.status === "pending")
+    .map((o) => ({ ...o, ageMinutes: getOrderAgeMinutes(o.created_at) }))
+    .sort((a, b) => b.ageMinutes - a.ageMinutes);
+
+  const rows = pending.map((o) => ({ order_number: o.order_number, age: formatAgeShort(o.ageMinutes), total: Number(o.total_amount).toFixed(2), placed_at: o.created_at }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Pending & Aging Orders"
+        subtitle="Every order still waiting on a response, oldest first"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "order_number", label: "Order #" }, { key: "age", label: "Age" }, { key: "total", label: "Total (₹)" }, { key: "placed_at", label: "Placed at" }]} filename="pending-orders.csv" />}
+      />
+      {pending.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Clock} title="Nothing pending" description="Every order has been responded to." compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>Order</th><th style={S.th}>Age</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
+              <tbody>
+                {pending.map((o) => {
+                  const level = getAgingLevel(o.ageMinutes);
+                  const c = AGING_COLOR[level];
+                  return (
+                    <tr key={o.id}>
+                      <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>#{o.order_number}</td>
+                      <td style={S.td}><span style={S.badge(c.color, c.background)}>{formatAgeShort(o.ageMinutes)}</span></td>
+                      <td style={{ ...S.td, textAlign: "right" }}>₹{Number(o.total_amount).toFixed(2)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LowStockReport({ products, categoryById }: { products: ProductRow[]; categoryById: Map<string, string> }) {
+  const low = products.filter((p) => p.stock_quantity <= p.low_stock_threshold).sort((a, b) => a.stock_quantity - b.stock_quantity);
+  const rows = low.map((p) => ({ name: p.name, category: categoryById.get(p.category_id ?? "") ?? "—", unit: p.unit, stock: p.stock_quantity, threshold: p.low_stock_threshold }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Low Stock & Out of Stock"
+        subtitle="Products at or below their reorder threshold, right now"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "unit", label: "Unit" }, { key: "stock", label: "Stock" }, { key: "threshold", label: "Threshold" }]} filename="low-stock.csv" />}
+      />
+      {low.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Boxes} title="Nothing low on stock" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>Product</th><th style={S.th}>Category</th><th style={{ ...S.th, textAlign: "right" }}>Stock</th><th style={{ ...S.th, textAlign: "right" }}>Threshold</th></tr></thead>
+              <tbody>
+                {low.map((p) => (
+                  <tr key={p.id}>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{p.name}</td>
+                    <td style={S.td}>{categoryById.get(p.category_id ?? "") ?? "—"}</td>
+                    <td style={{ ...S.td, textAlign: "right", color: p.stock_quantity === 0 ? "var(--error)" : "#B7791F", fontWeight: 700 }}>{p.stock_quantity} {p.unit}</td>
+                    <td style={{ ...S.td, textAlign: "right" }}>{p.low_stock_threshold}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StockMovementsReport({ movements, productById }: { movements: MovementRow[]; productById: Map<string, ProductRow> }) {
+  const rows = movements.map((m) => ({
+    product: productById.get(m.product_id ?? "")?.name ?? "Unknown product",
+    type: MOVEMENT_LABEL[m.movement_type] ?? m.movement_type,
+    change: m.quantity_delta,
+    notes: m.notes ?? "",
+    when: m.created_at,
+  }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Stock Movements"
+        subtitle="Every sale, restock, and manual edit in the selected range"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "product", label: "Product" }, { key: "type", label: "Type" }, { key: "change", label: "Change" }, { key: "notes", label: "Notes" }, { key: "when", label: "When" }]} filename="stock-movements.csv" />}
+      />
+      {movements.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Boxes} title="No stock movements in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>When</th><th style={S.th}>Product</th><th style={S.th}>Type</th><th style={S.th}>Notes</th><th style={{ ...S.th, textAlign: "right" }}>Change</th></tr></thead>
+              <tbody>
+                {movements.map((m) => {
+                  const positive = m.quantity_delta > 0;
+                  return (
+                    <tr key={m.id}>
+                      <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--ink-muted)" }}>{new Date(m.created_at).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</td>
+                      <td style={{ ...S.td, color: "var(--ink)" }}>{productById.get(m.product_id ?? "")?.name ?? "Unknown product"}</td>
+                      <td style={S.td}>{MOVEMENT_LABEL[m.movement_type] ?? m.movement_type}</td>
+                      <td style={{ ...S.td, color: "var(--ink-faint)" }}>{m.notes ?? "—"}</td>
+                      <td style={{ ...S.td, textAlign: "right", fontWeight: 700, color: positive ? "var(--brand-dark)" : "var(--error)" }}>{positive ? "+" : ""}{m.quantity_delta}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showRevenue: boolean }) {
+  const byChannel = new Map<string, { count: number; revenue: number }>();
+  for (const o of orders) {
+    const key = o.created_via ?? "unknown";
+    const existing = byChannel.get(key) ?? { count: 0, revenue: 0 };
+    existing.count += 1;
+    if (o.status === "completed") existing.revenue += Number(o.total_amount);
+    byChannel.set(key, existing);
+  }
+  const entries = Array.from(byChannel.entries()).sort((a, b) => b[1].count - a[1].count);
+  const maxCount = Math.max(1, ...entries.map(([, v]) => v.count));
+  const rows = entries.map(([channel, v]) => ({ channel, orders: v.count, revenue: v.revenue.toFixed(2) }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Order Channel Split"
+        subtitle="Where orders actually came from — WhatsApp bot vs. the web storefront"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "channel", label: "Channel" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename="channel-split.csv" />}
+      />
+      {entries.length === 0 ? (
+        <div style={S.card}><EmptyState icon={MessageCircle} title="No orders in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {entries.map(([channel, v]) => (
+              <div key={channel} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 100, fontSize: "var(--text-sm)", color: "var(--ink-muted)", textTransform: "capitalize" }}>{channel}</div>
+                <div style={{ flex: 1, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${(v.count / maxCount) * 100}%`, height: "100%", background: "var(--brand)" }} />
+                </div>
+                <div style={{ width: 40, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{v.count}</div>
+                {showRevenue && <div style={{ width: 80, fontSize: "var(--text-sm)", color: "var(--ink-muted)", textAlign: "right" }}>{fmtMoney(v.revenue)}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tier 2 ──────────────────────────────────────────────────────────────
+
+function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders: OrderRow[]; rangeFrom: string; rangeTo: string; showRevenue: boolean }) {
+  const days: string[] = [];
+  const cursor = new Date(rangeFrom);
+  const end = new Date(rangeTo);
+  while (cursor <= end) { days.push(isoDate(cursor)); cursor.setDate(cursor.getDate() + 1); }
+
+  const buckets = new Map(days.map((d) => [d, { revenue: 0, count: 0 }]));
+  for (const o of orders) {
+    const key = o.created_at.slice(0, 10);
+    const bucket = buckets.get(key);
+    if (bucket) {
+      bucket.count += 1;
+      if (o.status === "completed") bucket.revenue += Number(o.total_amount);
+    }
+  }
+  const trend = days.map((d) => ({ date: d, ...buckets.get(d)! }));
+  const max = Math.max(1, ...trend.map((d) => (showRevenue ? d.revenue : d.count)));
+  const rows = trend.map((d) => ({ date: d.date, orders: d.count, revenue: d.revenue.toFixed(2) }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Sales Trend"
+        subtitle={`${showRevenue ? "Revenue" : "Order count"} by day, ${rangeFrom} to ${rangeTo}`}
+        exportNode={<ExportButton rows={rows} columns={[{ key: "date", label: "Date" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename={`sales-trend-${rangeFrom}-to-${rangeTo}.csv`} />}
+      />
+      <div style={S.card}>
+        {orders.length === 0 ? (
+          <EmptyState icon={TrendingUp} title="No orders in this period yet" compact />
+        ) : (
+          <div style={{ display: "flex", alignItems: "flex-end", gap: Math.max(1, 3 - Math.floor(days.length / 40)), height: 140, overflowX: "auto" }}>
+            {trend.map((d) => {
+              const value = showRevenue ? d.revenue : d.count;
+              const pct = Math.max(2, (value / max) * 100);
+              return (
+                <div
+                  key={d.date}
+                  title={`${d.date}: ${showRevenue ? fmtMoney(d.revenue) : d.count + " orders"}`}
+                  style={{ flex: 1, minWidth: 3, height: `${pct}%`, background: value > 0 ? "var(--brand)" : "var(--surface-border)", borderRadius: "3px 3px 0 0" }}
+                />
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TopProductsReport({ items, showRevenue }: { items: OrderItemRow[]; showRevenue: boolean }) {
+  const totals = new Map<string, { qty: number; revenue: number }>();
+  for (const item of items) {
+    if (item.order_status !== "completed") continue;
+    const existing = totals.get(item.product_name_snapshot) ?? { qty: 0, revenue: 0 };
+    existing.qty += Number(item.quantity);
+    existing.revenue += Number(item.subtotal);
+    totals.set(item.product_name_snapshot, existing);
+  }
+  const ranked = Array.from(totals.entries())
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => (showRevenue ? b.revenue - a.revenue : b.qty - a.qty));
+  const rows = ranked.map((p) => ({ name: p.name, quantity: p.qty, revenue: p.revenue.toFixed(2) }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Top & Bottom Products"
+        subtitle={`Every product sold in this period, ranked by ${showRevenue ? "revenue" : "quantity"}`}
+        exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "quantity", label: "Quantity sold" }, { key: "revenue", label: "Revenue (₹)" }]} filename="top-products.csv" />}
+      />
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Package} title="No completed orders in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>#</th><th style={S.th}>Product</th><th style={{ ...S.th, textAlign: "right" }}>Quantity</th>{showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Revenue</th>}</tr></thead>
+              <tbody>
+                {ranked.map((p, i) => (
+                  <tr key={p.name}>
+                    <td style={{ ...S.td, color: "var(--ink-faint)" }}>{i + 1}</td>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ ...S.td, textAlign: "right" }}>{p.qty}</td>
+                    {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(p.revenue)}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CategoryPerformanceReport({ items, productById, categoryById, showRevenue }: { items: OrderItemRow[]; productById: Map<string, ProductRow>; categoryById: Map<string, string>; showRevenue: boolean }) {
+  const totals = new Map<string, { qty: number; revenue: number }>();
+  for (const item of items) {
+    if (item.order_status !== "completed") continue;
+    const product = productById.get(item.product_id ?? "");
+    const catName = product?.category_id ? categoryById.get(product.category_id) ?? "Uncategorized" : "Uncategorized";
+    const existing = totals.get(catName) ?? { qty: 0, revenue: 0 };
+    existing.qty += Number(item.quantity);
+    existing.revenue += Number(item.subtotal);
+    totals.set(catName, existing);
+  }
+  const ranked = Array.from(totals.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => (showRevenue ? b.revenue - a.revenue : b.qty - a.qty));
+  const max = Math.max(1, ...ranked.map((c) => (showRevenue ? c.revenue : c.qty)));
+  const rows = ranked.map((c) => ({ category: c.name, quantity: c.qty, revenue: c.revenue.toFixed(2) }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Category Performance"
+        subtitle="Sales rolled up by product category"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "category", label: "Category" }, { key: "quantity", label: "Quantity" }, { key: "revenue", label: "Revenue (₹)" }]} filename="category-performance.csv" />}
+      />
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Layers} title="No completed orders in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {ranked.map((c) => {
+              const value = showRevenue ? c.revenue : c.qty;
+              return (
+                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 130, fontSize: "var(--text-sm)", color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
+                  <div style={{ flex: 1, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                    <div style={{ width: `${(value / max) * 100}%`, height: "100%", background: "var(--brand-dark)" }} />
+                  </div>
+                  <div style={{ width: 70, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{showRevenue ? fmtMoney(c.revenue) : c.qty}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FulfillmentSpeedReport({ orders }: { orders: OrderRow[] }) {
+  const completed = orders.filter((o) => o.status === "completed" && o.accepted_at);
+  const stages: { label: string; deltas: number[] }[] = [
+    { label: "Placed → accepted", deltas: [] },
+    { label: "Accepted → ready", deltas: [] },
+    { label: "Ready → completed", deltas: [] },
+    { label: "Placed → completed", deltas: [] },
+  ];
+  for (const o of completed) {
+    const placed = new Date(o.created_at).getTime();
+    const accepted = o.accepted_at ? new Date(o.accepted_at).getTime() : null;
+    const ready = o.ready_at ? new Date(o.ready_at).getTime() : null;
+    const done = o.completed_at ? new Date(o.completed_at).getTime() : null;
+    if (accepted) stages[0].deltas.push((accepted - placed) / 60000);
+    if (accepted && ready) stages[1].deltas.push((ready - accepted) / 60000);
+    if (ready && done) stages[2].deltas.push((done - ready) / 60000);
+    if (done) stages[3].deltas.push((done - placed) / 60000);
+  }
+  const avg = (arr: number[]) => (arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : null);
+  const rows = stages.map((s) => ({ stage: s.label, avg_minutes: avg(s.deltas)?.toFixed(1) ?? "—", sample_size: s.deltas.length }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Fulfillment Speed"
+        subtitle="Average time spent in each stage, completed orders only"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "stage", label: "Stage" }, { key: "avg_minutes", label: "Avg minutes" }, { key: "sample_size", label: "Orders" }]} filename="fulfillment-speed.csv" />}
+      />
+      {completed.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Clock} title="No completed orders with full timestamps in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {stages.map((s) => {
+              const a = avg(s.deltas);
+              return (
+                <div key={s.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 0", borderBottom: "1px solid var(--surface)" }}>
+                  <div style={{ fontSize: "var(--text-base)", color: "var(--ink)" }}>{s.label}</div>
+                  <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--brand-dark)" }}>{a !== null ? `${a.toFixed(1)} min` : "—"} <span style={{ fontWeight: 400, color: "var(--ink-faint)", fontSize: "var(--text-sm)" }}>({s.deltas.length} orders)</span></div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CancellationReasonsReport({ orders }: { orders: OrderRow[] }) {
+  const failed = orders.filter((o) => o.status === "rejected" || o.status === "cancelled");
+  const byReason = new Map<string, number>();
+  for (const o of failed) {
+    const reason = (o.status === "rejected" ? o.rejection_reason : o.cancellation_reason) || "No reason given";
+    byReason.set(reason, (byReason.get(reason) ?? 0) + 1);
+  }
+  const ranked = Array.from(byReason.entries()).map(([reason, count]) => ({ reason, count })).sort((a, b) => b.count - a.count);
+  const max = Math.max(1, ...ranked.map((r) => r.count));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Cancellation & Rejection Reasons"
+        subtitle={`${failed.length} order${failed.length === 1 ? "" : "s"} didn't go through in this period`}
+        exportNode={<ExportButton rows={ranked} columns={[{ key: "reason", label: "Reason" }, { key: "count", label: "Count" }]} filename="cancellation-reasons.csv" />}
+      />
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={XCircle} title="No rejections or cancellations in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {ranked.map((r) => (
+              <div key={r.reason} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ flex: 1, fontSize: "var(--text-sm)", color: "var(--ink)" }}>{r.reason}</div>
+                <div style={{ width: 120, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${(r.count / max) * 100}%`, height: "100%", background: "var(--error)" }} />
+                </div>
+                <div style={{ width: 24, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{r.count}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomerActivityReport({ orders, customerById, showRevenue }: { orders: OrderRow[]; customerById: Map<string, CustomerRow>; showRevenue: boolean }) {
+  const byCustomer = new Map<string, { orders: number; spent: number; lastOrder: string }>();
+  for (const o of orders) {
+    if (!o.customer_id) continue;
+    const existing = byCustomer.get(o.customer_id) ?? { orders: 0, spent: 0, lastOrder: o.created_at };
+    existing.orders += 1;
+    if (o.status === "completed") existing.spent += Number(o.total_amount);
+    if (o.created_at > existing.lastOrder) existing.lastOrder = o.created_at;
+    byCustomer.set(o.customer_id, existing);
+  }
+  const ranked = Array.from(byCustomer.entries())
+    .map(([id, v]) => ({ id, name: customerById.get(id)?.full_name || customerById.get(id)?.phone || "Unknown", ...v }))
+    .sort((a, b) => (showRevenue ? b.spent - a.spent : b.orders - a.orders));
+  const rows = ranked.map((c) => ({ customer: c.name, orders: c.orders, spent: c.spent.toFixed(2), last_order: c.lastOrder }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Customer Activity"
+        subtitle="Who ordered in this period, ranked by how much they matter to the business"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "customer", label: "Customer" }, { key: "orders", label: "Orders" }, { key: "spent", label: "Spent (₹)" }, { key: "last_order", label: "Last order" }]} filename="customer-activity.csv" />}
+      />
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={Users} title="No customer orders in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>Customer</th><th style={{ ...S.th, textAlign: "right" }}>Orders</th>{showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Spent</th>}<th style={S.th}>Last order</th></tr></thead>
+              <tbody>
+                {ranked.map((c) => (
+                  <tr key={c.id}>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{c.name}</td>
+                    <td style={{ ...S.td, textAlign: "right" }}>{c.orders}</td>
+                    {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(c.spent)}</td>}
+                    <td style={{ ...S.td, whiteSpace: "nowrap" }}>{new Date(c.lastOrder).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GrossMarginReport({ items, productById }: { items: OrderItemRow[]; productById: Map<string, ProductRow> }) {
+  const totals = new Map<string, { qty: number; revenue: number; margin: number; knownCost: boolean }>();
+  let totalMargin = 0;
+  let totalRevenueWithKnownCost = 0;
+
+  for (const item of items) {
+    if (item.order_status !== "completed" || !item.product_id) continue;
+    const product = productById.get(item.product_id);
+    const cost = product?.cost_price;
+    const existing = totals.get(item.product_name_snapshot) ?? { qty: 0, revenue: 0, margin: 0, knownCost: cost !== null && cost !== undefined };
+    existing.qty += Number(item.quantity);
+    existing.revenue += Number(item.subtotal);
+    if (cost !== null && cost !== undefined) {
+      const itemMargin = (Number(item.unit_price) - Number(cost)) * Number(item.quantity);
+      existing.margin += itemMargin;
+      totalMargin += itemMargin;
+      totalRevenueWithKnownCost += Number(item.subtotal);
+    }
+    totals.set(item.product_name_snapshot, existing);
+  }
+  const ranked = Array.from(totals.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.margin - a.margin);
+  const marginPct = totalRevenueWithKnownCost > 0 ? (totalMargin / totalRevenueWithKnownCost) * 100 : null;
+  const rows = ranked.map((p) => ({ product: p.name, quantity: p.qty, revenue: p.revenue.toFixed(2), margin: p.knownCost ? p.margin.toFixed(2) : "unknown cost" }));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Gross Margin"
+        subtitle="At today's cost prices — order items don't snapshot cost at time of sale, so this is an approximation, not an exact historical figure"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "product", label: "Product" }, { key: "quantity", label: "Quantity" }, { key: "revenue", label: "Revenue (₹)" }, { key: "margin", label: "Margin (₹)" }]} filename="gross-margin.csv" />}
+      />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>
+        <StatCard icon={PiggyBank} label="Total margin" value={`${fmtMoney(totalMargin)}${marginPct !== null ? ` (${marginPct.toFixed(0)}%)` : ""}`} accent="var(--brand-dark)" />
+      </div>
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={PiggyBank} title="No completed orders in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead><tr><th style={S.th}>Product</th><th style={{ ...S.th, textAlign: "right" }}>Revenue</th><th style={{ ...S.th, textAlign: "right" }}>Margin</th></tr></thead>
+              <tbody>
+                {ranked.map((p) => (
+                  <tr key={p.name}>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(p.revenue)}</td>
+                    <td style={{ ...S.td, textAlign: "right", color: p.knownCost ? "var(--brand-dark)" : "var(--ink-faint)", fontWeight: p.knownCost ? 700 : 400 }}>{p.knownCost ? fmtMoney(p.margin) : "no cost set"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StaffActivityReport({ auditLogs }: { auditLogs: AuditLogRow[] }) {
+  const byActor = new Map<string, number>();
+  for (const log of auditLogs) {
+    const name = (log.metadata?.actor_name as string | undefined) || "Unknown";
+    byActor.set(name, (byActor.get(name) ?? 0) + 1);
+  }
+  const ranked = Array.from(byActor.entries()).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+  const max = Math.max(1, ...ranked.map((r) => r.count));
+
+  return (
+    <div>
+      <ReportHeader
+        title="Staff Activity"
+        subtitle="Order status changes made from the dashboard, per person — WhatsApp-side Accept/Reject taps aren't attributed to a person yet, so this undercounts real activity"
+        exportNode={<ExportButton rows={ranked} columns={[{ key: "name", label: "Staff member" }, { key: "count", label: "Actions" }]} filename="staff-activity.csv" />}
+      />
+      {ranked.length === 0 ? (
+        <div style={S.card}><EmptyState icon={UserCog} title="No dashboard order actions in this period" compact /></div>
+      ) : (
+        <div style={S.card}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {ranked.map((r) => (
+              <div key={r.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 140, fontSize: "var(--text-sm)", color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.name}</div>
+                <div style={{ flex: 1, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                  <div style={{ width: `${(r.count / max) * 100}%`, height: "100%", background: "var(--brand)" }} />
+                </div>
+                <div style={{ width: 30, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{r.count}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 14, paddingTop: 12, borderTop: "1px solid var(--surface-border)", fontSize: "var(--text-xs)", color: "var(--ink-faint)" }}>
+            <AlertTriangle size={12} />
+            Dashboard actions only — WhatsApp button taps aren&apos;t logged to a person yet.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
