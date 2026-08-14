@@ -741,7 +741,9 @@ export default function MasterCatalogClient() {
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedCategory.master_products.map((product) => (
+                      {[...selectedCategory.master_products]
+                        .sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
+                        .map((product) => (
                         <tr key={product.id}>
                           <td>
                             <div className="flex items-center gap-2.5">
@@ -822,7 +824,7 @@ export default function MasterCatalogClient() {
               const coverage = enabledShopCount(cat.id)
               const busy = bulkBusyCategoryId === cat.id
               const expanded = expandedCategoryIds.has(cat.id)
-              const products = cat.master_products ?? []
+              const products = [...(cat.master_products ?? [])].sort((a, b) => a.name.localeCompare(b.name) || a.unit.localeCompare(b.unit))
               return (
                 <div key={cat.id} className="card" style={{ padding: 0 }}>
                   <div className="flex items-center justify-between" style={{ padding: 16 }}>

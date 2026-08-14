@@ -14,14 +14,17 @@ export default async function OrdersPage() {
 
   const adminClient = createAdminClient()
 
-  const { data: orders, error } = await adminClient
-    .from('orders')
-    .select(
-      'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot ), order_items ( quantity )'
-    )
-    .eq('shop_id', context.shopId)
-    .order('created_at', { ascending: false })
-    .limit(200)
+  const [{ data: orders, error }, { data: settings }] = await Promise.all([
+    adminClient
+      .from('orders')
+      .select(
+        'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot ), order_items ( quantity )'
+      )
+      .eq('shop_id', context.shopId)
+      .order('created_at', { ascending: false })
+      .limit(200),
+    adminClient.from('shop_settings').select('order_decline_reasons').eq('shop_id', context.shopId).maybeSingle(),
+  ])
 
   if (error) {
     console.error('Failed to load orders:', error)
@@ -51,6 +54,7 @@ export default async function OrdersPage() {
       initialOrders={rows}
       showRevenue={context.role !== 'staff'}
       canManage={viewerHasPermission(context, 'manage_orders')}
+      declineReasons={settings?.order_decline_reasons ?? []}
     />
   )
 }

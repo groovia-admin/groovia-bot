@@ -7,6 +7,7 @@ import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
 import DailySummarySettingsForm from '@/components/settings/DailySummarySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 import ShopQrCode from '@/components/settings/ShopQrCode'
+import DeclineReasonsSettingsForm from '@/components/settings/DeclineReasonsSettingsForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,7 @@ export default async function SettingsPage() {
       adminClient
         .from('shop_settings')
         .select(
-          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time'
+          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time, order_decline_reasons'
         )
         .eq('shop_id', context.shopId)
         .maybeSingle(),
@@ -107,6 +108,14 @@ export default async function SettingsPage() {
             <h2 style={cardTitleStyle}>Bot Behavior</h2>
             <p style={cardSubStyle}>Control what the WhatsApp bot says and how it handles new orders.</p>
             <BotBehaviorSettingsForm initial={settings} />
+          </div>
+        )}
+
+        {context.kind === 'shop_user' && (
+          <div style={cardStyle}>
+            <h2 style={cardTitleStyle}>Order Decline Reasons</h2>
+            <p style={cardSubStyle}>Quick-pick reasons offered when rejecting or cancelling an order.</p>
+            <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
           </div>
         )}
       </div>

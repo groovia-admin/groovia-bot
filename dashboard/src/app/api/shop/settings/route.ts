@@ -3,7 +3,7 @@ import { requireShopRole } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'
 
 const SETTINGS_COLUMNS =
-  'shop_id, order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time, created_at, updated_at'
+  'shop_id, order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time, order_decline_reasons, created_at, updated_at'
 
 const TIME_HHMM_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -33,6 +33,10 @@ function isNullablePaymentMethodArray(v: unknown): v is string[] | null {
 
 function isNullableHoursObject(v: unknown): v is Record<string, unknown> | null {
   return v === null || (typeof v === 'object' && !Array.isArray(v))
+}
+
+function isReasonList(v: unknown): v is string[] {
+  return Array.isArray(v) && v.length <= 20 && v.every((r) => typeof r === 'string' && r.trim().length > 0 && r.length <= 80)
 }
 
 export async function GET() {
@@ -136,6 +140,13 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'business_hours must be an object or null' }, { status: 400 })
     }
     changes.business_hours = body.business_hours
+  }
+
+  if (has('order_decline_reasons')) {
+    if (!isReasonList(body.order_decline_reasons)) {
+      return NextResponse.json({ error: 'order_decline_reasons must be a list of up to 20 short reasons' }, { status: 400 })
+    }
+    changes.order_decline_reasons = (body.order_decline_reasons as string[]).map((r) => r.trim())
   }
 
   if (has('daily_summary_time')) {

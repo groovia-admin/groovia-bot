@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Check, X, ChefHat, PackageCheck, CircleCheckBig, Ban } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
+import OrderReasonModal from "./OrderReasonModal";
 
 export type OrderStatus = "pending" | "accepted" | "preparing" | "ready" | "completed" | "rejected" | "cancelled";
 
@@ -34,12 +35,11 @@ export const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: str
   cancelled: [],
 };
 
-export default function OrderActions({ orderId, status }: { orderId: string; status: OrderStatus }) {
+export default function OrderActions({ orderId, status, declineReasons }: { orderId: string; status: OrderStatus; declineReasons: string[] }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [pendingReasonFor, setPendingReasonFor] = useState<OrderStatus | null>(null);
-  const [reason, setReason] = useState("");
 
   const actions = NEXT_ACTIONS[status] ?? [];
 
@@ -60,7 +60,6 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
 
       toast(`Order marked ${nextStatus}`);
       setPendingReasonFor(null);
-      setReason("");
       if (status === "pending") window.dispatchEvent(new Event("groovia:pending-orders-changed"));
       router.refresh();
     } catch {
@@ -76,54 +75,29 @@ export default function OrderActions({ orderId, status }: { orderId: string; sta
     <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ fontSize: "var(--text-base)", fontWeight: 700, color: "var(--ink)" }}>Update order</div>
 
-      {pendingReasonFor ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <label style={S.label}>
-            Reason for marking this order {pendingReasonFor}
-          </label>
-          <textarea
-            style={{ ...S.input, minHeight: 60, resize: "vertical" }}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder="e.g. Out of stock, customer requested cancellation…"
-            autoFocus
-          />
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              disabled={busy || !reason.trim()}
-              onClick={() => applyStatus(pendingReasonFor, reason.trim())}
-              style={{ ...S.btn("var(--error)", "#fff"), opacity: busy || !reason.trim() ? 0.5 : 1 }}
-            >
-              Confirm {pendingReasonFor}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPendingReasonFor(null);
-                setReason("");
-              }}
-              style={S.btn("var(--surface-hover)", "var(--ink)")}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {actions.map((action) => (
-            <button
-              key={action.status}
-              type="button"
-              disabled={busy}
-              onClick={() => (action.needsReason ? setPendingReasonFor(action.status) : applyStatus(action.status))}
-              style={{ ...S.btn(action.bg, action.color), opacity: busy ? 0.5 : 1 }}
-            >
-              <action.icon size={14} />
-              {action.label}
-            </button>
-          ))}
-        </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {actions.map((action) => (
+          <button
+            key={action.status}
+            type="button"
+            disabled={busy}
+            onClick={() => (action.needsReason ? setPendingReasonFor(action.status) : applyStatus(action.status))}
+            style={{ ...S.btn(action.bg, action.color), opacity: busy ? 0.5 : 1 }}
+          >
+            <action.icon size={14} />
+            {action.label}
+          </button>
+        ))}
+      </div>
+
+      {pendingReasonFor && (
+        <OrderReasonModal
+          title={`Reason for marking this order ${pendingReasonFor}`}
+          presetReasons={declineReasons}
+          busy={busy}
+          onCancel={() => setPendingReasonFor(null)}
+          onConfirm={(reason) => applyStatus(pendingReasonFor, reason)}
+        />
       )}
     </div>
   );
