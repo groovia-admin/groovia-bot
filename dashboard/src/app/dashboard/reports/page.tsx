@@ -1,6 +1,7 @@
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
 import ReportsClient from '@/components/reports/ReportsClient'
+import AdminReportsClient from '@/components/reports/AdminReportsClient'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,14 +20,51 @@ function daysAgoIso(days: number): string {
 export default async function ReportsPage() {
   // Same permission matrix as the old Analytics page this replaces —
   // owner sees revenue/margin figures, manager sees volume/operational
-  // reports only.
+  // reports only. Super admins get a separate platform-wide report set
+  // below, since none of the per-shop reports above make sense across
+  // shop boundaries.
   const context = await requireRole(['owner', 'manager'])
 
-  if (context.kind !== 'shop_user') {
+  if (context.kind === 'super_admin') {
+    const adminClient = createAdminClient()
+    const since = daysAgoIso(WINDOW_DAYS)
+
+    const [
+      { data: shops, error: shopsError },
+      { data: ordersRaw, error: ordersError },
+      { data: connections, error: connectionsError },
+      { data: productsRaw, error: productsError },
+    ] = await Promise.all([
+      adminClient
+        .from('shops')
+        .select('id, name, slug, city, subscription_status, is_active, created_at, trial_ends_at')
+        .order('created_at', { ascending: false }),
+      adminClient
+        .from('orders')
+        .select('shop_id, status, total_amount, created_at')
+        .gte('created_at', since),
+      adminClient.from('whatsapp_connections').select('shop_id'),
+      adminClient.from('products').select('shop_id'),
+    ])
+
+    if (shopsError) console.error('Admin reports: failed to load shops:', shopsError)
+    if (ordersError) console.error('Admin reports: failed to load orders:', ordersError)
+    if (connectionsError) console.error('Admin reports: failed to load whatsapp connections:', connectionsError)
+    if (productsError) console.error('Admin reports: failed to load products:', productsError)
+
+    const productCountByShop: Record<string, number> = {}
+    for (const p of productsRaw ?? []) {
+      productCountByShop[p.shop_id] = (productCountByShop[p.shop_id] ?? 0) + 1
+    }
+
     return (
-      <div style={{ background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, color: 'var(--ink-muted)', fontSize: 'var(--text-base)' }}>
-        Not applicable for super admins.
-      </div>
+      <AdminReportsClient
+        windowDays={WINDOW_DAYS}
+        shops={shops ?? []}
+        orders={ordersRaw ?? []}
+        connectedShopIds={(connections ?? []).map((c) => c.shop_id)}
+        productCountByShop={productCountByShop}
+      />
     )
   }
 
