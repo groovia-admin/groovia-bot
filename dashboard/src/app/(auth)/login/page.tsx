@@ -392,7 +392,7 @@ export default function LoginPage() {
         .otp-sent a:hover{text-decoration:underline}
         .otp-boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:16px}
         .otp-boxes input{
-          height:56px;text-align:center;
+          width:100%;min-width:0;height:56px;text-align:center;
           font-family: var(--font-bricolage), sans-serif;font-size:22px;font-weight:600;color:var(--ink);
           background:var(--field);border:1.5px solid var(--field-line);border-radius:var(--r-md);
           outline:0;transition:.15s;
