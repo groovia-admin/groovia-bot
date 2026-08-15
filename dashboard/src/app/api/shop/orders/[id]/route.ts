@@ -37,6 +37,46 @@ const TIMESTAMP_COLUMN: Partial<Record<OrderStatus, string>> = {
 
 const REASON_REQUIRED: OrderStatus[] = ['rejected', 'cancelled']
 
+// Backs the Orders-list detail drawer — same fields the old standalone
+// /dashboard/orders/[id] server page fetched, just returned as JSON so a
+// client component can pull them without navigating away from the list.
+export async function GET(_request: Request, { params }: OrderRouteContext) {
+  const authorization = await requireShopRole(['owner', 'manager', 'staff'])
+
+  if ('error' in authorization) {
+    return authorization.error
+  }
+
+  const { adminClient, shopId } = authorization
+  const { id } = await params
+
+  const [{ data: order, error }, { data: settings }] = await Promise.all([
+    adminClient
+      .from('orders')
+      .select(
+        'id, order_number, status, order_type, payment_method, payment_status, subtotal, delivery_fee, tax_amount, discount_amount, total_amount, pickup_slot_label, notes, rejection_reason, cancellation_reason, created_at, accepted_at, preparing_at, ready_at, completed_at, order_items ( id, product_name_snapshot, unit_snapshot, quantity, unit_price, subtotal ), order_customer_details ( customer_name_snapshot, customer_phone_snapshot, delivery_address_snapshot )'
+      )
+      .eq('id', id)
+      .eq('shop_id', shopId)
+      .maybeSingle(),
+    adminClient.from('shop_settings').select('order_decline_reasons').eq('shop_id', shopId).maybeSingle(),
+  ])
+
+  if (error) {
+    console.error('Failed to load order:', error)
+    return NextResponse.json({ error: 'Failed to load order' }, { status: 500 })
+  }
+
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  return NextResponse.json(
+    { order, declineReasons: settings?.order_decline_reasons ?? [] },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
+  )
+}
+
 export async function PATCH(request: Request, { params }: OrderRouteContext) {
   const authorization = await requireShopRole(['owner', 'manager', 'staff'])
 

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
 import { Search, ShoppingBag, Check, RefreshCw, Download, ChevronDown } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
@@ -14,6 +13,7 @@ import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
 import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
 import { NEXT_ACTIONS, type OrderStatus } from "@/components/orders/OrderActions";
 import OrderReasonModal from "@/components/orders/OrderReasonModal";
+import OrderDetailDrawer from "@/components/orders/OrderDetailDrawer";
 import SortableTh, { type SortDir } from "@/components/ui/SortableTh";
 
 type SortKey = "order" | "customer" | "items" | "status" | "placed" | "total";
@@ -83,6 +83,9 @@ export default function OrdersClient({
   // only one at a time, so a single id (not a set) is enough.
   const [openStatusFor, setOpenStatusFor] = useState<string | null>(null);
   const statusMenuRef = useRef<HTMLDivElement>(null);
+  // Which order's detail drawer is open — a slide-over on top of this same
+  // list instead of navigating to a separate /dashboard/orders/[id] page.
+  const [openOrderId, setOpenOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -532,9 +535,13 @@ export default function OrdersClient({
                         </td>
                       )}
                       <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>
-                        <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--brand-dark)", textDecoration: "none" }}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenOrderId(o.id)}
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", color: "var(--brand-dark)" }}
+                        >
                           #{o.order_number}
-                        </Link>
+                        </button>
                       </td>
                       <td style={S.td}>
                         {o.customer_name ? (
@@ -631,9 +638,13 @@ export default function OrdersClient({
                               <Check size={13} />
                             </button>
                           )}
-                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
+                          <button
+                            type="button"
+                            onClick={() => setOpenOrderId(o.id)}
+                            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--ink-muted)", fontSize: "var(--text-sm)" }}
+                          >
                             View
-                          </Link>
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -654,6 +665,8 @@ export default function OrdersClient({
           onConfirm={(reason) => applyStatus(reasonPrompt.orderId, reasonPrompt.nextStatus, reason)}
         />
       )}
+
+      <OrderDetailDrawer orderId={openOrderId} canManage={canManage} showRevenue={showRevenue} onClose={() => setOpenOrderId(null)} />
     </div>
   );
 }
