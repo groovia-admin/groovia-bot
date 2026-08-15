@@ -14,6 +14,9 @@ import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
 import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
 import { NEXT_ACTIONS, type OrderStatus } from "@/components/orders/OrderActions";
 import OrderReasonModal from "@/components/orders/OrderReasonModal";
+import SortableTh, { type SortDir } from "@/components/ui/SortableTh";
+
+type SortKey = "order" | "customer" | "items" | "status" | "placed" | "total";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
@@ -77,6 +80,8 @@ export default function OrdersClient({
   const [reasonPrompt, setReasonPrompt] = useState<{ orderId: string; orderNumber: string; nextStatus: OrderStatus } | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
+  const [sortKey, setSortKey] = useState<SortKey>("placed");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [now, setNow] = useState(() => new Date());
@@ -157,6 +162,25 @@ export default function OrdersClient({
       );
     });
   }, [orders, search, statusFilter, dateFrom, dateTo]);
+
+  function toggleSort(key: SortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "placed" ? "desc" : "asc"); }
+  }
+
+  const sorted = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      switch (sortKey) {
+        case "order": return a.order_number.localeCompare(b.order_number) * dir;
+        case "customer": return (a.customer_name ?? a.customer_phone ?? "").localeCompare(b.customer_name ?? b.customer_phone ?? "") * dir;
+        case "items": return (a.item_count - b.item_count) * dir;
+        case "status": return a.status.localeCompare(b.status) * dir;
+        case "total": return (a.total_amount - b.total_amount) * dir;
+        default: return (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : 0) * dir;
+      }
+    });
+  }, [filtered, sortKey, sortDir]);
 
   // Bulk actions only ever apply to pending orders — accepting is the only
   // status change safe to fire off in a batch without per-order context
@@ -458,12 +482,12 @@ export default function OrdersClient({
                     )}
                   </th>
                 )}
-                <th style={S.th}>Order</th>
-                <th style={S.th}>Customer</th>
-                <th style={{ ...S.th, textAlign: "right" }}>Items</th>
-                <th style={S.th}>Status</th>
-                <th style={S.th}>Placed</th>
-                {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Total</th>}
+                <SortableTh label="Order" active={sortKey === "order"} dir={sortDir} onClick={() => toggleSort("order")} />
+                <SortableTh label="Customer" active={sortKey === "customer"} dir={sortDir} onClick={() => toggleSort("customer")} />
+                <SortableTh label="Items" align="right" active={sortKey === "items"} dir={sortDir} onClick={() => toggleSort("items")} />
+                <SortableTh label="Status" active={sortKey === "status"} dir={sortDir} onClick={() => toggleSort("status")} />
+                <SortableTh label="Placed" active={sortKey === "placed"} dir={sortDir} onClick={() => toggleSort("placed")} />
+                {showRevenue && <SortableTh label="Total" align="right" active={sortKey === "total"} dir={sortDir} onClick={() => toggleSort("total")} />}
                 <th style={{ ...S.th, textAlign: "right" }}>Action</th>
               </tr>
             </thead>
@@ -484,7 +508,7 @@ export default function OrdersClient({
                   </td>
                 </tr>
               ) : (
-                filtered.map((o) => {
+                sorted.map((o) => {
                   const [color, background] = STATUS_STYLE[o.status];
                   const busy = busyId === o.id;
                   const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";

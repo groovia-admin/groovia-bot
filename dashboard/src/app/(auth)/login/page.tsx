@@ -44,13 +44,16 @@ export default function LoginPage() {
   const [passwordError, setPasswordError] = useState('')
 
   const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState({ msg: '', show: false })
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Shown inline right under "Enter the code sent to…" on the OTP screen
+  // itself — a floating bottom-of-viewport toast for this was easy to miss
+  // since attention is already on the code-entry boxes above it.
+  const [otpSentNote, setOtpSentNote] = useState('')
+  const otpSentNoteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  function ping(msg: string) {
-    if (toastTimer.current) clearTimeout(toastTimer.current)
-    setToast({ msg, show: true })
-    toastTimer.current = setTimeout(() => setToast((t) => ({ ...t, show: false })), 2600)
+  function flashOtpSentNote(msg: string) {
+    if (otpSentNoteTimer.current) clearTimeout(otpSentNoteTimer.current)
+    setOtpSentNote(msg)
+    otpSentNoteTimer.current = setTimeout(() => setOtpSentNote(''), 4000)
   }
 
   // Counts down only while the OTP step is showing — resets whenever a
@@ -120,7 +123,7 @@ export default function LoginPage() {
     setOtpStatus('idle')
     setResendIn(RESEND_SECONDS)
     setPhoneStep('otp')
-    ping('Code sent on WhatsApp')
+    flashOtpSentNote('Code sent on WhatsApp')
     setTimeout(() => otpRefs.current[0]?.focus(), 0)
   }
 
@@ -130,6 +133,7 @@ export default function LoginPage() {
     setOtpDigits(Array(OTP_LENGTH).fill(''))
     setOtpError('')
     setOtpStatus('idle')
+    setOtpSentNote('')
   }
 
   async function handleResend() {
@@ -137,7 +141,7 @@ export default function LoginPage() {
     const ok = await sendOtp(phone)
     if (!ok) return
     setResendIn(RESEND_SECONDS)
-    ping('New code sent')
+    flashOtpSentNote('New code sent')
   }
 
   function updateOtpDigit(index: number, raw: string) {
@@ -181,8 +185,17 @@ export default function LoginPage() {
     setLoading(true)
     setOtpStatus('verifying')
 
+    // The pulse-ring animation needs to actually be visible for at least one
+    // cycle — on a fast network verifyOtp can resolve in well under 1.1s
+    // (one ring cycle), which cut the animation off mid-pulse and read as
+    // broken rather than as "checking your code." Floor the visible
+    // "verifying" time regardless of how fast the API responds.
+    const MIN_VERIFYING_MS = 1300
+    const startedAt = Date.now()
     const normalized = normalizeIndianPhone(phone)
     const { error } = await supabase.auth.verifyOtp({ phone: normalized ?? phone, token: code, type: 'sms' })
+    const remaining = MIN_VERIFYING_MS - (Date.now() - startedAt)
+    if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining))
 
     if (error) {
       setOtpError(error.message || "That code doesn't match. Check and try again.")
@@ -193,13 +206,13 @@ export default function LoginPage() {
 
     logAuthEvent('login', 'phone')
     setOtpStatus('success')
-    ping('Verified — signing in…')
-    // Let the boxes-merge-into-a-checkmark animation actually play before
-    // navigating away — otherwise the success state is invisible.
+    // Let the boxes-merge-into-a-checkmark animation actually play out
+    // (converge ~500ms + merge-in delay/duration ~550ms) before navigating
+    // away — otherwise the success state is barely visible.
     setTimeout(() => {
       router.push('/dashboard')
       router.refresh()
-    }, 800)
+    }, 1300)
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -397,10 +410,15 @@ export default function LoginPage() {
         .wa-note{ display:flex;align-items:center;gap:8px;justify-content:center; margin-top:14px;font-size:12.5px;color:var(--muted); }
         .wa-note svg{width:15px;height:15px;color:var(--wa-green)}
 
-        .otp-sent{font-size:14px;color:var(--muted);margin:0 0 18px;line-height:1.5;text-align:center}
+        .otp-sent{font-size:14px;color:var(--muted);margin:0 0 10px;line-height:1.5;text-align:center}
         .otp-sent b{color:var(--ink)}
         .otp-sent a{color:var(--teal-700);font-weight:600;text-decoration:none;margin-left:6px}
         .otp-sent a:hover{text-decoration:underline}
+        .otp-sent-note{
+          display:flex;align-items:center;justify-content:center;gap:6px;
+          margin:0 0 14px;font-size:12.5px;font-weight:600;color:var(--wa-green);
+        }
+        .otp-sent-note svg{width:14px;height:14px;flex:none}
         .otp-boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:16px;position:relative}
         .otp-boxes input{
           width:100%;min-width:0;height:56px;text-align:center;
@@ -423,20 +441,22 @@ export default function LoginPage() {
         .otp-boxes.verifying input{
           border-color:var(--teal-500);
           animation:otpPulseRing 1.1s ease-out infinite;
-          animation-delay:calc(var(--i,0) * 110ms);
+          animation-delay:calc(var(--i,0) * 130ms);
         }
 
         /* Success: the six boxes converge toward the middle and fade out while
            a single green checkmark box scales in at that same center point —
-           reads as the boxes becoming one, not just a state swap. */
+           reads as the boxes becoming one, not just a state swap. Slower and
+           more staggered than a typical UI transition on purpose — this is
+           the payoff moment, it should be visible, not blink past. */
         @keyframes otpConverge{
           from{opacity:1;transform:translateX(0) scale(1)}
           to{opacity:0;transform:translateX(calc((2.5 - var(--i,0)) * 70%)) scale(.35)}
         }
         .otp-boxes.success .otp-box{
           opacity:0;transform:translateX(calc((2.5 - var(--i,0)) * 70%)) scale(.35);
-          animation:otpConverge .38s cubic-bezier(.4,0,.2,1) forwards;
-          animation-delay:calc(var(--i,0) * 12ms);
+          animation:otpConverge .5s cubic-bezier(.4,0,.2,1) forwards;
+          animation-delay:calc(var(--i,0) * 25ms);
         }
         @keyframes otpMergeIn{
           from{opacity:0;transform:translateX(-50%) scale(.6)}
@@ -447,7 +467,7 @@ export default function LoginPage() {
           display:flex;align-items:center;justify-content:center;
           background:var(--wa-green);color:#fff;border-radius:var(--r-md);
           opacity:1;transform:translateX(-50%);
-          animation:otpMergeIn .32s ease .22s backwards;
+          animation:otpMergeIn .4s ease .3s backwards;
         }
         .otp-merged svg{width:26px;height:26px;flex:none}
         .resend{margin-top:14px;text-align:center;font-size:13px;color:var(--muted)}
@@ -463,17 +483,6 @@ export default function LoginPage() {
 
         .powered{ margin-top:auto;padding-top:26px;text-align:center; font-size:12px;letter-spacing:.02em;color:#93A29F; }
         .powered b{ font-family: var(--font-bricolage);font-weight:700;color:var(--teal-700);letter-spacing:-.01em; }
-
-        .toast{
-          position:fixed;left:50%;bottom:26px;transform:translate(-50%,120%);
-          background:var(--teal-900);color:#EAF6F3;
-          padding:13px 18px;border-radius:12px;font-size:13.5px;font-weight:500;
-          display:flex;align-items:center;gap:10px;
-          box-shadow:0 18px 40px -18px rgba(0,0,0,.6);opacity:0;
-          transition:transform .35s cubic-bezier(.2,.8,.2,1),opacity .35s;z-index:50;
-        }
-        .toast.show{transform:translate(-50%,0);opacity:1}
-        .toast svg{width:17px;height:17px;color:#8BE3D0}
 
         .login-root :focus-visible{outline:2px solid var(--teal-500);outline-offset:2px;border-radius:6px}
 
@@ -587,6 +596,12 @@ export default function LoginPage() {
                         <>Enter the code sent to <b>{sentTo}</b><a href="#" onClick={handleChangeNumber}>Change</a></>
                       )}
                     </p>
+                    {otpSentNote && otpStatus === 'idle' && (
+                      <p className="otp-sent-note">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                        {otpSentNote}
+                      </p>
+                    )}
                     <div className={`otp-boxes${otpStatus !== 'idle' ? ` ${otpStatus}` : ''}`} aria-label="6-digit code">
                       {otpDigits.map((digit, i) => (
                         <div className="otp-box" key={i} style={{ '--i': i } as React.CSSProperties}>
@@ -701,11 +716,6 @@ export default function LoginPage() {
           <div className="powered">Powered by <b>GrooVia</b></div>
         </section>
       </main>
-
-      <div className={`toast${toast.show ? ' show' : ''}`} role="status" aria-live="polite">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-        <span>{toast.msg}</span>
-      </div>
     </div>
   )
 }

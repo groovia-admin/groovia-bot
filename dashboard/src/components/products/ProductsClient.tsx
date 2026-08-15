@@ -9,6 +9,9 @@ import InfoTooltip from "@/components/ui/InfoTooltip";
 import EmptyState from "@/components/ui/EmptyState";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import ProductEditModal from "./ProductEditModal";
+import SortableTh, { type SortDir } from "@/components/ui/SortableTh";
+
+type ProductSortKey = "name" | "category" | "unit" | "price" | "cost" | "margin" | "stock" | "status";
 
 type Category = {
   id: string;
@@ -87,6 +90,19 @@ export default function ProductsClient({
   const [productSearch, setProductSearch] = useState("");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
+  const [sortKey, setSortKey] = useState<ProductSortKey>("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function toggleSort(key: ProductSortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir("asc"); }
+    setPage(1);
+  }
+
+  function margin(p: Product): number | null {
+    if (p.cost_price == null || Number(p.price) <= 0) return null;
+    return ((Number(p.price) - Number(p.cost_price)) / Number(p.price)) * 100;
+  }
 
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
 
@@ -106,14 +122,30 @@ export default function ProductsClient({
     );
   }, [products, productSearch]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const sortedProducts = useMemo(() => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...filteredProducts].sort((a, b) => {
+      switch (sortKey) {
+        case "category": return categoryName(a).localeCompare(categoryName(b)) * dir;
+        case "unit": return a.unit.localeCompare(b.unit) * dir;
+        case "price": return (Number(a.price) - Number(b.price)) * dir;
+        case "cost": return (Number(a.cost_price ?? -1) - Number(b.cost_price ?? -1)) * dir;
+        case "margin": return ((margin(a) ?? -1) - (margin(b) ?? -1)) * dir;
+        case "stock": return (a.stock_quantity - b.stock_quantity) * dir;
+        case "status": return (Number(a.is_available) - Number(b.is_available)) * dir;
+        default: return a.name.localeCompare(b.name) * dir;
+      }
+    });
+  }, [filteredProducts, sortKey, sortDir]);
+
+  const totalPages = Math.max(1, Math.ceil(sortedProducts.length / pageSize));
   // Search/pageSize changes can leave `page` pointing past the new last
   // page (e.g. searching down to 3 results while on page 4) — clamp on
   // render rather than in an effect, so it can never flash a blank page.
   const currentPage = Math.min(page, totalPages);
   const paginatedProducts = useMemo(
-    () => filteredProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filteredProducts, currentPage, pageSize]
+    () => sortedProducts.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [sortedProducts, currentPage, pageSize]
   );
 
   function updateSearch(value: string) {
@@ -127,7 +159,7 @@ export default function ProductsClient({
   }
 
   function exportCsv() {
-    const rows = filteredProducts.map((p) => ({
+    const rows = sortedProducts.map((p) => ({
       name: p.name,
       category: categoryName(p),
       unit: p.unit,
@@ -705,19 +737,19 @@ export default function ProductsClient({
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <th style={S.th}>Name</th>
-                <th style={S.th}>Category</th>
-                <th style={S.th}>Unit</th>
-                <th style={S.th}>Price</th>
-                <th style={S.th}>Cost</th>
-                <th style={S.th}>Margin</th>
-                <th style={S.th}>Stock</th>
-                <th style={S.th}>Status</th>
+                <SortableTh label="Name" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name")} />
+                <SortableTh label="Category" active={sortKey === "category"} dir={sortDir} onClick={() => toggleSort("category")} />
+                <SortableTh label="Unit" active={sortKey === "unit"} dir={sortDir} onClick={() => toggleSort("unit")} />
+                <SortableTh label="Price" active={sortKey === "price"} dir={sortDir} onClick={() => toggleSort("price")} />
+                <SortableTh label="Cost" active={sortKey === "cost"} dir={sortDir} onClick={() => toggleSort("cost")} />
+                <SortableTh label="Margin" active={sortKey === "margin"} dir={sortDir} onClick={() => toggleSort("margin")} />
+                <SortableTh label="Stock" active={sortKey === "stock"} dir={sortDir} onClick={() => toggleSort("stock")} />
+                <SortableTh label="Status" active={sortKey === "status"} dir={sortDir} onClick={() => toggleSort("status")} />
                 <th style={{ ...S.th, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.length === 0 ? (
+              {sortedProducts.length === 0 ? (
                 <tr>
                   <td style={S.td} colSpan={9}>
                     {products.length === 0 ? (
@@ -739,10 +771,8 @@ export default function ProductsClient({
                       <td style={S.td}>₹{Number(product.price).toFixed(2)}</td>
                       <td style={S.td}>{product.cost_price != null ? `₹${Number(product.cost_price).toFixed(2)}` : "—"}</td>
                       <td style={S.td}>
-                        {product.cost_price != null && Number(product.price) > 0 ? (
-                          <span style={{ color: "var(--brand-dark)" }}>
-                            {Math.round(((Number(product.price) - Number(product.cost_price)) / Number(product.price)) * 100)}%
-                          </span>
+                        {margin(product) !== null ? (
+                          <span style={{ color: "var(--brand-dark)" }}>{Math.round(margin(product)!)}%</span>
                         ) : (
                           "—"
                         )}
@@ -801,7 +831,7 @@ export default function ProductsClient({
         </div>
       </div>
 
-      {filteredProducts.length > 0 && totalPages > 1 && (
+      {sortedProducts.length > 0 && totalPages > 1 && (
         <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12 }}>
           <button
             type="button"
@@ -812,7 +842,7 @@ export default function ProductsClient({
             <ChevronLeft size={14} />
           </button>
           <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
-            Page {currentPage} of {totalPages} · {filteredProducts.length} product{filteredProducts.length === 1 ? "" : "s"}
+            Page {currentPage} of {totalPages} · {sortedProducts.length} product{sortedProducts.length === 1 ? "" : "s"}
           </span>
           <button
             type="button"
