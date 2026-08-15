@@ -35,7 +35,21 @@ export const NEXT_ACTIONS: Record<OrderStatus, { status: OrderStatus; label: str
   cancelled: [],
 };
 
-export default function OrderActions({ orderId, status, declineReasons }: { orderId: string; status: OrderStatus; declineReasons: string[] }) {
+export default function OrderActions({
+  orderId,
+  status,
+  declineReasons,
+  onChanged,
+}: {
+  orderId: string;
+  status: OrderStatus;
+  declineReasons: string[];
+  // Set only by the Orders-list detail drawer, which has its own
+  // client-fetched copy of the order that router.refresh() alone won't
+  // update (that only re-runs the page's server component, refreshing the
+  // list behind the drawer, not the drawer's own local state).
+  onChanged?: () => void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -62,6 +76,7 @@ export default function OrderActions({ orderId, status, declineReasons }: { orde
       setPendingReasonFor(null);
       if (status === "pending") window.dispatchEvent(new Event("groovia:pending-orders-changed"));
       router.refresh();
+      onChanged?.();
     } catch {
       toast("Failed to update order. Please try again.", "error");
     } finally {
