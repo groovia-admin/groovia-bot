@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { Search, ShoppingBag, Check, RefreshCw, Download } from "lucide-react";
+import { Search, ShoppingBag, Check, RefreshCw, Download, ChevronDown } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import EmptyState from "@/components/ui/EmptyState";
@@ -79,6 +79,18 @@ export default function OrdersClient({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [reasonPrompt, setReasonPrompt] = useState<{ orderId: string; orderNumber: string; nextStatus: OrderStatus } | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
+  // Which row's status badge currently has its change-status menu open —
+  // only one at a time, so a single id (not a set) is enough.
+  const [openStatusFor, setOpenStatusFor] = useState<string | null>(null);
+  const statusMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (statusMenuRef.current && !statusMenuRef.current.contains(e.target as Node)) setOpenStatusFor(null);
+    }
+    if (openStatusFor) document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [openStatusFor]);
   const [refreshing, setRefreshing] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("placed");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -540,39 +552,64 @@ export default function OrdersClient({
                       </td>
                       <td style={{ ...S.td, textAlign: "right", color: "var(--ink-muted)" }}>{o.item_count}</td>
                       <td style={S.td}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                          {canManage && NEXT_ACTIONS[o.status].length > 0 ? (
+                            <div style={{ position: "relative" }} ref={openStatusFor === o.id ? statusMenuRef : undefined}>
+                              <button
+                                type="button"
+                                disabled={busy}
+                                aria-haspopup="listbox"
+                                aria-expanded={openStatusFor === o.id}
+                                aria-label={`Change status for order ${o.order_number}`}
+                                onClick={() => setOpenStatusFor((cur) => (cur === o.id ? null : o.id))}
+                                style={{
+                                  ...S.badge(color, background),
+                                  border: 0,
+                                  cursor: busy ? "default" : "pointer",
+                                  opacity: busy ? 0.6 : 1,
+                                }}
+                              >
+                                {o.status}
+                                <ChevronDown size={12} style={{ marginLeft: 1 }} />
+                              </button>
+                              {openStatusFor === o.id && (
+                                <div
+                                  role="listbox"
+                                  style={{
+                                    position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, minWidth: 160,
+                                    background: "#FFFFFF", border: "1px solid var(--surface-border)", borderRadius: 8,
+                                    boxShadow: "0 8px 24px -8px rgba(11,28,48,0.25)", padding: 4,
+                                  }}
+                                >
+                                  {NEXT_ACTIONS[o.status].map((action) => (
+                                    <button
+                                      key={action.status}
+                                      type="button"
+                                      role="option"
+                                      onClick={() => {
+                                        setOpenStatusFor(null);
+                                        requestStatus(o, action.status, action.needsReason);
+                                      }}
+                                      style={{
+                                        display: "flex", alignItems: "center", gap: 8, width: "100%",
+                                        padding: "7px 9px", borderRadius: 6, border: 0, background: "transparent",
+                                        textAlign: "left", fontSize: "var(--text-sm)", color: "var(--ink)",
+                                        fontFamily: "inherit", cursor: "pointer",
+                                      }}
+                                      onMouseEnter={(e) => { e.currentTarget.style.background = "var(--surface)"; }}
+                                      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                                    >
+                                      <action.icon size={13} color={action.color === "#fff" ? action.bg : action.color} />
+                                      {action.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
                             <span style={S.badge(color, background)}>{o.status}</span>
-                            {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
-                          </div>
-                          {canManage && NEXT_ACTIONS[o.status].length > 0 && (
-                            <select
-                              value=""
-                              disabled={busy}
-                              aria-label={`Change status for order ${o.order_number}`}
-                              onChange={(e) => {
-                                const nextStatus = e.target.value as OrderStatus;
-                                const action = NEXT_ACTIONS[o.status].find((a) => a.status === nextStatus);
-                                e.target.value = "";
-                                if (action) requestStatus(o, action.status, action.needsReason);
-                              }}
-                              style={{
-                                fontSize: "var(--text-xs)",
-                                padding: "3px 6px",
-                                borderRadius: 6,
-                                border: "1px solid var(--surface-border)",
-                                background: "#FFFFFF",
-                                color: "var(--ink-muted)",
-                                fontFamily: "inherit",
-                                cursor: busy ? "default" : "pointer",
-                              }}
-                            >
-                              <option value="" disabled>Change status…</option>
-                              {NEXT_ACTIONS[o.status].map((action) => (
-                                <option key={action.status} value={action.status}>{action.label}</option>
-                              ))}
-                            </select>
                           )}
+                          {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
                         </div>
                       </td>
                       <td style={{ ...S.td, whiteSpace: "nowrap" }}>

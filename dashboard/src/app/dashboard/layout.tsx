@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
+import { Megaphone } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import Sidebar from '@/components/Sidebar'
 import { ToastProvider } from '@/components/ui/ToastProvider'
@@ -40,6 +42,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const isSuperAdmin = context.kind === 'super_admin'
 
+  // Platform-wide notice a super admin can turn on from Settings — e.g.
+  // planned downtime — shown to shop-side users only, not the super admin
+  // who's the one setting it.
+  let announcement: string | null = null
+  if (context.kind === 'shop_user') {
+    const { data: platformSettings } = await createAdminClient()
+      .from('platform_settings')
+      .select('announcement_message, announcement_enabled')
+      .eq('id', true)
+      .maybeSingle()
+    if (platformSettings?.announcement_enabled && platformSettings.announcement_message) {
+      announcement = platformSettings.announcement_message
+    }
+  }
+
   const shopUser: ShopUserForSidebar | null =
     context.kind === 'shop_user'
       ? {
@@ -62,6 +79,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <ToastProvider>
           <IdleLogout />
           {!isSuperAdmin && <OrderAlertListener />}
+          {announcement && (
+            <div style={{ background: '#FFF7ED', borderBottom: '1px solid #FED7AA', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 'var(--text-sm)', color: '#9A3412' }}>
+              <Megaphone size={15} style={{ flexShrink: 0 }} />
+              <span>{announcement}</span>
+            </div>
+          )}
           {!isSuperAdmin && (
             <div style={{ padding: '14px 24px 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10 }}>
               <GlobalSearch />
