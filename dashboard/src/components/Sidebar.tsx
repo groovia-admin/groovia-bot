@@ -33,7 +33,8 @@ const SUPER_ADMIN_NAV = [
   { href: '/dashboard',         label: 'Overview',       icon: LayoutDashboard, exact: true, color: '#3b82f6' },
   { href: '/dashboard/shops',   label: 'Shops',          icon: Store,           color: '#f59e0b' },
   { href: '/dashboard/catalog', label: 'Master Catalog', icon: Package,         color: '#a855f7' },
-  { href: '/dashboard/logs',    label: 'Audit Logs',     icon: ScrollText,      color: '#06b6d4' },
+  { href: '/dashboard/reports', label: 'Reports',        icon: BarChart2,       color: '#06b6d4' },
+  { href: '/dashboard/logs',    label: 'Audit Logs',     icon: ScrollText,      color: '#14b8a6' },
   { href: '/dashboard/settings',label: 'Settings',       icon: Settings,        color: '#64748b' },
 ]
 

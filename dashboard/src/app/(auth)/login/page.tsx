@@ -32,6 +32,7 @@ export default function LoginPage() {
   const [phoneError, setPhoneError] = useState('')
   const [otpDigits, setOtpDigits] = useState<string[]>(() => Array(OTP_LENGTH).fill(''))
   const [otpError, setOtpError] = useState('')
+  const [otpStatus, setOtpStatus] = useState<'idle' | 'verifying' | 'success'>('idle')
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
   const [resendIn, setResendIn] = useState(RESEND_SECONDS)
 
@@ -68,6 +69,7 @@ export default function LoginPage() {
     setEmailError('')
     setPasswordError('')
     setOtpDigits(Array(OTP_LENGTH).fill(''))
+    setOtpStatus('idle')
   }
 
   async function sendOtp(phoneValue: string): Promise<boolean> {
@@ -115,6 +117,7 @@ export default function LoginPage() {
 
     setOtpDigits(Array(OTP_LENGTH).fill(''))
     setOtpError('')
+    setOtpStatus('idle')
     setResendIn(RESEND_SECONDS)
     setPhoneStep('otp')
     ping('Code sent on WhatsApp')
@@ -126,6 +129,7 @@ export default function LoginPage() {
     setPhoneStep('input')
     setOtpDigits(Array(OTP_LENGTH).fill(''))
     setOtpError('')
+    setOtpStatus('idle')
   }
 
   async function handleResend() {
@@ -175,20 +179,27 @@ export default function LoginPage() {
 
     setOtpError('')
     setLoading(true)
+    setOtpStatus('verifying')
 
     const normalized = normalizeIndianPhone(phone)
     const { error } = await supabase.auth.verifyOtp({ phone: normalized ?? phone, token: code, type: 'sms' })
 
     if (error) {
       setOtpError(error.message || "That code doesn't match. Check and try again.")
+      setOtpStatus('idle')
       setLoading(false)
       return
     }
 
     logAuthEvent('login', 'phone')
+    setOtpStatus('success')
     ping('Verified — signing in…')
-    router.push('/dashboard')
-    router.refresh()
+    // Let the boxes-merge-into-a-checkmark animation actually play before
+    // navigating away — otherwise the success state is invisible.
+    setTimeout(() => {
+      router.push('/dashboard')
+      router.refresh()
+    }, 800)
   }
 
   async function handleLogin(e: React.FormEvent) {
@@ -390,7 +401,7 @@ export default function LoginPage() {
         .otp-sent b{color:var(--ink)}
         .otp-sent a{color:var(--teal-700);font-weight:600;text-decoration:none;margin-left:6px}
         .otp-sent a:hover{text-decoration:underline}
-        .otp-boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:16px}
+        .otp-boxes{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:16px;position:relative}
         .otp-boxes input{
           width:100%;min-width:0;height:56px;text-align:center;
           font-family: var(--font-bricolage), sans-serif;font-size:22px;font-weight:600;color:var(--ink);
@@ -399,6 +410,46 @@ export default function LoginPage() {
         }
         .otp-boxes input:focus{border-color:var(--teal-600);background:#fff;box-shadow:0 0 0 4px rgba(14,131,117,.13)}
         .otp-boxes input.filled{border-color:var(--teal-500);color:var(--teal-700)}
+
+        /* Verify-in-flight: a soft ring pulses out from each box in turn,
+           left to right — reads as the row "going round" while the code is
+           being checked, digits stay visible under it. */
+        .otp-box{position:relative}
+        @keyframes otpPulseRing{
+          0%{box-shadow:0 0 0 0 rgba(14,131,117,.45)}
+          70%{box-shadow:0 0 0 8px rgba(14,131,117,0)}
+          100%{box-shadow:0 0 0 0 rgba(14,131,117,0)}
+        }
+        .otp-boxes.verifying input{
+          border-color:var(--teal-500);
+          animation:otpPulseRing 1.1s ease-out infinite;
+          animation-delay:calc(var(--i,0) * 110ms);
+        }
+
+        /* Success: the six boxes converge toward the middle and fade out while
+           a single green checkmark box scales in at that same center point —
+           reads as the boxes becoming one, not just a state swap. */
+        @keyframes otpConverge{
+          from{opacity:1;transform:translateX(0) scale(1)}
+          to{opacity:0;transform:translateX(calc((2.5 - var(--i,0)) * 70%)) scale(.35)}
+        }
+        .otp-boxes.success .otp-box{
+          opacity:0;transform:translateX(calc((2.5 - var(--i,0)) * 70%)) scale(.35);
+          animation:otpConverge .38s cubic-bezier(.4,0,.2,1) forwards;
+          animation-delay:calc(var(--i,0) * 12ms);
+        }
+        @keyframes otpMergeIn{
+          from{opacity:0;transform:translateX(-50%) scale(.6)}
+          to{opacity:1;transform:translateX(-50%) scale(1)}
+        }
+        .otp-merged{
+          position:absolute;left:50%;top:0;width:64px;height:56px;
+          display:flex;align-items:center;justify-content:center;
+          background:var(--wa-green);color:#fff;border-radius:var(--r-md);
+          opacity:1;transform:translateX(-50%);
+          animation:otpMergeIn .32s ease .22s backwards;
+        }
+        .otp-merged svg{width:26px;height:26px;flex:none}
         .resend{margin-top:14px;text-align:center;font-size:13px;color:var(--muted)}
         .resend button{appearance:none;border:0;background:0;cursor:pointer;font-family:inherit;font-size:13px;font-weight:600;color:var(--teal-700)}
         .resend button:disabled{color:#9AA8A5;cursor:default}
@@ -529,22 +580,35 @@ export default function LoginPage() {
                   </form>
                 ) : (
                   <form onSubmit={handleVerifyOtp} noValidate>
-                    <p className="otp-sent">Enter the code sent to <b>{sentTo}</b><a href="#" onClick={handleChangeNumber}>Change</a></p>
-                    <div className="otp-boxes" aria-label="6-digit code">
+                    <p className="otp-sent">
+                      {otpStatus === 'success' ? (
+                        <b>Verified — signing you in…</b>
+                      ) : (
+                        <>Enter the code sent to <b>{sentTo}</b><a href="#" onClick={handleChangeNumber}>Change</a></>
+                      )}
+                    </p>
+                    <div className={`otp-boxes${otpStatus !== 'idle' ? ` ${otpStatus}` : ''}`} aria-label="6-digit code">
                       {otpDigits.map((digit, i) => (
-                        <input
-                          key={i}
-                          ref={(el) => { otpRefs.current[i] = el }}
-                          inputMode="numeric"
-                          maxLength={1}
-                          aria-label={`Digit ${i + 1}`}
-                          className={digit ? 'filled' : ''}
-                          value={digit}
-                          onChange={(e) => updateOtpDigit(i, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                          onPaste={handleOtpPaste}
-                        />
+                        <div className="otp-box" key={i} style={{ '--i': i } as React.CSSProperties}>
+                          <input
+                            ref={(el) => { otpRefs.current[i] = el }}
+                            inputMode="numeric"
+                            maxLength={1}
+                            aria-label={`Digit ${i + 1}`}
+                            className={digit ? 'filled' : ''}
+                            value={digit}
+                            disabled={otpStatus !== 'idle'}
+                            onChange={(e) => updateOtpDigit(i, e.target.value)}
+                            onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                            onPaste={handleOtpPaste}
+                          />
+                        </div>
                       ))}
+                      {otpStatus === 'success' && (
+                        <div className="otp-merged" role="status" aria-live="polite">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+                        </div>
+                      )}
                     </div>
                     <p className={`err${otpError ? ' show' : ''}`}>{otpError || "That code doesn't match. Check and try again."}</p>
                     <button className="btn" type="submit" disabled={loading}>

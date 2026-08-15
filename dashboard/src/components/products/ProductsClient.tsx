@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Plus, Pencil, EyeOff, Eye, Trash2, Download, Search, ChevronLeft, ChevronRight, Package, FolderPlus } from "lucide-react";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
@@ -50,6 +51,8 @@ export default function ProductsClient({
   canManage: boolean;
 }) {
   const toast = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [error, setError] = useState("");
@@ -69,6 +72,17 @@ export default function ProductsClient({
   const [savingProduct, setSavingProduct] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Lets other pages (Inventory restock links, Global Search) deep-link
+  // straight into the edit modal instead of a separate product page.
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    if (!editId) return;
+    const match = products.find((p) => p.id === editId);
+    if (match) setEditingProduct(match);
+    router.replace("/dashboard/products", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   const [productSearch, setProductSearch] = useState("");
   const [pageSize, setPageSize] = useState(20);

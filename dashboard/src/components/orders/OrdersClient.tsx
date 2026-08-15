@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { Search, ShoppingBag, Check, X, RefreshCw, Download } from "lucide-react";
+import { Search, ShoppingBag, Check, RefreshCw, Download } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import EmptyState from "@/components/ui/EmptyState";
@@ -13,6 +13,7 @@ import { toCsv, downloadCsv } from "@/lib/csv";
 import OrderAgeBadge from "@/components/orders/OrderAgeBadge";
 import { getAgingLevel, getOrderAgeMinutes } from "@/lib/orderAging";
 import { NEXT_ACTIONS, type OrderStatus } from "@/components/orders/OrderActions";
+import OrderReasonModal from "@/components/orders/OrderReasonModal";
 
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
@@ -58,10 +59,12 @@ export default function OrdersClient({
   initialOrders,
   showRevenue,
   canManage,
+  declineReasons,
 }: {
   initialOrders: OrderRow[];
   showRevenue: boolean;
   canManage: boolean;
+  declineReasons: string[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -71,6 +74,7 @@ export default function OrdersClient({
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [reasonPrompt, setReasonPrompt] = useState<{ orderId: string; orderNumber: string; nextStatus: OrderStatus } | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState(() => new Date());
   const [refreshing, setRefreshing] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -205,18 +209,7 @@ export default function OrdersClient({
   // Inline status change from the list row's dropdown — same endpoint and
   // transition rules OrderActions.tsx uses on the detail page (NEXT_ACTIONS
   // is shared from there), just without navigating away first.
-  async function updateStatus(id: string, nextStatus: OrderStatus, needsReason?: boolean) {
-    let reason: string | undefined;
-    if (needsReason) {
-      const input = window.prompt(`Reason for marking this order ${nextStatus}:`);
-      if (input === null) return;
-      if (!input.trim()) {
-        toast("A reason is required", "error");
-        return;
-      }
-      reason = input.trim();
-    }
-
+  async function applyStatus(id: string, nextStatus: OrderStatus, reason?: string) {
     setBusyId(id);
     try {
       const response = await fetch(`/api/shop/orders/${id}`, {
@@ -233,12 +226,25 @@ export default function OrdersClient({
 
       setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, status: nextStatus } : o)));
       toast(`Order marked ${nextStatus}`);
+      setReasonPrompt(null);
       window.dispatchEvent(new Event("groovia:pending-orders-changed"));
     } catch {
       toast("Failed to update order. Please try again.", "error");
     } finally {
       setBusyId(null);
     }
+  }
+
+  // Reason-required transitions (reject/cancel) open the shared modal
+  // in-place instead of navigating to the order detail page — that
+  // navigation was the "opens somewhere else" complaint, even though it
+  // was technically the same tab.
+  function requestStatus(order: OrderRow, nextStatus: OrderStatus, needsReason?: boolean) {
+    if (needsReason) {
+      setReasonPrompt({ orderId: order.id, orderNumber: order.order_number, nextStatus });
+      return;
+    }
+    applyStatus(order.id, nextStatus);
   }
 
   async function bulkAccept() {
@@ -510,9 +516,39 @@ export default function OrdersClient({
                       </td>
                       <td style={{ ...S.td, textAlign: "right", color: "var(--ink-muted)" }}>{o.item_count}</td>
                       <td style={S.td}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                          <span style={S.badge(color, background)}>{o.status}</span>
-                          {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-start" }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <span style={S.badge(color, background)}>{o.status}</span>
+                            {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
+                          </div>
+                          {canManage && NEXT_ACTIONS[o.status].length > 0 && (
+                            <select
+                              value=""
+                              disabled={busy}
+                              aria-label={`Change status for order ${o.order_number}`}
+                              onChange={(e) => {
+                                const nextStatus = e.target.value as OrderStatus;
+                                const action = NEXT_ACTIONS[o.status].find((a) => a.status === nextStatus);
+                                e.target.value = "";
+                                if (action) requestStatus(o, action.status, action.needsReason);
+                              }}
+                              style={{
+                                fontSize: "var(--text-xs)",
+                                padding: "3px 6px",
+                                borderRadius: 6,
+                                border: "1px solid var(--surface-border)",
+                                background: "#FFFFFF",
+                                color: "var(--ink-muted)",
+                                fontFamily: "inherit",
+                                cursor: busy ? "default" : "pointer",
+                              }}
+                            >
+                              <option value="" disabled>Change status…</option>
+                              {NEXT_ACTIONS[o.status].map((action) => (
+                                <option key={action.status} value={action.status}>{action.label}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       </td>
                       <td style={{ ...S.td, whiteSpace: "nowrap" }}>
@@ -524,8 +560,8 @@ export default function OrdersClient({
                         </td>
                       )}
                       <td style={{ ...S.td, textAlign: "right" }}>
-                        {o.status === "pending" && canManage ? (
-                          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", alignItems: "center" }}>
+                          {o.status === "pending" && canManage && (
                             <button
                               type="button"
                               disabled={busy}
@@ -535,49 +571,11 @@ export default function OrdersClient({
                             >
                               <Check size={13} />
                             </button>
-                            <Link
-                              href={`/dashboard/orders/${o.id}`}
-                              title="Reject order" aria-label="Reject order"
-                              style={{ ...S.btn("rgba(239,68,68,0.12)", "var(--error)"), padding: "6px 10px", textDecoration: "none" }}
-                            >
-                              <X size={13} />
-                            </Link>
-                          </div>
-                        ) : (
-                          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-                            {canManage && NEXT_ACTIONS[o.status].length > 0 && (
-                              <select
-                                value=""
-                                disabled={busy}
-                                aria-label={`Change status for order ${o.order_number}`}
-                                onChange={(e) => {
-                                  const nextStatus = e.target.value as OrderStatus;
-                                  const action = NEXT_ACTIONS[o.status].find((a) => a.status === nextStatus);
-                                  e.target.value = "";
-                                  if (action) updateStatus(o.id, action.status, action.needsReason);
-                                }}
-                                style={{
-                                  fontSize: "var(--text-sm)",
-                                  padding: "5px 8px",
-                                  borderRadius: 6,
-                                  border: "1px solid var(--surface-border)",
-                                  background: "#FFFFFF",
-                                  color: "var(--ink-muted)",
-                                  fontFamily: "inherit",
-                                  cursor: busy ? "default" : "pointer",
-                                }}
-                              >
-                                <option value="" disabled>Change status…</option>
-                                {NEXT_ACTIONS[o.status].map((action) => (
-                                  <option key={action.status} value={action.status}>{action.label}</option>
-                                ))}
-                              </select>
-                            )}
-                            <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
-                              View
-                            </Link>
-                          </div>
-                        )}
+                          )}
+                          <Link href={`/dashboard/orders/${o.id}`} style={{ color: "var(--ink-muted)", fontSize: "var(--text-sm)", textDecoration: "none" }}>
+                            View
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -587,6 +585,16 @@ export default function OrdersClient({
           </table>
         </div>
       </div>
+
+      {reasonPrompt && (
+        <OrderReasonModal
+          title={`Reason for marking order #${reasonPrompt.orderNumber} ${reasonPrompt.nextStatus}`}
+          presetReasons={declineReasons}
+          busy={busyId === reasonPrompt.orderId}
+          onCancel={() => setReasonPrompt(null)}
+          onConfirm={(reason) => applyStatus(reasonPrompt.orderId, reasonPrompt.nextStatus, reason)}
+        />
+      )}
     </div>
   );
 }

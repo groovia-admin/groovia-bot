@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Download, TrendingUp, TrendingDown, Minus, ShoppingBag, Package, XCircle,
   PiggyBank, Clock, Boxes, MessageCircle, Layers, Users, UserCog, AlertTriangle,
+  ChevronUp, ChevronDown,
 } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
@@ -340,7 +341,7 @@ export default function ReportsClient({ showRevenue, windowDays, orders, orderIt
           {reportId === "stock-movements" && <StockMovementsReport movements={filteredMovements} productById={productById} />}
           {reportId === "channel-split" && <ChannelSplitReport orders={filteredOrders} showRevenue={showRevenue} />}
           {reportId === "sales-trend" && <SalesTrendReport orders={filteredOrders} rangeFrom={rangeFrom} rangeTo={rangeTo} showRevenue={showRevenue} />}
-          {reportId === "top-products" && <TopProductsReport items={filteredItems} showRevenue={showRevenue} />}
+          {reportId === "top-products" && <TopProductsReport items={filteredItems} showRevenue={showRevenue} productById={productById} categoryById={categoryById} />}
           {reportId === "category-performance" && <CategoryPerformanceReport items={filteredItems} productById={productById} categoryById={categoryById} showRevenue={showRevenue} />}
           {reportId === "fulfillment-speed" && <FulfillmentSpeedReport orders={filteredOrders} />}
           {reportId === "cancellation-reasons" && <CancellationReasonsReport orders={filteredOrders} />}
@@ -350,6 +351,39 @@ export default function ReportsClient({ showRevenue, windowDays, orders, orderIt
         </div>
       </div>
     </div>
+  );
+}
+
+type SortDir = "asc" | "desc";
+
+// Every table report owns its own sortKey/sortDir state (declared per
+// report below) — this is just the clickable, direction-indicating <th>
+// they all render through, so a click-to-sort column looks and behaves
+// identically everywhere in Reports instead of each table reinventing it.
+function SortableTh({
+  label,
+  active,
+  dir,
+  align,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: SortDir;
+  align?: "left" | "right";
+  onClick: () => void;
+}) {
+  return (
+    <th
+      style={{ ...S.th, textAlign: align ?? "left", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" }}
+      onClick={onClick}
+      aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, flexDirection: align === "right" ? "row-reverse" : "row" }}>
+        {label}
+        {active ? (dir === "asc" ? <ChevronUp size={11} /> : <ChevronDown size={11} />) : <ChevronDown size={11} style={{ opacity: 0.25 }} />}
+      </span>
+    </th>
   );
 }
 
@@ -410,10 +444,23 @@ function SalesSummaryReport({ orders, prevOrders, showRevenue, rangeFrom, rangeT
 }
 
 function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
+  const [sortKey, setSortKey] = useState<"order" | "age" | "total">("age");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(key: "order" | "age" | "total") {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "order" ? "asc" : "desc"); }
+  }
+
   const pending = orders
     .filter((o) => o.status === "pending")
     .map((o) => ({ ...o, ageMinutes: getOrderAgeMinutes(o.created_at) }))
-    .sort((a, b) => b.ageMinutes - a.ageMinutes);
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "order") return a.order_number.localeCompare(b.order_number) * dir;
+      if (sortKey === "total") return (Number(a.total_amount) - Number(b.total_amount)) * dir;
+      return (a.ageMinutes - b.ageMinutes) * dir;
+    });
 
   const rows = pending.map((o) => ({ order_number: o.order_number, age: formatAgeShort(o.ageMinutes), total: Number(o.total_amount).toFixed(2), placed_at: o.created_at }));
 
@@ -421,7 +468,7 @@ function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
     <div>
       <ReportHeader
         title="Pending & Aging Orders"
-        subtitle="Every order still waiting on a response, oldest first"
+        subtitle="Every order still waiting on a response — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "order_number", label: "Order #" }, { key: "age", label: "Age" }, { key: "total", label: "Total (₹)" }, { key: "placed_at", label: "Placed at" }]} filename="pending-orders.csv" />}
       />
       {pending.length === 0 ? (
@@ -430,7 +477,13 @@ function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>Order</th><th style={S.th}>Age</th><th style={{ ...S.th, textAlign: "right" }}>Total</th></tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="Order" active={sortKey === "order"} dir={sortDir} onClick={() => toggle("order")} />
+                  <SortableTh label="Age" active={sortKey === "age"} dir={sortDir} onClick={() => toggle("age")} />
+                  <SortableTh label="Total" align="right" active={sortKey === "total"} dir={sortDir} onClick={() => toggle("total")} />
+                </tr>
+              </thead>
               <tbody>
                 {pending.map((o) => {
                   const level = getAgingLevel(o.ageMinutes);
@@ -453,14 +506,30 @@ function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
 }
 
 function LowStockReport({ products, categoryById }: { products: ProductRow[]; categoryById: Map<string, string> }) {
-  const low = products.filter((p) => p.stock_quantity <= p.low_stock_threshold).sort((a, b) => a.stock_quantity - b.stock_quantity);
+  const [sortKey, setSortKey] = useState<"name" | "category" | "stock" | "threshold">("stock");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  function toggle(key: typeof sortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" || key === "category" ? "asc" : "asc"); }
+  }
+
+  const low = products
+    .filter((p) => p.stock_quantity <= p.low_stock_threshold)
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      if (sortKey === "category") return (categoryById.get(a.category_id ?? "") ?? "").localeCompare(categoryById.get(b.category_id ?? "") ?? "") * dir;
+      if (sortKey === "threshold") return (a.low_stock_threshold - b.low_stock_threshold) * dir;
+      return (a.stock_quantity - b.stock_quantity) * dir;
+    });
   const rows = low.map((p) => ({ name: p.name, category: categoryById.get(p.category_id ?? "") ?? "—", unit: p.unit, stock: p.stock_quantity, threshold: p.low_stock_threshold }));
 
   return (
     <div>
       <ReportHeader
         title="Low Stock & Out of Stock"
-        subtitle="Products at or below their reorder threshold, right now"
+        subtitle="Products at or below their reorder threshold, right now — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "unit", label: "Unit" }, { key: "stock", label: "Stock" }, { key: "threshold", label: "Threshold" }]} filename="low-stock.csv" />}
       />
       {low.length === 0 ? (
@@ -469,7 +538,14 @@ function LowStockReport({ products, categoryById }: { products: ProductRow[]; ca
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>Product</th><th style={S.th}>Category</th><th style={{ ...S.th, textAlign: "right" }}>Stock</th><th style={{ ...S.th, textAlign: "right" }}>Threshold</th></tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="Product" active={sortKey === "name"} dir={sortDir} onClick={() => toggle("name")} />
+                  <SortableTh label="Category" active={sortKey === "category"} dir={sortDir} onClick={() => toggle("category")} />
+                  <SortableTh label="Stock" align="right" active={sortKey === "stock"} dir={sortDir} onClick={() => toggle("stock")} />
+                  <SortableTh label="Threshold" align="right" active={sortKey === "threshold"} dir={sortDir} onClick={() => toggle("threshold")} />
+                </tr>
+              </thead>
               <tbody>
                 {low.map((p) => (
                   <tr key={p.id}>
@@ -489,7 +565,23 @@ function LowStockReport({ products, categoryById }: { products: ProductRow[]; ca
 }
 
 function StockMovementsReport({ movements, productById }: { movements: MovementRow[]; productById: Map<string, ProductRow> }) {
-  const rows = movements.map((m) => ({
+  const [sortKey, setSortKey] = useState<"when" | "product" | "type" | "change">("when");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(key: typeof sortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "when" || key === "change" ? "desc" : "asc"); }
+  }
+
+  const sorted = [...movements].sort((a, b) => {
+    const dir = sortDir === "asc" ? 1 : -1;
+    if (sortKey === "product") return (productById.get(a.product_id ?? "")?.name ?? "").localeCompare(productById.get(b.product_id ?? "")?.name ?? "") * dir;
+    if (sortKey === "type") return (MOVEMENT_LABEL[a.movement_type] ?? a.movement_type).localeCompare(MOVEMENT_LABEL[b.movement_type] ?? b.movement_type) * dir;
+    if (sortKey === "change") return (a.quantity_delta - b.quantity_delta) * dir;
+    return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * dir;
+  });
+
+  const rows = sorted.map((m) => ({
     product: productById.get(m.product_id ?? "")?.name ?? "Unknown product",
     type: MOVEMENT_LABEL[m.movement_type] ?? m.movement_type,
     change: m.quantity_delta,
@@ -501,7 +593,7 @@ function StockMovementsReport({ movements, productById }: { movements: MovementR
     <div>
       <ReportHeader
         title="Stock Movements"
-        subtitle="Every sale, restock, and manual edit in the selected range"
+        subtitle="Every sale, restock, and manual edit in the selected range — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "product", label: "Product" }, { key: "type", label: "Type" }, { key: "change", label: "Change" }, { key: "notes", label: "Notes" }, { key: "when", label: "When" }]} filename="stock-movements.csv" />}
       />
       {movements.length === 0 ? (
@@ -510,9 +602,17 @@ function StockMovementsReport({ movements, productById }: { movements: MovementR
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>When</th><th style={S.th}>Product</th><th style={S.th}>Type</th><th style={S.th}>Notes</th><th style={{ ...S.th, textAlign: "right" }}>Change</th></tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="When" active={sortKey === "when"} dir={sortDir} onClick={() => toggle("when")} />
+                  <SortableTh label="Product" active={sortKey === "product"} dir={sortDir} onClick={() => toggle("product")} />
+                  <SortableTh label="Type" active={sortKey === "type"} dir={sortDir} onClick={() => toggle("type")} />
+                  <th style={S.th}>Notes</th>
+                  <SortableTh label="Change" align="right" active={sortKey === "change"} dir={sortDir} onClick={() => toggle("change")} />
+                </tr>
+              </thead>
               <tbody>
-                {movements.map((m) => {
+                {sorted.map((m) => {
                   const positive = m.quantity_delta > 0;
                   return (
                     <tr key={m.id}>
@@ -626,26 +726,55 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
   );
 }
 
-function TopProductsReport({ items, showRevenue }: { items: OrderItemRow[]; showRevenue: boolean }) {
-  const totals = new Map<string, { qty: number; revenue: number }>();
+function TopProductsReport({
+  items,
+  showRevenue,
+  productById,
+  categoryById,
+}: {
+  items: OrderItemRow[];
+  showRevenue: boolean;
+  productById: Map<string, ProductRow>;
+  categoryById: Map<string, string>;
+}) {
+  const [sortKey, setSortKey] = useState<"name" | "category" | "qty" | "revenue">(showRevenue ? "revenue" : "qty");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(key: typeof sortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" || key === "category" ? "asc" : "desc"); }
+  }
+
+  const totals = new Map<string, { qty: number; revenue: number; productId: string | null }>();
   for (const item of items) {
     if (item.order_status !== "completed") continue;
-    const existing = totals.get(item.product_name_snapshot) ?? { qty: 0, revenue: 0 };
+    const existing = totals.get(item.product_name_snapshot) ?? { qty: 0, revenue: 0, productId: item.product_id };
     existing.qty += Number(item.quantity);
     existing.revenue += Number(item.subtotal);
     totals.set(item.product_name_snapshot, existing);
   }
   const ranked = Array.from(totals.entries())
-    .map(([name, v]) => ({ name, ...v }))
-    .sort((a, b) => (showRevenue ? b.revenue - a.revenue : b.qty - a.qty));
-  const rows = ranked.map((p) => ({ name: p.name, quantity: p.qty, revenue: p.revenue.toFixed(2) }));
+    .map(([name, v]) => ({
+      name,
+      qty: v.qty,
+      revenue: v.revenue,
+      category: v.productId ? categoryById.get(productById.get(v.productId)?.category_id ?? "") ?? "Uncategorized" : "Uncategorized",
+    }))
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      if (sortKey === "category") return a.category.localeCompare(b.category) * dir;
+      if (sortKey === "qty") return (a.qty - b.qty) * dir;
+      return (a.revenue - b.revenue) * dir;
+    });
+  const rows = ranked.map((p) => ({ name: p.name, category: p.category, quantity: p.qty, revenue: p.revenue.toFixed(2) }));
 
   return (
     <div>
       <ReportHeader
         title="Top & Bottom Products"
-        subtitle={`Every product sold in this period, ranked by ${showRevenue ? "revenue" : "quantity"}`}
-        exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "quantity", label: "Quantity sold" }, { key: "revenue", label: "Revenue (₹)" }]} filename="top-products.csv" />}
+        subtitle="Every product sold in this period, with its category — click a column to sort"
+        exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "quantity", label: "Quantity sold" }, { key: "revenue", label: "Revenue (₹)" }]} filename="top-products.csv" />}
       />
       {ranked.length === 0 ? (
         <div style={S.card}><EmptyState icon={Package} title="No completed orders in this period" compact /></div>
@@ -653,12 +782,19 @@ function TopProductsReport({ items, showRevenue }: { items: OrderItemRow[]; show
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>#</th><th style={S.th}>Product</th><th style={{ ...S.th, textAlign: "right" }}>Quantity</th>{showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Revenue</th>}</tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="Product" active={sortKey === "name"} dir={sortDir} onClick={() => toggle("name")} />
+                  <SortableTh label="Category" active={sortKey === "category"} dir={sortDir} onClick={() => toggle("category")} />
+                  <SortableTh label="Quantity" align="right" active={sortKey === "qty"} dir={sortDir} onClick={() => toggle("qty")} />
+                  {showRevenue && <SortableTh label="Revenue" align="right" active={sortKey === "revenue"} dir={sortDir} onClick={() => toggle("revenue")} />}
+                </tr>
+              </thead>
               <tbody>
-                {ranked.map((p, i) => (
+                {ranked.map((p) => (
                   <tr key={p.name}>
-                    <td style={{ ...S.td, color: "var(--ink-faint)" }}>{i + 1}</td>
                     <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{p.name}</td>
+                    <td style={{ ...S.td, color: "var(--ink-muted)" }}>{p.category}</td>
                     <td style={{ ...S.td, textAlign: "right" }}>{p.qty}</td>
                     {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(p.revenue)}</td>}
                   </tr>
@@ -806,6 +942,14 @@ function CancellationReasonsReport({ orders }: { orders: OrderRow[] }) {
 }
 
 function CustomerActivityReport({ orders, customerById, showRevenue }: { orders: OrderRow[]; customerById: Map<string, CustomerRow>; showRevenue: boolean }) {
+  const [sortKey, setSortKey] = useState<"name" | "orders" | "spent" | "lastOrder">(showRevenue ? "spent" : "orders");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(key: typeof sortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" ? "asc" : "desc"); }
+  }
+
   const byCustomer = new Map<string, { orders: number; spent: number; lastOrder: string }>();
   for (const o of orders) {
     if (!o.customer_id) continue;
@@ -817,14 +961,20 @@ function CustomerActivityReport({ orders, customerById, showRevenue }: { orders:
   }
   const ranked = Array.from(byCustomer.entries())
     .map(([id, v]) => ({ id, name: customerById.get(id)?.full_name || customerById.get(id)?.phone || "Unknown", ...v }))
-    .sort((a, b) => (showRevenue ? b.spent - a.spent : b.orders - a.orders));
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      if (sortKey === "orders") return (a.orders - b.orders) * dir;
+      if (sortKey === "spent") return (a.spent - b.spent) * dir;
+      return (a.lastOrder < b.lastOrder ? -1 : a.lastOrder > b.lastOrder ? 1 : 0) * dir;
+    });
   const rows = ranked.map((c) => ({ customer: c.name, orders: c.orders, spent: c.spent.toFixed(2), last_order: c.lastOrder }));
 
   return (
     <div>
       <ReportHeader
         title="Customer Activity"
-        subtitle="Who ordered in this period, ranked by how much they matter to the business"
+        subtitle="Who ordered in this period — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "customer", label: "Customer" }, { key: "orders", label: "Orders" }, { key: "spent", label: "Spent (₹)" }, { key: "last_order", label: "Last order" }]} filename="customer-activity.csv" />}
       />
       {ranked.length === 0 ? (
@@ -833,7 +983,14 @@ function CustomerActivityReport({ orders, customerById, showRevenue }: { orders:
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>Customer</th><th style={{ ...S.th, textAlign: "right" }}>Orders</th>{showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Spent</th>}<th style={S.th}>Last order</th></tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="Customer" active={sortKey === "name"} dir={sortDir} onClick={() => toggle("name")} />
+                  <SortableTh label="Orders" align="right" active={sortKey === "orders"} dir={sortDir} onClick={() => toggle("orders")} />
+                  {showRevenue && <SortableTh label="Spent" align="right" active={sortKey === "spent"} dir={sortDir} onClick={() => toggle("spent")} />}
+                  <SortableTh label="Last order" active={sortKey === "lastOrder"} dir={sortDir} onClick={() => toggle("lastOrder")} />
+                </tr>
+              </thead>
               <tbody>
                 {ranked.map((c) => (
                   <tr key={c.id}>
@@ -853,6 +1010,14 @@ function CustomerActivityReport({ orders, customerById, showRevenue }: { orders:
 }
 
 function GrossMarginReport({ items, productById }: { items: OrderItemRow[]; productById: Map<string, ProductRow> }) {
+  const [sortKey, setSortKey] = useState<"name" | "revenue" | "margin">("margin");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  function toggle(key: typeof sortKey) {
+    if (key === sortKey) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else { setSortKey(key); setSortDir(key === "name" ? "asc" : "desc"); }
+  }
+
   const totals = new Map<string, { qty: number; revenue: number; margin: number; knownCost: boolean }>();
   let totalMargin = 0;
   let totalRevenueWithKnownCost = 0;
@@ -872,7 +1037,14 @@ function GrossMarginReport({ items, productById }: { items: OrderItemRow[]; prod
     }
     totals.set(item.product_name_snapshot, existing);
   }
-  const ranked = Array.from(totals.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => b.margin - a.margin);
+  const ranked = Array.from(totals.entries())
+    .map(([name, v]) => ({ name, ...v }))
+    .sort((a, b) => {
+      const dir = sortDir === "asc" ? 1 : -1;
+      if (sortKey === "name") return a.name.localeCompare(b.name) * dir;
+      if (sortKey === "revenue") return (a.revenue - b.revenue) * dir;
+      return (a.margin - b.margin) * dir;
+    });
   const marginPct = totalRevenueWithKnownCost > 0 ? (totalMargin / totalRevenueWithKnownCost) * 100 : null;
   const rows = ranked.map((p) => ({ product: p.name, quantity: p.qty, revenue: p.revenue.toFixed(2), margin: p.knownCost ? p.margin.toFixed(2) : "unknown cost" }));
 
@@ -880,7 +1052,7 @@ function GrossMarginReport({ items, productById }: { items: OrderItemRow[]; prod
     <div>
       <ReportHeader
         title="Gross Margin"
-        subtitle="At today's cost prices — order items don't snapshot cost at time of sale, so this is an approximation, not an exact historical figure"
+        subtitle="At today's cost prices — order items don't snapshot cost at time of sale, so this is an approximation, not an exact historical figure. Click a column to sort."
         exportNode={<ExportButton rows={rows} columns={[{ key: "product", label: "Product" }, { key: "quantity", label: "Quantity" }, { key: "revenue", label: "Revenue (₹)" }, { key: "margin", label: "Margin (₹)" }]} filename="gross-margin.csv" />}
       />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14, marginBottom: 16 }}>
@@ -892,7 +1064,13 @@ function GrossMarginReport({ items, productById }: { items: OrderItemRow[]; prod
         <div style={S.card}>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead><tr><th style={S.th}>Product</th><th style={{ ...S.th, textAlign: "right" }}>Revenue</th><th style={{ ...S.th, textAlign: "right" }}>Margin</th></tr></thead>
+              <thead>
+                <tr>
+                  <SortableTh label="Product" active={sortKey === "name"} dir={sortDir} onClick={() => toggle("name")} />
+                  <SortableTh label="Revenue" align="right" active={sortKey === "revenue"} dir={sortDir} onClick={() => toggle("revenue")} />
+                  <SortableTh label="Margin" align="right" active={sortKey === "margin"} dir={sortDir} onClick={() => toggle("margin")} />
+                </tr>
+              </thead>
               <tbody>
                 {ranked.map((p) => (
                   <tr key={p.name}>

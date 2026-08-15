@@ -1,5 +1,9 @@
+import {
+  Store, MapPin, QrCode, Bot, Ban, Truck, CreditCard, Send, Landmark,
+} from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
+import EmptyState from '@/components/ui/EmptyState'
 import ShopLogoUpload from '@/components/settings/ShopLogoUpload'
 import ShopProfileForm from '@/components/settings/ShopProfileForm'
 import BotBehaviorSettingsForm from '@/components/settings/BotBehaviorSettingsForm'
@@ -7,12 +11,46 @@ import DeliverySettingsForm from '@/components/settings/DeliverySettingsForm'
 import DailySummarySettingsForm from '@/components/settings/DailySummarySettingsForm'
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 import ShopQrCode from '@/components/settings/ShopQrCode'
+import DeclineReasonsSettingsForm from '@/components/settings/DeclineReasonsSettingsForm'
 
 export const dynamic = 'force-dynamic'
 
 const cardStyle: React.CSSProperties = { background: '#FFFFFF', border: '1px solid var(--surface-border)', borderRadius: 12, padding: 20, boxShadow: '0 1px 2px rgba(11,28,48,0.04)' }
-const cardTitleStyle: React.CSSProperties = { fontSize: "var(--text-md)", fontWeight: 700, color: 'var(--ink)', margin: '0 0 4px' }
-const cardSubStyle: React.CSSProperties = { fontSize: "var(--text-sm)", color: 'var(--ink-muted)', margin: '0 0 16px' }
+const eyebrowStyle: React.CSSProperties = { fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--ink-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '4px 0 2px' }
+
+function SettingsCard({
+  icon: Icon,
+  color,
+  title,
+  subtitle,
+  children,
+}: {
+  icon: React.ElementType
+  color: string
+  title: string
+  subtitle: string
+  children: React.ReactNode
+}) {
+  return (
+    <div style={cardStyle}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 16 }}>
+        <div
+          style={{
+            width: 34, height: 34, borderRadius: 9, flexShrink: 0,
+            background: `${color}1a`, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Icon size={17} color={color} />
+        </div>
+        <div>
+          <h2 style={{ fontSize: 'var(--text-md)', fontWeight: 700, color: 'var(--ink)', margin: 0 }}>{title}</h2>
+          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--ink-muted)', margin: '2px 0 0' }}>{subtitle}</p>
+        </div>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 export default async function SettingsPage() {
   // Manager can reach this page (bot/store settings), but the payout &
@@ -41,7 +79,7 @@ export default async function SettingsPage() {
       adminClient
         .from('shop_settings')
         .select(
-          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time'
+          'order_acceptance_enabled, allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, upi_id, accepted_payment_methods, auto_accept_orders, tax_enabled, tax_percentage, business_hours, welcome_message, away_message, reminder_enabled, auto_reject_after_minutes, daily_summary_enabled, daily_summary_time, order_decline_reasons'
         )
         .eq('shop_id', context.shopId)
         .maybeSingle(),
@@ -75,74 +113,91 @@ export default async function SettingsPage() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }} className="settings-columns">
-      {/* Left column — compact, lighter-weight cards */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {context.kind === 'shop_user' && isOwner && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Shop Profile</h2>
-            <p style={cardSubStyle}>Your shop&apos;s logo, shown in the dashboard sidebar and to customers.</p>
-            <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
-          </div>
-        )}
-
-        {context.kind === 'shop_user' && isOwner && shopProfile && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Shop Details</h2>
-            <p style={cardSubStyle}>Name, address, and phone shown to customers in the WhatsApp order link.</p>
-            <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
-          </div>
-        )}
-
-        {context.kind === 'shop_user' && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Store QR Code</h2>
-            <p style={cardSubStyle}>Print or share this so customers can start ordering by scanning it.</p>
-            <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
-          </div>
-        )}
-
-        {context.kind === 'shop_user' && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Bot Behavior</h2>
-            <p style={cardSubStyle}>Control what the WhatsApp bot says and how it handles new orders.</p>
-            <BotBehaviorSettingsForm initial={settings} />
-          </div>
-        )}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div>
+        <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Settings</h1>
+        <p style={{ fontSize: 'var(--text-base)', color: 'var(--ink-muted)', marginTop: 4 }}>
+          {context.kind === 'super_admin' ? 'Platform-level configuration.' : "Your shop's identity, ordering rules, and how the WhatsApp bot behaves."}
+        </p>
       </div>
 
-      {/* Right column — feature-heavy cards with their own enable/reveal toggles */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {context.kind === 'shop_user' && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Order &amp; Delivery</h2>
-            <p style={cardSubStyle}>Pickup/delivery availability, fees, and tax.</p>
-            <DeliverySettingsForm initial={settings} />
-          </div>
-        )}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }} className="settings-columns">
+        {/* Left column — shop identity and customer-facing behavior */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {context.kind === 'shop_user' && isOwner && (
+            <>
+              <div style={eyebrowStyle}>Shop identity</div>
+              <SettingsCard icon={Store} color="#a855f7" title="Shop Profile" subtitle="Your shop's logo, shown in the dashboard sidebar and to customers.">
+                <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+              </SettingsCard>
+            </>
+          )}
 
-        {context.kind === 'shop_user' && isOwner && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Payment</h2>
-            <p style={cardSubStyle}>UPI details and accepted payment methods.</p>
-            <PaymentSettingsForm initial={settings} />
-          </div>
-        )}
+          {context.kind === 'shop_user' && isOwner && shopProfile && (
+            <SettingsCard icon={MapPin} color="#3b82f6" title="Shop Details" subtitle="Name, address, and phone shown to customers in the WhatsApp order link.">
+              <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
+            </SettingsCard>
+          )}
 
-        {context.kind === 'shop_user' && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Daily Summary</h2>
-            <p style={cardSubStyle}>A morning WhatsApp recap of yesterday&apos;s orders, revenue, and top products.</p>
-            <DailySummarySettingsForm initial={settings} />
-          </div>
-        )}
+          {context.kind === 'shop_user' && (
+            <SettingsCard icon={QrCode} color="#f59e0b" title="Store QR Code" subtitle="Print or share this so customers can start ordering by scanning it.">
+              <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
+            </SettingsCard>
+          )}
 
-        {context.kind === 'super_admin' && (
-          <div style={cardStyle}>
-            <h2 style={cardTitleStyle}>Payout &amp; Banking</h2>
-            <p style={cardSubStyle}>Payout settings placeholder (platform admin only — hidden from shop owners).</p>
-          </div>
-        )}
+          {context.kind === 'shop_user' && (
+            <>
+              <div style={eyebrowStyle}>Customer communication</div>
+              <SettingsCard icon={Bot} color="#14b8a6" title="Bot Behavior" subtitle="Control what the WhatsApp bot says and how it handles new orders.">
+                <BotBehaviorSettingsForm initial={settings} />
+              </SettingsCard>
+            </>
+          )}
+
+          {context.kind === 'shop_user' && (
+            <SettingsCard icon={Ban} color="#ef4444" title="Order Decline Reasons" subtitle="Quick-pick reasons offered when rejecting or cancelling an order.">
+              <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
+            </SettingsCard>
+          )}
+        </div>
+
+        {/* Right column — ordering rules, payments, and platform-only cards */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {context.kind === 'shop_user' && (
+            <>
+              <div style={eyebrowStyle}>Orders &amp; payments</div>
+              <SettingsCard icon={Truck} color="#22c55e" title="Order & Delivery" subtitle="Pickup/delivery availability, fees, and tax.">
+                <DeliverySettingsForm initial={settings} />
+              </SettingsCard>
+            </>
+          )}
+
+          {context.kind === 'shop_user' && isOwner && (
+            <SettingsCard icon={CreditCard} color="#6366f1" title="Payment" subtitle="UPI details and accepted payment methods.">
+              <PaymentSettingsForm initial={settings} />
+            </SettingsCard>
+          )}
+
+          {context.kind === 'shop_user' && (
+            <>
+              <div style={eyebrowStyle}>Reporting</div>
+              <SettingsCard icon={Send} color="#06b6d4" title="Daily Summary" subtitle="A morning WhatsApp recap of yesterday's orders, revenue, and top products.">
+                <DailySummarySettingsForm initial={settings} />
+              </SettingsCard>
+            </>
+          )}
+
+          {context.kind === 'super_admin' && (
+            <SettingsCard icon={Landmark} color="#64748b" title="Payout & Banking" subtitle="How shops get paid out from the platform.">
+              <EmptyState
+                icon={Landmark}
+                title="Not built yet"
+                description="There's no payout or banking configuration wired up on the platform side yet — this section is a placeholder for when that exists."
+                compact
+              />
+            </SettingsCard>
+          )}
+        </div>
       </div>
 
       <style>{`
