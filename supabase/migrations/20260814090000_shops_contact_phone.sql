@@ -1,0 +1,12 @@
+-- Separate from whatsapp_connections.display_phone_number entirely.
+-- That field is the technical WhatsApp routing number (the bot's own
+-- connection, shared across every shop on it under the v2 shared-number
+-- model) and must never be shown to a customer as "call the shop" —
+-- confirmed via Meta's own API that it resolves to Groovia's own
+-- verified business identity, not any individual shop's. This is the
+-- shopkeeper's own real, callable phone number, entered once at
+-- onboarding and shown in the WhatsApp welcome message.
+--
+-- Already applied directly against production — this file exists for
+-- the repo's own record, not as a pending change.
+ALTER TABLE public.shops ADD COLUMN IF NOT EXISTS contact_phone text;

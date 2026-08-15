@@ -50,34 +50,32 @@ function normalizeWhatsappFrom(from) {
 }
 
 /**
- * Resolves which shop owns the WhatsApp Business number that received the
- * message, via the whatsapp_connections table. Returns the shop itself
- * (id/name/slug — what starting a v2 webview session needs), not just
- * its id, so the fallback path in messageHandler.js can hand a customer
- * straight to the ordering webview without a second lookup. Returns
- * null if this phone_number_id isn't linked to any active shop.
+ * Resolves every active shop connected to the WhatsApp Business number
+ * that received the message, via the whatsapp_connections table. Plural
+ * on purpose — the v2 shared-number model means more than one shop can
+ * legitimately share a phone_number_id (a single `.maybeSingle()` here
+ * used to error the moment a second shop was added on the same number,
+ * a known gap flagged in messageHandler.js's fallback path before this
+ * was ever exercised for real). Callers decide what to do with 0, 1, or
+ * many results — this just resolves the raw set.
  */
-async function resolveShopByPhoneNumberId(phoneNumberId) {
+async function resolveShopsByPhoneNumberId(phoneNumberId) {
   const supabase = getSupabase();
-  if (!supabase || !phoneNumberId) return null;
+  if (!supabase || !phoneNumberId) return [];
 
   const { data, error } = await supabase
     .from('whatsapp_connections')
     .select('shops ( id, name, slug, is_active, address_line_1, address_line_2, city, state, postal_code )')
-    .eq('phone_number_id', phoneNumberId)
-    .maybeSingle();
+    .eq('phone_number_id', phoneNumberId);
 
   if (error) {
     logger.error({ error, phoneNumberId }, 'whatsapp_connections lookup failed');
-    return null;
+    return [];
   }
 
-  if (!data) return null;
-
-  const shop = Array.isArray(data.shops) ? data.shops[0] : data.shops;
-  if (!shop || !shop.is_active) return null;
-
-  return shop;
+  return (data || [])
+    .map((row) => (Array.isArray(row.shops) ? row.shops[0] : row.shops))
+    .filter((shop) => shop && shop.is_active);
 }
 
 /**
@@ -185,29 +183,38 @@ async function getActiveStaffPhones(shopId) {
 }
 
 /**
- * The shop's own WhatsApp display number (whatsapp_connections.display_phone_number
- * — the same source catalogSync.js already uses for its wa.me deep link),
- * for showing in the customer-facing welcome message so the shop looks
- * like a real, contactable business rather than an anonymous webview
- * link. Returns null rather than throwing if no connection is on file —
- * callers should just omit the phone line in that case.
+ * The shop's own real, callable phone number (shops.contact_phone), for
+ * showing in the customer-facing welcome message so the shop looks like
+ * a real, contactable business rather than an anonymous webview link.
+ *
+ * Deliberately NOT whatsapp_connections.display_phone_number — that's
+ * the technical WhatsApp routing number, which under the v2 shared-
+ * number model can be the same number for several shops at once (or,
+ * during early pilot, Groovia's own dev/test number). Confirmed via a
+ * direct Meta API check that it resolves to Groovia's own verified
+ * business identity, not any individual shop's — showing it as "call us"
+ * would point a customer at the wrong business. contact_phone is set
+ * once by the shop owner (Settings) and has nothing to do with WhatsApp
+ * routing, so it stays correct regardless of how many shops share a
+ * number. Returns null rather than throwing if unset — callers should
+ * just omit the phone line in that case.
  */
 async function getShopDisplayPhone(shopId) {
   const supabase = getSupabase();
   if (!supabase || !shopId) return null;
 
   const { data, error } = await supabase
-    .from('whatsapp_connections')
-    .select('display_phone_number')
-    .eq('shop_id', shopId)
+    .from('shops')
+    .select('contact_phone')
+    .eq('id', shopId)
     .maybeSingle();
 
   if (error) {
-    logger.error({ error, shopId }, 'Failed to load WhatsApp display phone for shop');
+    logger.error({ error, shopId }, 'Failed to load contact phone for shop');
     return null;
   }
 
-  return data?.display_phone_number || null;
+  return data?.contact_phone || null;
 }
 
 /**
@@ -263,7 +270,7 @@ async function findNearbyShops(latitude, longitude, { radiusKm = 10, limit = 5 }
 module.exports = {
   getSupabase,
   normalizeWhatsappFrom,
-  resolveShopByPhoneNumberId,
+  resolveShopsByPhoneNumberId,
   resolveShopUserByPhone,
   resolveShopUserGlobal,
   getActiveStaffPhones,

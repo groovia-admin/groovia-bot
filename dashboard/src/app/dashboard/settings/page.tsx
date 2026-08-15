@@ -70,6 +70,7 @@ export default async function SettingsPage() {
     city: string | null
     state: string | null
     postal_code: string | null
+    contact_phone: string | null
   } | null = null
 
   if (context.kind === 'shop_user') {
@@ -85,7 +86,7 @@ export default async function SettingsPage() {
         .maybeSingle(),
       adminClient
         .from('shops')
-        .select('slug, name, description, area, address_line_1, address_line_2, city, state, postal_code')
+        .select('slug, name, description, area, address_line_1, address_line_2, city, state, postal_code, contact_phone')
         .eq('id', context.shopId)
         .maybeSingle(),
       adminClient.from('whatsapp_connections').select('display_phone_number').eq('shop_id', context.shopId).maybeSingle(),
@@ -108,6 +109,7 @@ export default async function SettingsPage() {
           city: shopData.city,
           state: shopData.state,
           postal_code: shopData.postal_code,
+          contact_phone: shopData.contact_phone,
         }
       : null
   }
@@ -164,7 +166,7 @@ export default async function SettingsPage() {
         {isOwner && shopProfile && (
           <div className="settings-block">
             <SettingsCard icon={MapPin} color="#3b82f6" title="Shop Details" subtitle="Name, address, and phone shown to customers in the WhatsApp order link.">
-              <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
+              <ShopProfileForm initial={shopProfile} />
             </SettingsCard>
           </div>
         )}

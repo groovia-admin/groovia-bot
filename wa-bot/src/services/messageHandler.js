@@ -2,7 +2,7 @@ const logger = require('../utils/logger');
 const config = require('../config');
 const {
   getSupabase,
-  resolveShopByPhoneNumberId,
+  resolveShopsByPhoneNumberId,
   resolveShopUserGlobal,
   findShopBySlug,
   findNearbyShops,
@@ -128,7 +128,12 @@ function parseCommand(text) {
   const completeMatch = text.trim().match(/^(?:COMPLETE|DONE)\s+(ORD-[\w-]+)$/i);
   if (completeMatch) return { command: 'COMPLETE', orderNumber: completeMatch[1].toUpperCase() };
 
-  if (['HELP', 'HI', 'HELLO', 'START'].includes(upper)) return { command: 'HELP' };
+  // SHOP/MENU added as HELP aliases so a shopkeeper who doesn't know any
+  // commands yet has an obvious word to try — "shop" reads naturally as
+  // "talk to my shop's bot" the same way HI/HELLO already do. Bare
+  // "SHOP" only (no trailing "-slug"), so it can't collide with the
+  // customer-facing "SHOP-{slug}" QR trigger handled earlier in the router.
+  if (['HELP', 'HI', 'HELLO', 'START', 'SHOP', 'MENU'].includes(upper)) return { command: 'HELP' };
 
   if (['CATALOG', 'PRODUCTS', 'STOCK'].includes(upper)) return { command: 'CATALOG' };
 
@@ -1095,21 +1100,39 @@ async function handleIncomingMessage(message, value) {
   // below — now unreachable from here, kept for now rather than deleted
   // immediately; see the PR this shipped in for the cleanup list).
   //
-  // Same ambiguity caveat Phase 2 originally flagged: this still
-  // assumes phone_number_id maps to exactly one shop. That breaks once
-  // a second shop genuinely shares the number — at that point this
-  // needs to become an explicit "share your location or scan a shop QR"
-  // prompt instead of guessing which shop a bare "Hi" was meant for.
+  // The ambiguity caveat Phase 2 originally flagged is now handled: more
+  // than one active shop can share a phone_number_id under the v2
+  // shared-number model, so this can no longer just pick one. 0 and 1
+  // results behave exactly as before (nothing changes for the common
+  // single-shop-per-number case); 2+ reuses the same "pick a shop" list
+  // + handler the nearby-shops-by-location flow already has, rather
+  // than guessing which shop a bare "Hi" was meant for.
   const phoneNumberId = value.metadata?.phone_number_id;
-  const shop = await resolveShopByPhoneNumberId(phoneNumberId);
+  const shops = await resolveShopsByPhoneNumberId(phoneNumberId);
 
-  if (!shop) {
+  if (shops.length === 0) {
     logger.error({ phoneNumberId }, 'No shop linked to this WhatsApp number');
     await sendWhatsAppMessage(from, '⚠️ This number isn\'t linked to a shop yet. Please contact support.');
     return;
   }
 
-  await startCustomerOrderingSession(from, shop, name);
+  if (shops.length === 1) {
+    await startCustomerOrderingSession(from, shops[0], name);
+    return;
+  }
+
+  const rows = shops.slice(0, 9).map((shop) => ({
+    id: `nearby_shop_${shop.id}`,
+    title: shop.name.slice(0, 24),
+    description: [shop.address_line_1, shop.city].filter(Boolean).join(', ').slice(0, 72) || undefined,
+  }));
+
+  await sendListMessage(
+    from,
+    `👋 Hi ${name}! A few shops use this number — which one are you looking for?`,
+    'Select shop',
+    [{ title: 'Shops', rows }]
+  );
 }
 
 async function handleStatusUpdate(status) {

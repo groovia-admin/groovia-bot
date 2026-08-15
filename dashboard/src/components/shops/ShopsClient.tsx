@@ -313,7 +313,7 @@ export default function ShopsClient({
         return;
       }
 
-      showToast(`WhatsApp connection saved for ${whatsappShop.name}`);
+      showToast(`WhatsApp connection saved for ${whatsappShop.name} — verified as ${data.connection?.display_phone_number ?? "unknown number"}`);
       closeWhatsappModal();
     } catch {
       setWhatsappError("Failed to save WhatsApp connection. Please try again.");
@@ -1977,12 +1977,18 @@ export default function ShopsClient({
                 </div>
 
                 <div>
-                  <label style={S.label}>Display phone number *</label>
+                  <label style={S.label}>Display phone number</label>
+                  {/* Read-only: no longer hand-typed — a manually entered
+                      value drifted from Meta's actual number on a real
+                      shop, silently breaking every wa.me redirect in the
+                      app. Saving now re-fetches this straight from Meta
+                      using the Phone Number ID above, so this box always
+                      reflects what's actually live, not what someone
+                      typed once and forgot to update. */}
                   <input
-                    style={S.input}
-                    value={whatsappForm.display_phone_number}
-                    onChange={(e) => setWhatsappForm((f) => ({ ...f, display_phone_number: e.target.value }))}
-                    placeholder="+91 98765 43210"
+                    style={{ ...S.input, background: "var(--surface)", color: "var(--ink-faint)" }}
+                    value={whatsappForm.display_phone_number || "Verified from Meta on save"}
+                    disabled
                   />
                 </div>
 

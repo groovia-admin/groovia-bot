@@ -184,4 +184,37 @@ router.get('/orders/:orderId/invoice', requireInternalSecret, async (req, res) =
   }
 });
 
+// GET /internal/whatsapp/phone-lookup?phoneNumberId=...
+// Verifies a WhatsApp phone_number_id directly against Meta's own Graph
+// API and returns Meta's actual display_phone_number/verified_name for
+// it. Backs the admin WhatsApp-connection form (dashboard) so that field
+// is never hand-typed — confirmed real bug: a hand-typed value had
+// drifted from Meta's actual number, so every wa.me redirect and "call
+// this shop" display pointed at a number that had never sent the
+// customer anything. This also doubles as validation: a wrong/typo'd
+// phone_number_id fails here loudly instead of saving silently.
+router.get('/whatsapp/phone-lookup', requireInternalSecret, async (req, res) => {
+  const phoneNumberId = req.query.phoneNumberId;
+
+  if (!phoneNumberId) {
+    return res.status(400).json({ error: 'phoneNumberId is required' });
+  }
+
+  try {
+    const url = `https://graph.facebook.com/${config.graphApiVersion}/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${config.whatsappToken}`;
+    const metaRes = await fetch(url);
+    const data = await metaRes.json();
+
+    if (!metaRes.ok || !data.display_phone_number) {
+      logger.warn({ phoneNumberId, metaError: data.error }, 'Meta phone-number lookup failed');
+      return res.status(422).json({ error: data.error?.message || "Meta couldn't find a WhatsApp number for this Phone Number ID" });
+    }
+
+    return res.status(200).json({ display_phone_number: data.display_phone_number, verified_name: data.verified_name || null });
+  } catch (err) {
+    logger.error({ err, phoneNumberId }, 'Phone-number lookup request failed');
+    return res.status(502).json({ error: 'Failed to reach Meta' });
+  }
+});
+
 module.exports = router;
