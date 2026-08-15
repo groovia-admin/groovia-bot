@@ -92,3 +92,4 @@
 | #127 | Fix greeting timezone, add order date filter + inline status change, … | dashboard | @groovia-admin | @groovia-admin | 2026-08-13 13:07 UTC | 0d 0h 0m |
 | #128 | Reports: a real Tier 1 + Tier 2 reporting hub, replacing Analytics | dashboard | @groovia-admin | @groovia-admin | 2026-08-14 14:14 UTC | 0d 0h 0m |
 | #129 | Fix OTP input boxes blowing out the layout | dashboard | @groovia-admin | @groovia-admin | 2026-08-14 16:39 UTC | 0d 0h 1m |
+| #130 | Bot orders reports fixes | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-15 00:52 UTC | 0d 0h 22m |
