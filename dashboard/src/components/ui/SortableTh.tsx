@@ -19,7 +19,7 @@ export default function SortableTh({
   label: string;
   active: boolean;
   dir: SortDir;
-  align?: "left" | "right";
+  align?: "left" | "right" | "center";
   width?: number | string;
   onClick: () => void;
 }) {
@@ -29,7 +29,7 @@ export default function SortableTh({
       onClick={onClick}
       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
     >
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, flexDirection: align === "right" ? "row-reverse" : "row" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 3, justifyContent: align === "center" ? "center" : "flex-start", width: align === "center" ? "100%" : undefined, flexDirection: align === "right" ? "row-reverse" : "row" }}>
         {label}
         {active ? (dir === "asc" ? <ChevronUp size={12} /> : <ChevronDown size={12} />) : <span style={{ width: 12, display: "inline-block" }} />}
       </span>
