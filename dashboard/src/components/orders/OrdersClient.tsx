@@ -487,16 +487,14 @@ export default function OrdersClient({
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                {canManage && (
+                {canManage && selectablePendingIds.length > 0 && (
                   <th style={{ ...S.th, width: 32 }}>
-                    {selectablePendingIds.length > 0 && (
-                      <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" aria-label="Select all pending orders" />
-                    )}
+                    <input type="checkbox" checked={allSelectableSelected} onChange={toggleSelectAll} title="Select all pending orders" aria-label="Select all pending orders" />
                   </th>
                 )}
                 <SortableTh label="Order" active={sortKey === "order"} dir={sortDir} onClick={() => toggleSort("order")} />
                 <SortableTh label="Customer" active={sortKey === "customer"} dir={sortDir} onClick={() => toggleSort("customer")} />
-                <SortableTh label="Items" align="right" active={sortKey === "items"} dir={sortDir} onClick={() => toggleSort("items")} />
+                <SortableTh label="Items" align="center" active={sortKey === "items"} dir={sortDir} onClick={() => toggleSort("items")} />
                 <SortableTh label="Status" active={sortKey === "status"} dir={sortDir} onClick={() => toggleSort("status")} />
                 <SortableTh label="Placed" active={sortKey === "placed"} dir={sortDir} onClick={() => toggleSort("placed")} />
                 {showRevenue && <SortableTh label="Total" align="right" active={sortKey === "total"} dir={sortDir} onClick={() => toggleSort("total")} />}
@@ -506,7 +504,7 @@ export default function OrdersClient({
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td style={S.td} colSpan={(showRevenue ? 7 : 6) + (canManage ? 1 : 0)}>
+                  <td style={S.td} colSpan={showRevenue ? 7 : 6}>
                     {orders.length === 0 ? (
                       <EmptyState
                         icon={ShoppingBag}
@@ -526,7 +524,7 @@ export default function OrdersClient({
                   const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
                   return (
                     <tr key={o.id} style={isAgingUrgent ? { boxShadow: "inset 3px 0 0 var(--error)" } : undefined}>
-                      {canManage && (
+                      {canManage && selectablePendingIds.length > 0 && (
                         <td style={S.td}>
                           {o.status === "pending" && (
                             <input type="checkbox" checked={selectedIds.has(o.id)} onChange={() => toggleSelected(o.id)} />
@@ -550,7 +548,7 @@ export default function OrdersClient({
                           o.customer_phone || "—"
                         )}
                       </td>
-                      <td style={{ ...S.td, textAlign: "right", color: "var(--ink-muted)" }}>{o.item_count}</td>
+                      <td style={{ ...S.td, textAlign: "center", color: "var(--ink-muted)" }}>{o.item_count}</td>
                       <td style={S.td}>
                         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                           {canManage && NEXT_ACTIONS[o.status].length > 0 ? (
