@@ -6,13 +6,19 @@
 // this file and globals.css can never drift apart on what "the surface
 // border" or "muted text" actually is.
 export const S = {
+  // A soft two-layer shadow (tight contact + a wider diffused layer) plus a
+  // faint inset top highlight reads as gently raised off the page — the
+  // same restrained "tactile" language the login page's button already
+  // used, just not previously carried into the rest of the dashboard.
   card: {
     background: "var(--surface-card)",
     border: "1px solid var(--surface-border)",
     borderRadius: 12,
     padding: 20,
-    boxShadow: "0 1px 2px rgba(11,28,48,0.06)",
+    boxShadow: "0 1px 2px rgba(11,28,48,0.05), 0 8px 20px -14px rgba(11,28,48,0.12), inset 0 1px 0 rgba(255,255,255,0.5)",
   } as React.CSSProperties,
+  // A faint inset shadow instead of a flat fill reads as a shallow, pressed-
+  // in field rather than just a bordered box.
   input: {
     width: "100%",
     padding: "9px 14px",
@@ -24,6 +30,7 @@ export const S = {
     outline: "none",
     fontFamily: "inherit",
     boxSizing: "border-box",
+    boxShadow: "inset 0 1px 2px rgba(11,28,48,0.04)",
   } as React.CSSProperties,
   label: {
     display: "block",
@@ -61,19 +68,29 @@ export const S = {
       background,
       border: `1px solid ${color}33`,
     }) as React.CSSProperties,
-  btn: (background: string, color: string) =>
-    ({
+  // A subtle gloss (light top, faint shade bottom) layered over whatever
+  // solid color the caller passes, plus a soft drop shadow and an inset
+  // top highlight — works for any background color since the gradient is a
+  // second, semi-transparent background-image rather than a per-color mix.
+  // A "transparent" background means the caller wants a ghost/link-style
+  // button (e.g. a "Back" link) — those stay flat, no depth to fake.
+  btn: (background: string, color: string) => {
+    const ghost = background === "transparent";
+    return {
       display: "inline-flex",
       alignItems: "center",
       gap: 6,
       padding: "8px 14px",
       borderRadius: 8,
-      border: "none",
-      background,
+      border: ghost ? "none" : "1px solid rgba(11,28,48,0.05)",
+      backgroundColor: background,
+      backgroundImage: ghost ? undefined : "linear-gradient(180deg, rgba(255,255,255,0.16), rgba(11,28,48,0.04))",
       color,
       fontSize: "var(--text-base)",
       fontWeight: 600,
       cursor: "pointer",
       fontFamily: "inherit",
-    }) as React.CSSProperties,
+      boxShadow: ghost ? undefined : "0 1px 2px rgba(11,28,48,0.06), 0 3px 8px -4px rgba(11,28,48,0.18), inset 0 1px 0 rgba(255,255,255,0.2)",
+    } as React.CSSProperties;
+  },
 };
