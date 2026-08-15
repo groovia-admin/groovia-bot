@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Download, TrendingUp, TrendingDown, Minus, ShoppingBag, Package, XCircle,
   PiggyBank, Clock, Boxes, MessageCircle, Layers, Users, UserCog, AlertTriangle,
-  ChevronUp, ChevronDown, BarChart3, Timer,
+  ChevronUp, ChevronDown, BarChart3, Timer, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
@@ -220,9 +220,26 @@ function StatCard({
   );
 }
 
+const NAV_COLLAPSE_STORAGE_KEY = "groovia_reports_nav_collapsed";
+
 export default function ReportsClient({ showRevenue, windowDays, orders, orderItems, products, categories, movements, auditLogs, customers }: Props) {
   const [reportId, setReportId] = useState<ReportId>("sales-summary");
   const [preset, setPreset] = useState<Preset>("today");
+  // Same idea as the main dashboard Sidebar's collapse toggle — this nav
+  // list eats 240px that's dead weight once you already know which report
+  // you're looking at, so let it shrink to an icon rail the same way.
+  const [navCollapsed, setNavCollapsed] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return window.localStorage.getItem(NAV_COLLAPSE_STORAGE_KEY) === "1";
+  });
+
+  function toggleNavCollapsed() {
+    setNavCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(NAV_COLLAPSE_STORAGE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
   const [rangeFrom, setRangeFrom] = useState(todayStr());
   const [rangeTo, setRangeTo] = useState(todayStr());
 
@@ -277,19 +294,38 @@ export default function ReportsClient({ showRevenue, windowDays, orders, orderIt
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 16, alignItems: "start" }}>
+      <div style={{ display: "grid", gridTemplateColumns: navCollapsed ? "48px 1fr" : "240px 1fr", gap: 16, alignItems: "start", transition: "grid-template-columns .15s ease" }}>
         <div style={{ ...S.card, padding: 10, display: "flex", flexDirection: "column", gap: 2, position: "sticky", top: 12 }}>
-          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "6px 10px 8px" }}>
-            Daily operations
-          </div>
+          <button
+            type="button"
+            onClick={toggleNavCollapsed}
+            title={navCollapsed ? "Expand report list" : "Collapse report list"}
+            aria-label={navCollapsed ? "Expand report list" : "Collapse report list"}
+            style={{
+              display: "flex", alignItems: "center", justifyContent: navCollapsed ? "center" : "flex-end",
+              padding: "4px 6px", marginBottom: 4, borderRadius: 6, border: "none", background: "transparent",
+              color: "var(--ink-faint)", cursor: "pointer",
+            }}
+          >
+            {navCollapsed ? <PanelLeftOpen size={15} /> : <PanelLeftClose size={15} />}
+          </button>
+
+          {!navCollapsed && (
+            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "6px 10px 8px" }}>
+              Daily operations
+            </div>
+          )}
           {visibleReports.filter((r) => r.tier === 1).map((r) => (
-            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
+            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} collapsed={navCollapsed} onClick={() => setReportId(r.id)} />
           ))}
-          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "16px 10px 8px", borderTop: "1px solid var(--surface-border)", marginTop: 6 }}>
-            Business performance
-          </div>
+          {!navCollapsed && (
+            <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "16px 10px 8px", borderTop: "1px solid var(--surface-border)", marginTop: 6 }}>
+              Business performance
+            </div>
+          )}
+          {navCollapsed && <div style={{ borderTop: "1px solid var(--surface-border)", margin: "6px 4px" }} />}
           {visibleReports.filter((r) => r.tier === 2).map((r) => (
-            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
+            <ReportNavItem key={r.id} meta={r} active={reportId === r.id} collapsed={navCollapsed} onClick={() => setReportId(r.id)} />
           ))}
         </div>
 
@@ -390,15 +426,17 @@ function SortableTh({
   );
 }
 
-function ReportNavItem({ meta, active, onClick }: { meta: ReportMeta; active: boolean; onClick: () => void }) {
+function ReportNavItem({ meta, active, collapsed, onClick }: { meta: ReportMeta; active: boolean; collapsed: boolean; onClick: () => void }) {
   const Icon = meta.icon;
   return (
     <button
       type="button"
       onClick={onClick}
+      title={collapsed ? meta.label : undefined}
+      aria-label={collapsed ? meta.label : undefined}
       style={{
-        display: "flex", alignItems: "center", gap: 9,
-        textAlign: "left", padding: "8px 10px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", gap: 9, justifyContent: collapsed ? "center" : "flex-start",
+        textAlign: "left", padding: collapsed ? "8px 0" : "8px 10px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
         fontSize: "var(--text-sm)", fontWeight: active ? 700 : 500,
         background: active ? "var(--brand-light)" : "transparent",
         color: active ? "var(--brand-dark)" : "var(--ink-muted)",
@@ -407,7 +445,7 @@ function ReportNavItem({ meta, active, onClick }: { meta: ReportMeta; active: bo
       }}
     >
       <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.65 }} />
-      {meta.label}
+      {!collapsed && meta.label}
     </button>
   );
 }
