@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Download, TrendingUp, TrendingDown, Minus, ShoppingBag, Package, XCircle,
   PiggyBank, Clock, Boxes, MessageCircle, Layers, Users, UserCog, AlertTriangle,
-  ChevronUp, ChevronDown,
+  ChevronUp, ChevronDown, BarChart3, Timer,
 } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
@@ -93,22 +93,25 @@ type ReportId =
   | "sales-trend" | "top-products" | "category-performance" | "fulfillment-speed"
   | "cancellation-reasons" | "customer-activity" | "gross-margin" | "staff-activity";
 
-type ReportMeta = { id: ReportId; label: string; tier: 1 | 2; ownerOnly?: boolean; rangeIndependent?: boolean };
+type ReportMeta = { id: ReportId; label: string; icon: React.ElementType; tier: 1 | 2; ownerOnly?: boolean; rangeIndependent?: boolean };
 
+// Labels match the terms shops already see elsewhere in the industry
+// (Zoho/Tally-style "Stock Ledger", Shopify-style "Best & Worst Sellers",
+// "Sales by Channel") rather than internal/engineering phrasing.
 const REPORTS: ReportMeta[] = [
-  { id: "sales-summary", label: "Sales Summary", tier: 1 },
-  { id: "pending-orders", label: "Pending & Aging Orders", tier: 1, rangeIndependent: true },
-  { id: "low-stock", label: "Low Stock & Out of Stock", tier: 1, rangeIndependent: true },
-  { id: "stock-movements", label: "Stock Movements", tier: 1 },
-  { id: "channel-split", label: "Order Channel Split", tier: 1 },
-  { id: "sales-trend", label: "Sales Trend", tier: 2 },
-  { id: "top-products", label: "Top & Bottom Products", tier: 2 },
-  { id: "category-performance", label: "Category Performance", tier: 2 },
-  { id: "fulfillment-speed", label: "Fulfillment Speed", tier: 2 },
-  { id: "cancellation-reasons", label: "Cancellation & Rejection Reasons", tier: 2 },
-  { id: "customer-activity", label: "Customer Activity", tier: 2 },
-  { id: "gross-margin", label: "Gross Margin", tier: 2, ownerOnly: true },
-  { id: "staff-activity", label: "Staff Activity", tier: 2 },
+  { id: "sales-summary", label: "Sales Summary", icon: BarChart3, tier: 1 },
+  { id: "pending-orders", label: "Pending Orders", icon: Clock, tier: 1, rangeIndependent: true },
+  { id: "low-stock", label: "Inventory Alerts", icon: AlertTriangle, tier: 1, rangeIndependent: true },
+  { id: "stock-movements", label: "Stock Ledger", icon: Boxes, tier: 1 },
+  { id: "channel-split", label: "Sales by Channel", icon: MessageCircle, tier: 1 },
+  { id: "sales-trend", label: "Sales Trends", icon: TrendingUp, tier: 2 },
+  { id: "top-products", label: "Best & Worst Sellers", icon: Package, tier: 2 },
+  { id: "category-performance", label: "Category Performance", icon: Layers, tier: 2 },
+  { id: "fulfillment-speed", label: "Fulfillment Time", icon: Timer, tier: 2 },
+  { id: "cancellation-reasons", label: "Cancellation Reasons", icon: XCircle, tier: 2 },
+  { id: "customer-activity", label: "Customer Insights", icon: Users, tier: 2 },
+  { id: "gross-margin", label: "Gross Margin", icon: PiggyBank, tier: 2, ownerOnly: true },
+  { id: "staff-activity", label: "Team Performance", icon: UserCog, tier: 2 },
 ];
 
 const MOVEMENT_LABEL: Record<string, string> = {
@@ -274,15 +277,15 @@ export default function ReportsClient({ showRevenue, windowDays, orders, orderIt
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "230px 1fr", gap: 16, alignItems: "start" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 12 }}>
-          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "4px 8px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "240px 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ ...S.card, padding: 10, display: "flex", flexDirection: "column", gap: 2, position: "sticky", top: 12 }}>
+          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "6px 10px 8px" }}>
             Daily operations
           </div>
           {visibleReports.filter((r) => r.tier === 1).map((r) => (
             <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
           ))}
-          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "12px 8px 4px" }}>
+          <div style={{ fontSize: "var(--text-xs)", fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: "0.05em", padding: "16px 10px 8px", borderTop: "1px solid var(--surface-border)", marginTop: 6 }}>
             Business performance
           </div>
           {visibleReports.filter((r) => r.tier === 2).map((r) => (
@@ -388,17 +391,22 @@ function SortableTh({
 }
 
 function ReportNavItem({ meta, active, onClick }: { meta: ReportMeta; active: boolean; onClick: () => void }) {
+  const Icon = meta.icon;
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
-        textAlign: "left", padding: "8px 10px", borderRadius: 8, border: "none", cursor: "pointer", fontFamily: "inherit",
+        display: "flex", alignItems: "center", gap: 9,
+        textAlign: "left", padding: "8px 10px", borderRadius: 7, cursor: "pointer", fontFamily: "inherit",
         fontSize: "var(--text-sm)", fontWeight: active ? 700 : 500,
         background: active ? "var(--brand-light)" : "transparent",
         color: active ? "var(--brand-dark)" : "var(--ink-muted)",
+        border: "none", borderLeft: active ? "3px solid var(--brand)" : "3px solid transparent",
+        transition: "background .12s ease, color .12s ease",
       }}
     >
+      <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.65 }} />
       {meta.label}
     </button>
   );
@@ -467,7 +475,7 @@ function PendingOrdersReport({ orders }: { orders: OrderRow[] }) {
   return (
     <div>
       <ReportHeader
-        title="Pending & Aging Orders"
+        title="Pending Orders"
         subtitle="Every order still waiting on a response — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "order_number", label: "Order #" }, { key: "age", label: "Age" }, { key: "total", label: "Total (₹)" }, { key: "placed_at", label: "Placed at" }]} filename="pending-orders.csv" />}
       />
@@ -528,7 +536,7 @@ function LowStockReport({ products, categoryById }: { products: ProductRow[]; ca
   return (
     <div>
       <ReportHeader
-        title="Low Stock & Out of Stock"
+        title="Inventory Alerts"
         subtitle="Products at or below their reorder threshold, right now — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "unit", label: "Unit" }, { key: "stock", label: "Stock" }, { key: "threshold", label: "Threshold" }]} filename="low-stock.csv" />}
       />
@@ -592,7 +600,7 @@ function StockMovementsReport({ movements, productById }: { movements: MovementR
   return (
     <div>
       <ReportHeader
-        title="Stock Movements"
+        title="Stock Ledger"
         subtitle="Every sale, restock, and manual edit in the selected range — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "product", label: "Product" }, { key: "type", label: "Type" }, { key: "change", label: "Change" }, { key: "notes", label: "Notes" }, { key: "when", label: "When" }]} filename="stock-movements.csv" />}
       />
@@ -649,7 +657,7 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
   return (
     <div>
       <ReportHeader
-        title="Order Channel Split"
+        title="Sales by Channel"
         subtitle="Where orders actually came from — WhatsApp bot vs. the web storefront"
         exportNode={<ExportButton rows={rows} columns={[{ key: "channel", label: "Channel" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename="channel-split.csv" />}
       />
@@ -699,7 +707,7 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
   return (
     <div>
       <ReportHeader
-        title="Sales Trend"
+        title="Sales Trends"
         subtitle={`${showRevenue ? "Revenue" : "Order count"} by day, ${rangeFrom} to ${rangeTo}`}
         exportNode={<ExportButton rows={rows} columns={[{ key: "date", label: "Date" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename={`sales-trend-${rangeFrom}-to-${rangeTo}.csv`} />}
       />
@@ -772,7 +780,7 @@ function TopProductsReport({
   return (
     <div>
       <ReportHeader
-        title="Top & Bottom Products"
+        title="Best & Worst Sellers"
         subtitle="Every product sold in this period, with its category — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "name", label: "Product" }, { key: "category", label: "Category" }, { key: "quantity", label: "Quantity sold" }, { key: "revenue", label: "Revenue (₹)" }]} filename="top-products.csv" />}
       />
@@ -878,7 +886,7 @@ function FulfillmentSpeedReport({ orders }: { orders: OrderRow[] }) {
   return (
     <div>
       <ReportHeader
-        title="Fulfillment Speed"
+        title="Fulfillment Time"
         subtitle="Average time spent in each stage, completed orders only"
         exportNode={<ExportButton rows={rows} columns={[{ key: "stage", label: "Stage" }, { key: "avg_minutes", label: "Avg minutes" }, { key: "sample_size", label: "Orders" }]} filename="fulfillment-speed.csv" />}
       />
@@ -916,7 +924,7 @@ function CancellationReasonsReport({ orders }: { orders: OrderRow[] }) {
   return (
     <div>
       <ReportHeader
-        title="Cancellation & Rejection Reasons"
+        title="Cancellation Reasons"
         subtitle={`${failed.length} order${failed.length === 1 ? "" : "s"} didn't go through in this period`}
         exportNode={<ExportButton rows={ranked} columns={[{ key: "reason", label: "Reason" }, { key: "count", label: "Count" }]} filename="cancellation-reasons.csv" />}
       />
@@ -973,7 +981,7 @@ function CustomerActivityReport({ orders, customerById, showRevenue }: { orders:
   return (
     <div>
       <ReportHeader
-        title="Customer Activity"
+        title="Customer Insights"
         subtitle="Who ordered in this period — click a column to sort"
         exportNode={<ExportButton rows={rows} columns={[{ key: "customer", label: "Customer" }, { key: "orders", label: "Orders" }, { key: "spent", label: "Spent (₹)" }, { key: "last_order", label: "Last order" }]} filename="customer-activity.csv" />}
       />
@@ -1100,7 +1108,7 @@ function StaffActivityReport({ auditLogs }: { auditLogs: AuditLogRow[] }) {
   return (
     <div>
       <ReportHeader
-        title="Staff Activity"
+        title="Team Performance"
         subtitle="Order status changes made from the dashboard, per person — WhatsApp-side Accept/Reject taps aren't attributed to a person yet, so this undercounts real activity"
         exportNode={<ExportButton rows={ranked} columns={[{ key: "name", label: "Staff member" }, { key: "count", label: "Actions" }]} filename="staff-activity.csv" />}
       />

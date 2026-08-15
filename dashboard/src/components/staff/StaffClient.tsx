@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, ShieldCheck, UserX, UserCheck, Users } from "lucide-react";
+import { Plus, ShieldCheck, UserX, UserCheck, Users, ScrollText, X } from "lucide-react";
+import { format } from "date-fns";
 import EmptyState from "@/components/ui/EmptyState";
 import { useToast } from "@/components/ui/ToastProvider";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
+import { ACTION_LABEL } from "@/lib/auditLabels";
 
 type StaffRole = "owner" | "manager" | "staff";
 type StaffPermission = "manage_orders" | "manage_products";
@@ -17,6 +19,14 @@ type StaffRow = {
   role: StaffRole;
   is_active: boolean;
   permissions: Partial<Record<StaffPermission, boolean>>;
+  created_at: string;
+};
+
+type StaffLogRow = {
+  id: string;
+  action: string;
+  actor_name: string | null;
+  target_name: string | null;
   created_at: string;
 };
 
@@ -37,10 +47,11 @@ const ROLE_BADGE: Record<StaffRole, [string, string]> = {
   staff: ["var(--ink-muted)", "var(--surface)"],
 };
 
-export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[] }) {
+export default function StaffClient({ initialStaff, staffLogs }: { initialStaff: StaffRow[]; staffLogs: StaffLogRow[] }) {
   const toast = useToast();
   const [staff, setStaff] = useState<StaffRow[]>(initialStaff);
   const [showAdd, setShowAdd] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [role, setRole] = useState<"manager" | "staff">("staff");
@@ -133,10 +144,16 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
             Manage who can access this shop and what they can do.
           </p>
         </div>
-        <button type="button" style={S.btn("var(--brand)", "#fff")} onClick={() => setShowAdd((v) => !v)}>
-          <Plus size={15} />
-          Add staff
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" style={{ ...S.btn("var(--surface)", "var(--ink)"), border: "1px solid var(--surface-border)" }} onClick={() => setShowLogs(true)}>
+            <ScrollText size={15} />
+            Staff logs
+          </button>
+          <button type="button" style={S.btn("var(--brand)", "#fff")} onClick={() => setShowAdd((v) => !v)}>
+            <Plus size={15} />
+            Add staff
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -325,6 +342,65 @@ export default function StaffClient({ initialStaff }: { initialStaff: StaffRow[]
           </table>
         </div>
       </div>
+
+      {showLogs && (
+        <div
+          style={{
+            position: "fixed", inset: 0, background: "rgba(11,28,48,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20, zIndex: 100,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowLogs(false); }}
+        >
+          <div
+            style={{
+              background: "var(--surface-card)", borderRadius: 14, padding: 24,
+              width: "100%", maxWidth: 640, maxHeight: "80vh", display: "flex", flexDirection: "column",
+              boxShadow: "0 20px 50px rgba(11,28,48,0.25)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <h2 style={{ fontSize: "var(--text-lg)", fontWeight: 800, color: "var(--ink)", margin: 0 }}>Staff activity log</h2>
+              <button
+                type="button"
+                onClick={() => setShowLogs(false)}
+                title="Close" aria-label="Close"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--ink-faint)", padding: 4 }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", margin: "0 0 16px" }}>
+              Additions, role changes, and access changes — most recent first.
+            </p>
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              {staffLogs.length === 0 ? (
+                <EmptyState icon={ScrollText} title="No staff activity yet" description="Adding staff or changing roles/access will show up here." compact />
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={S.th}>When</th>
+                      <th style={S.th}>Action</th>
+                      <th style={S.th}>By</th>
+                      <th style={S.th}>Staff member</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staffLogs.map((log) => (
+                      <tr key={log.id}>
+                        <td style={{ ...S.td, whiteSpace: "nowrap", color: "var(--ink-muted)" }}>{format(new Date(log.created_at), "MMM d, HH:mm")}</td>
+                        <td style={{ ...S.td, color: "var(--ink)" }}>{ACTION_LABEL[log.action] ?? log.action}</td>
+                        <td style={S.td}>{log.actor_name ?? "—"}</td>
+                        <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{log.target_name ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

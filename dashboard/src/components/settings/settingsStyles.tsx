@@ -9,6 +9,7 @@ export const inputStyle: React.CSSProperties = {
   outline: "none",
   fontFamily: "inherit",
   boxSizing: "border-box",
+  boxShadow: "inset 0 1px 2px rgba(11,28,48,0.04)",
 };
 
 export const labelStyle: React.CSSProperties = {
@@ -26,8 +27,9 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
   gap: 6,
   padding: "9px 16px",
   borderRadius: 8,
-  border: "none",
-  background: "var(--brand)",
+  border: "1px solid rgba(11,28,48,0.05)",
+  backgroundColor: "var(--brand)",
+  backgroundImage: "linear-gradient(180deg, rgba(255,255,255,0.16), rgba(11,28,48,0.04))",
   color: "#fff",
   fontSize: "var(--text-base)",
   fontWeight: 600,
@@ -35,6 +37,7 @@ export const saveButtonStyle = (disabled: boolean): React.CSSProperties => ({
   fontFamily: "inherit",
   width: "fit-content",
   opacity: disabled ? 0.5 : 1,
+  boxShadow: "0 1px 2px rgba(11,28,48,0.06), 0 3px 8px -4px rgba(11,28,48,0.18), inset 0 1px 0 rgba(255,255,255,0.2)",
 });
 
 export const noticeStyle: React.CSSProperties = {
@@ -74,6 +77,7 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
         height: 22,
         borderRadius: 11,
         background: on ? "var(--brand)" : "var(--surface-border)",
+        boxShadow: "inset 0 1px 3px rgba(11,28,48,0.18)",
         position: "relative",
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.5 : 1,
@@ -87,11 +91,12 @@ export function Toggle({ on, onToggle, disabled }: { on: boolean; onToggle: () =
           height: 16,
           borderRadius: "50%",
           background: "#fff",
+          backgroundImage: "linear-gradient(180deg, #fff, #f0f2f1)",
           position: "absolute",
           top: 3,
           left: on ? 21 : 3,
           transition: "left 0.15s",
-          boxShadow: "0 1px 2px rgba(11,28,48,0.2)",
+          boxShadow: "0 1px 3px rgba(11,28,48,0.35), 0 1px 1px rgba(11,28,48,0.2)",
         }}
       />
     </div>

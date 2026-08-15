@@ -112,97 +112,109 @@ export default async function SettingsPage() {
       : null
   }
 
+  // Super admins currently only get one real card here (Payout & Banking
+  // is an honest "not built yet" placeholder) — a 2-column masonry with a
+  // single card in it just leaves a huge empty column, which is exactly
+  // the "lots of white space" problem. Give that view a single, narrower
+  // column instead of forcing the multi-card shop-owner layout onto it.
+  if (context.kind === 'super_admin') {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 480 }}>
+        <div>
+          <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Settings</h1>
+          <p style={{ fontSize: 'var(--text-base)', color: 'var(--ink-muted)', marginTop: 4 }}>Platform-level configuration.</p>
+        </div>
+        <SettingsCard icon={Landmark} color="#64748b" title="Payout & Banking" subtitle="How shops get paid out from the platform.">
+          <EmptyState
+            icon={Landmark}
+            title="Not built yet"
+            description="There's no payout or banking configuration wired up on the platform side yet — this section is a placeholder for when that exists."
+            compact
+          />
+        </SettingsCard>
+      </div>
+    )
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Settings</h1>
         <p style={{ fontSize: 'var(--text-base)', color: 'var(--ink-muted)', marginTop: 4 }}>
-          {context.kind === 'super_admin' ? 'Platform-level configuration.' : "Your shop's identity, ordering rules, and how the WhatsApp bot behaves."}
+          Your shop&apos;s identity, ordering rules, and how the WhatsApp bot behaves.
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }} className="settings-columns">
-        {/* Left column — shop identity and customer-facing behavior */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {context.kind === 'shop_user' && isOwner && (
-            <>
-              <div style={eyebrowStyle}>Shop identity</div>
-              <SettingsCard icon={Store} color="#a855f7" title="Shop Profile" subtitle="Your shop's logo, shown in the dashboard sidebar and to customers.">
-                <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
-              </SettingsCard>
-            </>
-          )}
+      {/* CSS multi-column instead of two independent flex columns — a fixed
+          left/right split left the shorter side with a block of dead space
+          under it whenever the two sides didn't happen to end up the same
+          height. column-count balances total height between columns
+          automatically; each card gets break-inside:avoid so it never
+          splits across the column break. */}
+      <div className="settings-columns" style={{ columnCount: 2, columnGap: 16 }}>
+        {isOwner && (
+          <div className="settings-block">
+            <div style={eyebrowStyle}>Shop identity</div>
+            <SettingsCard icon={Store} color="#a855f7" title="Shop Profile" subtitle="Your shop's logo, shown in the dashboard sidebar and to customers.">
+              <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+            </SettingsCard>
+          </div>
+        )}
 
-          {context.kind === 'shop_user' && isOwner && shopProfile && (
+        {isOwner && shopProfile && (
+          <div className="settings-block">
             <SettingsCard icon={MapPin} color="#3b82f6" title="Shop Details" subtitle="Name, address, and phone shown to customers in the WhatsApp order link.">
               <ShopProfileForm initial={shopProfile} whatsappNumber={whatsappNumber} />
             </SettingsCard>
-          )}
+          </div>
+        )}
 
-          {context.kind === 'shop_user' && (
-            <SettingsCard icon={QrCode} color="#f59e0b" title="Store QR Code" subtitle="Print or share this so customers can start ordering by scanning it.">
-              <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
-            </SettingsCard>
-          )}
-
-          {context.kind === 'shop_user' && (
-            <>
-              <div style={eyebrowStyle}>Customer communication</div>
-              <SettingsCard icon={Bot} color="#14b8a6" title="Bot Behavior" subtitle="Control what the WhatsApp bot says and how it handles new orders.">
-                <BotBehaviorSettingsForm initial={settings} />
-              </SettingsCard>
-            </>
-          )}
-
-          {context.kind === 'shop_user' && (
-            <SettingsCard icon={Ban} color="#ef4444" title="Order Decline Reasons" subtitle="Quick-pick reasons offered when rejecting or cancelling an order.">
-              <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
-            </SettingsCard>
-          )}
+        <div className="settings-block">
+          <SettingsCard icon={QrCode} color="#f59e0b" title="Store QR Code" subtitle="Print or share this so customers can start ordering by scanning it.">
+            <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
+          </SettingsCard>
         </div>
 
-        {/* Right column — ordering rules, payments, and platform-only cards */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {context.kind === 'shop_user' && (
-            <>
-              <div style={eyebrowStyle}>Orders &amp; payments</div>
-              <SettingsCard icon={Truck} color="#22c55e" title="Order & Delivery" subtitle="Pickup/delivery availability, fees, and tax.">
-                <DeliverySettingsForm initial={settings} />
-              </SettingsCard>
-            </>
-          )}
+        <div className="settings-block">
+          <div style={eyebrowStyle}>Customer communication</div>
+          <SettingsCard icon={Bot} color="#14b8a6" title="Bot Behavior" subtitle="Control what the WhatsApp bot says and how it handles new orders.">
+            <BotBehaviorSettingsForm initial={settings} />
+          </SettingsCard>
+        </div>
 
-          {context.kind === 'shop_user' && isOwner && (
+        <div className="settings-block">
+          <SettingsCard icon={Ban} color="#ef4444" title="Order Decline Reasons" subtitle="Quick-pick reasons offered when rejecting or cancelling an order.">
+            <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
+          </SettingsCard>
+        </div>
+
+        <div className="settings-block">
+          <div style={eyebrowStyle}>Orders &amp; payments</div>
+          <SettingsCard icon={Truck} color="#22c55e" title="Order & Delivery" subtitle="Pickup/delivery availability, fees, and tax.">
+            <DeliverySettingsForm initial={settings} />
+          </SettingsCard>
+        </div>
+
+        {isOwner && (
+          <div className="settings-block">
             <SettingsCard icon={CreditCard} color="#6366f1" title="Payment" subtitle="UPI details and accepted payment methods.">
               <PaymentSettingsForm initial={settings} />
             </SettingsCard>
-          )}
+          </div>
+        )}
 
-          {context.kind === 'shop_user' && (
-            <>
-              <div style={eyebrowStyle}>Reporting</div>
-              <SettingsCard icon={Send} color="#06b6d4" title="Daily Summary" subtitle="A morning WhatsApp recap of yesterday's orders, revenue, and top products.">
-                <DailySummarySettingsForm initial={settings} />
-              </SettingsCard>
-            </>
-          )}
-
-          {context.kind === 'super_admin' && (
-            <SettingsCard icon={Landmark} color="#64748b" title="Payout & Banking" subtitle="How shops get paid out from the platform.">
-              <EmptyState
-                icon={Landmark}
-                title="Not built yet"
-                description="There's no payout or banking configuration wired up on the platform side yet — this section is a placeholder for when that exists."
-                compact
-              />
-            </SettingsCard>
-          )}
+        <div className="settings-block">
+          <div style={eyebrowStyle}>Reporting</div>
+          <SettingsCard icon={Send} color="#06b6d4" title="Daily Summary" subtitle="A morning WhatsApp recap of yesterday's orders, revenue, and top products.">
+            <DailySummarySettingsForm initial={settings} />
+          </SettingsCard>
         </div>
       </div>
 
       <style>{`
+        .settings-block { break-inside: avoid; margin-bottom: 16px; }
         @media (max-width: 900px) {
-          .settings-columns { grid-template-columns: 1fr !important; }
+          .settings-columns { column-count: 1 !important; }
         }
       `}</style>
     </div>

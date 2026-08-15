@@ -248,6 +248,7 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
                       ? 'bg-brand/15 text-brand-dark font-semibold'
                       : 'text-ink-muted hover:text-ink hover:bg-surface-hover'
                   )}
+                  style={active ? { boxShadow: 'inset 0 1px 2px rgba(11,28,48,0.06), inset 0 0 0 1px rgba(0,104,95,0.08)' } : undefined}
                 >
                   <span className="relative flex-shrink-0">
                     <Icon className="w-4 h-4" style={active ? undefined : { color: item.color }} />

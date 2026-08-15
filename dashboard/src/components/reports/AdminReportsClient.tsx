@@ -37,11 +37,11 @@ type Props = {
 
 type ReportId = "growth" | "leaderboard" | "subscriptions" | "onboarding";
 
-const REPORTS: { id: ReportId; label: string; rangeIndependent?: boolean }[] = [
-  { id: "growth", label: "Platform Growth" },
-  { id: "leaderboard", label: "Shop Leaderboard" },
-  { id: "subscriptions", label: "Subscription Health", rangeIndependent: true },
-  { id: "onboarding", label: "Onboarding Gaps", rangeIndependent: true },
+const REPORTS: { id: ReportId; label: string; icon: React.ElementType; rangeIndependent?: boolean }[] = [
+  { id: "growth", label: "Platform Growth", icon: TrendingUp },
+  { id: "leaderboard", label: "Shop Leaderboard", icon: ShoppingBag },
+  { id: "subscriptions", label: "Subscription Health", icon: AlertTriangle, rangeIndependent: true },
+  { id: "onboarding", label: "Onboarding Gaps", icon: MessageCircle, rangeIndependent: true },
 ];
 
 const STATUS_COLOR: Record<string, [string, string]> = {
@@ -133,24 +133,31 @@ function SortableTh({ label, active, dir, align, onClick }: { label: string; act
   );
 }
 
-function ReportNavItem({ meta, active, onClick }: { meta: { id: ReportId; label: string }; active: boolean; onClick: () => void }) {
+function ReportNavItem({ meta, active, onClick }: { meta: { id: ReportId; label: string; icon: React.ElementType }; active: boolean; onClick: () => void }) {
+  const Icon = meta.icon;
   return (
     <button
       type="button"
       onClick={onClick}
       style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 9,
         textAlign: "left",
         padding: "9px 12px",
-        borderRadius: 8,
-        border: "none",
+        borderRadius: 7,
         cursor: "pointer",
         fontFamily: "inherit",
         fontSize: "var(--text-sm)",
         fontWeight: active ? 700 : 500,
         background: active ? "var(--brand-light)" : "transparent",
         color: active ? "var(--brand-dark)" : "var(--ink-muted)",
+        border: "none",
+        borderLeft: active ? "3px solid var(--brand)" : "3px solid transparent",
+        transition: "background .12s ease, color .12s ease",
       }}
     >
+      <Icon size={14} style={{ flexShrink: 0, opacity: active ? 1 : 0.65 }} />
       {meta.label}
     </button>
   );
@@ -194,8 +201,8 @@ export default function AdminReportsClient({ windowDays, shops, orders, connecte
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 16, alignItems: "start" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 4, position: "sticky", top: 12 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: 16, alignItems: "start" }}>
+        <div style={{ ...S.card, padding: 10, display: "flex", flexDirection: "column", gap: 2, position: "sticky", top: 12 }}>
           {REPORTS.map((r) => (
             <ReportNavItem key={r.id} meta={r} active={reportId === r.id} onClick={() => setReportId(r.id)} />
           ))}

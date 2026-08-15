@@ -14,15 +14,38 @@ export default async function StaffPage() {
 
   const adminClient = createAdminClient()
 
-  const { data: staff, error } = await adminClient
-    .from('shop_users')
-    .select('id, full_name, phone_number, role, is_active, permissions, created_at')
-    .eq('shop_id', context.shopId)
-    .order('created_at', { ascending: false })
+  const [{ data: staff, error }, { data: staffLogsRaw, error: logsError }] = await Promise.all([
+    adminClient
+      .from('shop_users')
+      .select('id, full_name, phone_number, role, is_active, permissions, created_at')
+      .eq('shop_id', context.shopId)
+      .order('created_at', { ascending: false }),
+    adminClient
+      .from('audit_logs')
+      .select('id, action, metadata, created_at')
+      .eq('shop_id', context.shopId)
+      .eq('entity_type', 'shop_user')
+      .order('created_at', { ascending: false })
+      .limit(50),
+  ])
 
   if (error) {
     console.error('Failed to load staff:', error)
   }
+  if (logsError) {
+    console.error('Failed to load staff logs:', logsError)
+  }
 
-  return <StaffClient initialStaff={staff ?? []} />
+  const staffLogs = (staffLogsRaw ?? []).map((log) => {
+    const metadata = (log.metadata ?? {}) as { actor_name?: string; target_name?: string }
+    return {
+      id: log.id,
+      action: log.action,
+      actor_name: metadata.actor_name ?? null,
+      target_name: metadata.target_name ?? null,
+      created_at: log.created_at,
+    }
+  })
+
+  return <StaffClient initialStaff={staff ?? []} staffLogs={staffLogs} />
 }
