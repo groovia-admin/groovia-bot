@@ -100,3 +100,4 @@
 | #135 | Combine completion message + invoice into one, drop redundant accept … | wa-bot | @groovia-admin | @groovia-admin | 2026-08-15 15:14 UTC | 0d 0h 0m |
 | #136 | Add collapse toggle to the Reports nav panel, matching the main sidebar | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 15:43 UTC | 0d 0h 29m |
 | #137 | Fix blank checkbox column and center-align Items in the Orders table | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 16:40 UTC | 0d 0h 0m |
+| #138 | Bump required Node.js version to 22 (wa-bot + dashboard) | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 16:54 UTC | 0d 0h 0m |
