@@ -108,12 +108,15 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
 
       <div>
         <label style={labelStyle}>Welcome message</label>
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", margin: "2px 0 6px" }}>
+          Shown to customers the moment they scan your QR code or message you on WhatsApp — your shop's address, phone, and order link are added automatically below it.
+        </p>
         <textarea
           style={{ ...inputStyle, resize: "vertical" }}
           rows={3}
           value={welcomeMessage}
           onChange={(e) => setWelcomeMessage(e.target.value)}
-          placeholder={"Namaste! 👋 Welcome to our shop.\n\nTap below to browse and order."}
+          placeholder={"Namaste! 👋 Welcome to our shop."}
         />
       </div>
 

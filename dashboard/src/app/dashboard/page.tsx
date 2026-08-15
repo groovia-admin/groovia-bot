@@ -2,7 +2,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
 import { Store, ShoppingBag, Users, AlertTriangle, Clock, Plus, Package, Settings } from 'lucide-react'
-import { startOfTodayUtc } from '@/lib/timezone'
+import { startOfTodayUtc, getLocalHour } from '@/lib/timezone'
 import PauseOrdersToggle from '@/components/settings/PauseOrdersToggle'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 import EmptyState from '@/components/ui/EmptyState'
@@ -161,7 +161,7 @@ export default async function DashboardPage() {
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
           <h1 className="font-display text-2xl font-bold text-ink">
-            Good {getGreeting()}, {context.fullName?.split(' ')[0] ?? 'there'}
+            Good {getGreeting(context.shopTimezone)}, {context.fullName?.split(' ')[0] ?? 'there'}
           </h1>
           <p className="text-ink-muted text-sm mt-0.5">
             {context.shopName ?? 'Your store'} — here's today at a glance
@@ -346,8 +346,8 @@ function SubBadge({ status }: { status: string }) {
   )
 }
 
-function getGreeting() {
-  const h = new Date().getHours()
+function getGreeting(timezone: string) {
+  const h = getLocalHour(timezone)
   if (h < 12) return 'morning'
   if (h < 17) return 'afternoon'
   return 'evening'

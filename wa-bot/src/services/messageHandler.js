@@ -646,8 +646,20 @@ async function startCustomerOrderingSession(from, shop, name) {
     displayPhone ? `📞 ${displayPhone}` : null,
   ].filter(Boolean).join('\n');
 
+  // Same shop_settings.welcome_message the owner sets in Dashboard ->
+  // Settings -> Bot behavior — previously only sendGreeting's fallback
+  // path honored it, so a shop that only ever gets scanned via its QR
+  // code (the common case) never saw its own custom greeting.
+  const supabase = getSupabase();
+  let welcomeMessage = null;
+  if (supabase) {
+    const { data: settings } = await supabase.from('shop_settings').select('welcome_message').eq('shop_id', shop.id).maybeSingle();
+    if (settings?.welcome_message) welcomeMessage = settings.welcome_message;
+  }
+
+  const greeting = welcomeMessage || `Namaste ${name}! 👋 Welcome to *${shop.name}*.`;
   const text =
-    `Namaste ${name}! 👋 Welcome to *${shop.name}*.\n\n` +
+    `${greeting}\n\n` +
     (detailLines ? `${detailLines}\n\n` : '') +
     `Tap below to browse and order (link expires in 30 min).`;
 

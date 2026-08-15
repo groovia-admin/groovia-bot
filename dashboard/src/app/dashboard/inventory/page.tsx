@@ -69,7 +69,7 @@ export default async function InventoryPage() {
                   <td style={{ ...td, color: '#D97706', fontWeight: 600 }}>{product.stock_quantity}</td>
                   <td style={td}>{product.low_stock_threshold}</td>
                   <td style={{ ...td, textAlign: 'right' }}>
-                    <Link href={`/dashboard/products/${product.id}`} style={{ color: 'var(--brand-dark)', fontSize: "var(--text-base)", textDecoration: 'none' }}>
+                    <Link href={`/dashboard/products?edit=${product.id}`} style={{ color: 'var(--brand-dark)', fontSize: "var(--text-base)", textDecoration: 'none' }}>
                       Restock →
                     </Link>
                   </td>

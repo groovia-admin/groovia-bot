@@ -86,7 +86,7 @@ export default function GlobalSearch() {
     })),
     ...results.products.map((p) => ({
       key: `product-${p.id}`,
-      href: `/dashboard/products/${p.id}`,
+      href: `/dashboard/products?edit=${p.id}`,
       icon: Package,
       primary: p.name,
       secondary: `${p.unit} · ₹${Number(p.price).toFixed(0)}${p.sku ? ` · ${p.sku}` : ""}`,
