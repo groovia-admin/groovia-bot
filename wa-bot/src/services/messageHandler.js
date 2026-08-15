@@ -128,6 +128,16 @@ function parseCommand(text) {
   const completeMatch = text.trim().match(/^(?:COMPLETE|DONE)\s+(ORD-[\w-]+)$/i);
   if (completeMatch) return { command: 'COMPLETE', orderNumber: completeMatch[1].toUpperCase() };
 
+  // Distinct from REJECT: REJECT only ever applies to a still-'pending'
+  // order the customer has no idea exists yet, so a default reason is
+  // harmless. CANCEL applies to an order the customer already knows was
+  // accepted — reason is required (not defaulted) so they get a real
+  // answer instead of a generic "Cancelled by shopkeeper".
+  const cancelMatch = text.trim().match(/^CANCEL\s+(ORD-[\w-]+)\s+(.+)$/i);
+  if (cancelMatch) return { command: 'CANCEL', orderNumber: cancelMatch[1].toUpperCase(), reason: cancelMatch[2] };
+
+  if (/^CANCEL\s+ORD-[\w-]+$/i.test(text.trim())) return { command: 'CANCEL_MISSING_REASON' };
+
   // SHOP/MENU added as HELP aliases so a shopkeeper who doesn't know any
   // commands yet has an obvious word to try — "shop" reads naturally as
   // "talk to my shop's bot" the same way HI/HELLO already do. Bare
@@ -191,11 +201,18 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   // rejecting every attempt with "must be ACCEPTED", permanently
   // stranding that order on the WhatsApp side until someone went back
   // to the dashboard to finish it. READY now accepts either.
+  // CANCEL added for parity with the dashboard's own transitions
+  // (ALLOWED_TRANSITIONS in /api/shop/orders/[id]/route.ts, which has
+  // let staff cancel an already-accepted order for a while) — WhatsApp
+  // had no equivalent at all: REJECT only ever applies to 'pending',
+  // so there was genuinely no way to back out of an order once accepted
+  // without going to the dashboard.
   const validTransitions = {
     ACCEPT:   { from: ['pending'],             to: 'accepted'  },
     REJECT:   { from: ['pending'],             to: 'rejected'  },
     READY:    { from: ['accepted', 'preparing'], to: 'ready'   },
     COMPLETE: { from: ['ready'],               to: 'completed' },
+    CANCEL:   { from: ['accepted', 'preparing', 'ready'], to: 'cancelled' },
   };
 
   const transition = validTransitions[command];
@@ -219,6 +236,7 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   if (command === 'REJECT')  { updateData.rejected_at  = new Date().toISOString(); updateData.rejection_reason = reason; }
   if (command === 'READY')    updateData.ready_at      = new Date().toISOString();
   if (command === 'COMPLETE') updateData.completed_at  = new Date().toISOString();
+  if (command === 'CANCEL')  { updateData.cancelled_at = new Date().toISOString(); updateData.cancellation_reason = reason; }
 
   const { error: updateError } = await supabase
     .from('orders')
@@ -280,6 +298,49 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     }
   }
 
+  // Mirror image of the ACCEPT block above: stock committed as sold on
+  // acceptance has to go back on cancellation, same RPC/movement-type
+  // pattern the dashboard's own cancel path uses (stockEffect === 'restore'
+  // in /api/shop/orders/[id]/route.ts). Positive delta, not negative.
+  if (command === 'CANCEL') {
+    const { data: items, error: itemsError } = await supabase
+      .from('order_items')
+      .select('product_id, product_name_snapshot, quantity')
+      .eq('order_id', order.id);
+
+    if (itemsError) {
+      logger.error({ error: itemsError, orderId: order.id }, 'Failed to load order items for stock restore');
+    } else {
+      for (const item of items || []) {
+        if (!item.product_id) continue; // custom/removed products have no stock to adjust
+
+        const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
+          p_product_id: item.product_id,
+          p_delta: item.quantity,
+        });
+
+        if (rpcError) {
+          logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, 'Failed to restore stock for product');
+          continue;
+        }
+
+        const { error: movementError } = await supabase.from('inventory_movements').insert({
+          shop_id: shopId,
+          product_id: item.product_id,
+          quantity_delta: item.quantity,
+          movement_type: 'cancelled_order',
+          reference_id: order.id,
+          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+          created_by: null,
+        });
+
+        if (movementError) {
+          logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
+        }
+      }
+    }
+  }
+
   // Write audit log — best-effort. supabase-js query builders are
   // thenables (awaitable), not real Promise instances, so they have no
   // .catch() method; chaining one directly throws a TypeError instead of
@@ -319,6 +380,7 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     REJECT:   `❌ Order *${order.order_number}* rejected.\nReason: ${reason}\nCustomer will be notified.`,
     READY:    `🎉 Order *${order.order_number}* is ready for pickup!\nCustomer will be notified.`,
     COMPLETE: `✔️ Order *${order.order_number}* completed. Well done!`,
+    CANCEL:   `🚫 Order *${order.order_number}* cancelled.\nReason: ${reason}\nCustomer will be notified and any reserved stock has been returned.`,
   };
 
   await sendWhatsAppMessage(from, replies[command]);
@@ -986,6 +1048,7 @@ async function handleStaffMessage(message, value, staffMatch) {
       `*REJECT ORD-XXXX reason* — Reject with reason\n` +
       `*READY ORD-XXXX* — Mark ready for pickup\n` +
       `*COMPLETE ORD-XXXX* — Mark completed\n` +
+      `*CANCEL ORD-XXXX reason* — Cancel an already-accepted order\n` +
       `*CATALOG* — Add or edit products\n` +
       `*HELP* — Show this menu\n\n` +
       `_Groovia_ 🛒`
@@ -1000,8 +1063,16 @@ async function handleStaffMessage(message, value, staffMatch) {
       `*REJECT ORD-XXXX [reason]*\nReject with optional reason\n\n` +
       `*READY ORD-XXXX*\nMark order ready for pickup\n\n` +
       `*COMPLETE ORD-XXXX*\nMark as completed\n\n` +
-      `*CATALOG*\nAdd or edit products\n\n` +
+      `*CANCEL ORD-XXXX reason*\nCancel an order that's already accepted, being prepared, or ready — the customer is told why\n\n` +
+      `*CATALOG*\nAdd, edit, or restock products\n\n` +
       `_Need help? admin@groovia.co.in_`
+    );
+    return;
+  }
+
+  if (parsed.command === 'CANCEL_MISSING_REASON') {
+    await sendWhatsAppMessage(from,
+      `⚠️ CANCEL needs a reason so the customer knows why — e.g. *CANCEL ORD-1234 Out of stock*.`
     );
     return;
   }
