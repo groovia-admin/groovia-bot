@@ -233,22 +233,23 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
     </main>
   )
 
-  // Fires the one consolidated "here's what changed" message, then hands
-  // off to the same redirect-back-to-WhatsApp effect used above.
-  // Fire-and-forget: the redirect must never wait on or be blocked by
-  // this, same reasoning as every other best-effort notify in this flow.
+  // Always fires — not just when diffLines is non-empty. This is also
+  // what accepts a still-'pending' order now (see the /done route): a
+  // shopkeeper who opens the link, reviews without changing anything,
+  // and taps Done still means "this order is fine, accept it," so the
+  // server has to get this call either way. Fire-and-forget: the
+  // redirect must never wait on or be blocked by this, same reasoning
+  // as every other best-effort notify in this flow.
   function handleDone() {
     const diffLines = [...diffsRef.current.values()]
       .filter((d) => d.removed || d.from !== d.to)
       .map((d) => (d.removed ? `❌ ${d.name} — removed` : `✏️ ${d.name} — quantity ${d.from} → ${d.to}`))
 
-    if (diffLines.length > 0) {
-      fetch(`/api/public/staff-edit/${orderId}/done`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, diffLines }),
-      }).catch((err) => console.error('Failed to send consolidated edit notify', err))
-    }
+    fetch(`/api/public/staff-edit/${orderId}/done`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, diffLines }),
+    }).catch((err) => console.error('Failed to send Done to server', err))
 
     setEnded(true)
   }

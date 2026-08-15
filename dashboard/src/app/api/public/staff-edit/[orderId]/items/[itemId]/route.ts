@@ -58,18 +58,15 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     return NextResponse.json({ error: 'Order not found' }, { status: 404 })
   }
 
-  // 'accepted' stays editable too — a still-'pending' order now
-  // auto-accepts on its first edit (below), so this can't require
-  // 'pending' specifically without locking out any further changes
-  // right after that first one.
+  // 'accepted' stays editable too, alongside 'pending' — acceptance now
+  // happens on "Done" (see the /done route), not on this first edit, so
+  // there's no first-edit transition here to worry about racing.
   if (order.status !== 'pending' && order.status !== 'accepted') {
     return NextResponse.json(
       { error: `Order can no longer be edited (already ${order.status}).` },
       { status: 409 }
     )
   }
-
-  const wasPending = order.status === 'pending'
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
@@ -139,67 +136,6 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     return NextResponse.json({ error: 'Item was updated, but failed to recompute order total' }, { status: 500 })
   }
 
-  // Editing a still-pending order is the shop actively reviewing it —
-  // reported as a gap that this never actually accepted the order, so
-  // it silently stayed 'pending' with no formal confirmation reaching
-  // the customer. Auto-accepts on the first edit only, guarded by
-  // .eq('status','pending') so two racing edits can't both "win" this.
-  let autoAccepted = false
-  if (wasPending) {
-    const { error: acceptError } = await adminClient
-      .from('orders')
-      .update({ status: 'accepted', accepted_at: new Date().toISOString() })
-      .eq('id', orderId)
-      .eq('status', 'pending')
-
-    if (acceptError) {
-      console.error('Failed to auto-accept order on edit:', acceptError)
-    } else {
-      autoAccepted = true
-    }
-  }
-
-  // Same decrement the WhatsApp ACCEPT command and the dashboard's own
-  // status-PATCH route both already do on acceptance — see the
-  // dashboard item-edit route's twin of this comment for the known,
-  // accepted imprecision (only fires once, on whichever edit triggers
-  // the accept; always errs toward under-representing stock, never
-  // overselling).
-  if (autoAccepted) {
-    const { data: itemsForStock, error: itemsForStockError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', orderId)
-
-    if (itemsForStockError) {
-      console.error('Failed to load order items for stock decrement:', itemsForStockError)
-    } else {
-      for (const stockItem of itemsForStock ?? []) {
-        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: stockItem.product_id,
-          p_delta: -stockItem.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: link.shop_id,
-          product_id: stockItem.product_id,
-          quantity_delta: -stockItem.quantity,
-          movement_type: 'sale',
-          reference_id: orderId,
-          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-          created_by: null, // no Supabase auth user for a WhatsApp-driven action
-        })
-      }
-    }
-  }
-
   await logAuditEvent({
     shopId: link.shop_id,
     actorUserId: null,
@@ -212,63 +148,15 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     metadata: { target_name: `Order #${order.order_number} — ${item.product_name_snapshot}`, via: 'staff_edit_link' },
   })
 
-  if (autoAccepted) {
-    await logAuditEvent({
-      shopId: link.shop_id,
-      actorUserId: null,
-      actorType: 'whatsapp',
-      action: 'order.status_changed',
-      entityType: 'order',
-      entityId: orderId,
-      oldValues: { status: 'pending' },
-      newValues: { status: 'accepted' },
-      metadata: { target_name: `Order #${order.order_number}`, via: 'staff_edit_link' },
-    })
-  }
-
-  const waBotUrl = process.env.WA_BOT_INTERNAL_URL
-  const internalSecret = process.env.INTERNAL_API_SECRET
-  if (waBotUrl && internalSecret) {
-    const base = waBotUrl.replace(/\/$/, '')
-
-    if (autoAccepted) {
-      fetch(`${base}/internal/orders/${orderId}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id }),
-      })
-        .then(async (res) => {
-          if (!res.ok) console.error('wa-bot rejected the accept notify:', res.status, await res.text().catch(() => ''))
-        })
-        .catch((err) => console.error('Failed to notify wa-bot of order auto-accept:', err))
-
-      // Staff-facing confirmation + "Mark ready" button — without this,
-      // the shop had no visible sign the order was accepted at all, and
-      // no way to advance it to ready/complete short of typing a raw
-      // WhatsApp command they'd have no reason to know existed. No
-      // actorName here — this route has no logged-in user, just a
-      // signed link.
-      fetch(`${base}/internal/orders/${orderId}/notify-staff`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id, via: 'an item edit' }),
-      })
-        .then(async (res) => {
-          if (!res.ok) console.error('wa-bot rejected the staff notify:', res.status, await res.text().catch(() => ''))
-        })
-        .catch((err) => console.error('Failed to notify wa-bot staff of order auto-accept:', err))
-    }
-  }
-  // No per-item customer notify here on purpose — a shopkeeper editing
-  // several items in one sitting used to send the customer one WhatsApp
-  // message per tap, which read as a flood of unrelated "your order
-  // changed" pings instead of one coherent update. The diff is now
-  // accumulated client-side (StaffOrderEditApp.tsx) and sent as a single
-  // consolidated message from the /done route once the shopkeeper
-  // actually finishes editing.
+  // No accept/stock/notify logic here on purpose anymore — reported as
+  // feeling wrong for the order to silently flip to "accepted" the
+  // moment the first quantity got tapped, while the shopkeeper was still
+  // mid-edit and hadn't tapped Done. All of that (status change, stock
+  // decrement, staff/customer notify) now happens once, from the /done
+  // route, exactly when the shopkeeper actually finishes.
 
   return NextResponse.json(
-    { subtotal: newSubtotal, total: newTotal, removed: removing, autoAccepted },
+    { subtotal: newSubtotal, total: newTotal, removed: removing },
     { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
   )
 }
