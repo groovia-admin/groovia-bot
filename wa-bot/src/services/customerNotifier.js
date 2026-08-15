@@ -6,57 +6,6 @@ const { logMessage } = require('./conversationLogger');
 const { generateInvoicePdfBuffer } = require('./invoiceGenerator');
 
 /**
- * Plain-text itemized receipt — sent alongside order_confirm on ACCEPT,
- * per the v2 build brief's own Phase 7 flow (ACCEPT -> order_confirm +
- * receipt). Deliberately plain text, not a generated PDF/image: nothing
- * else in this codebase produces documents, and a formatted text list is
- * exactly what every other WhatsApp-commerce bot sends as a "receipt" in
- * practice — adding a PDF pipeline (generation + either a new public
- * storage bucket or WhatsApp's Media Upload API) is real infrastructure
- * for a nice-to-have, not core to placing/confirming an order.
- *
- * Best-effort and NOT retried, unlike the new-order-alert path: this is
- * a plain free-form message, so it inherits the same 24h customer-
- * service-window limit as any other non-template send (Meta error
- * 131047) if a shop sits on a pending order for a very long time before
- * accepting. Building the same tracked-retry/template-fallback machinery
- * deliveryTracker.js already has, just for this, would be a lot of
- * infrastructure for a supplementary message the customer's order_confirm
- * template already covers the essential half of (their order was
- * accepted) — logged and dropped on failure instead.
- */
-function buildReceiptText(order, shopName) {
-  const currencyCode = order.currency_code;
-  const items = order.order_items || [];
-  const itemLines = items
-    .map(
-      (item) =>
-        `${item.product_name_snapshot} × ${item.quantity} (${item.unit_snapshot}) — ${fmtMoney(item.subtotal, currencyCode)}`
-    )
-    .join('\n');
-
-  const deliveryLine =
-    order.order_type === 'delivery' && order.delivery_fee
-      ? `Delivery fee: ${fmtMoney(order.delivery_fee, currencyCode)}\n`
-      : '';
-
-  const deliveryAddressLine =
-    order.order_type === 'delivery' && order.delivery_address_snapshot?.address_line_1
-      ? `Delivering to: ${order.delivery_address_snapshot.address_line_1}\n`
-      : '';
-
-  return (
-    `🧾 *Receipt — Order ${order.order_number}*\n\n` +
-    `${itemLines}\n\n` +
-    deliveryLine +
-    `*Total: ${fmtMoney(order.total_amount, currencyCode)}*\n` +
-    (order.pickup_slot_label ? `Pickup: ${order.pickup_slot_label}\n` : '') +
-    deliveryAddressLine +
-    `\nThank you for ordering from *${shopName}*! 🙏`
-  );
-}
-
-/**
  * Sends the WhatsApp template matching `status` (an orders.status value,
  * e.g. 'accepted' | 'ready' | 'completed' | 'rejected' | 'cancelled') to
  * the customer who placed `orderId`. Looks up everything itself — callers
@@ -160,21 +109,43 @@ async function notifyCustomer(orderId, status, shopId) {
     components = [{ type: 'body', parameters }];
   }
 
-  const sent = await sendWhatsAppTemplateWithFallback(phone, template.name, template.language, components);
+  // The itemized-receipt text that used to ride along with order_confirm
+  // on ACCEPT was reported as redundant now that the same information
+  // shows up again in the completion invoice PDF, and the accept
+  // template itself already confirms the order/total -- removed rather
+  // than kept "just in case," since a customer getting the same order
+  // summarized to them twice in one flow reads as noise, not care.
 
-  // Receipt rides along with order_confirm specifically — matches the
-  // v2 build brief's ACCEPT -> order_confirm + receipt flow. Not sent
-  // for other statuses (ready/completed/rejected/cancelled don't repeat
-  // the itemized list).
-  if (sent && status === 'accepted') {
-    const receiptText = buildReceiptText(orderForParams, shopName);
-    const receiptSent = await sendWhatsAppMessage(phone, receiptText);
-    if (receiptSent) {
-      logMessage(shopId, phone, 'outbound', 'system', 'text', receiptText);
-    } else {
-      logger.warn({ orderId }, 'Failed to send order receipt (best-effort, not retried)');
+  // 'completed' tries to send the invoice PDF as the template's own
+  // Document header (one message) instead of a separate document send
+  // (two messages) -- resubmitted in Meta 2026-08-15, PENDING approval
+  // as of this comment (confirmed via a direct Graph API check, not
+  // assumed). Structural mismatches against an unapproved/pending
+  // template component fail synchronously from Meta (unlike the 24h-
+  // window case, which Meta accepts and only fails later via webhook),
+  // so trying the combined send first and falling back to today's
+  // separate-messages behavior on any failure is safe right now and
+  // stops needing the fallback the moment Meta approves it -- no
+  // redeploy required either way.
+  if (status === 'completed') {
+    const invoice = await generateOrderInvoicePdf(orderId, shopId);
+    const mediaId = invoice ? await uploadWhatsAppMedia(invoice.buffer, `Invoice-${invoice.orderNumber}.pdf`, 'application/pdf') : null;
+
+    if (mediaId) {
+      const combinedComponents = [
+        { type: 'header', parameters: [{ type: 'document', document: { id: mediaId, filename: `Invoice-${invoice.orderNumber}.pdf` } }] },
+        ...components,
+      ];
+      const combinedSent = await sendWhatsAppTemplateWithFallback(phone, template.name, template.language, combinedComponents);
+      if (combinedSent) {
+        logMessage(shopId, phone, 'outbound', 'system', 'document', `order_completed (with invoice header) for order ${orderId}`);
+        return true;
+      }
+      logger.info({ orderId }, 'Combined completed+invoice template send failed (likely still pending Meta approval) — falling back to separate messages');
     }
   }
+
+  const sent = await sendWhatsAppTemplateWithFallback(phone, template.name, template.language, components);
 
   // PDF invoice — completion only, and only to the customer. Reflects
   // order_items as they stand right now, i.e. after any staff edits
@@ -183,7 +154,8 @@ async function notifyCustomer(orderId, status, shopId) {
   // NOT wired into notifyStaffOfDashboardStatusChange (orderCreator.js) —
   // the shop owner/staff already know what they marked complete; this is
   // a customer-facing document, matching the explicit "not in shop owner
-  // WhatsApp" requirement.
+  // WhatsApp" requirement. Only reached here if the combined send above
+  // wasn't even attempted or didn't succeed.
   if (sent && status === 'completed') {
     await sendCompletionInvoice(orderId, shopId, phone);
   }
