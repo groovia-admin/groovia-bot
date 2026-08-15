@@ -96,3 +96,4 @@
 | #132 | Bot orders reports fixes | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 07:51 UTC | 0d 0h 0m |
 | #131 | Shared-number routing fix, real shop contact phone, variant-picker UX… | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-15 07:56 UTC | 0d 1h 22m |
 | #133 | Add CANCEL command to the WhatsApp order flow | wa-bot | @groovia-admin | @groovia-admin | 2026-08-15 14:43 UTC | 0d 0h 0m |
+| #134 | Orders click-to-open status menu, Settings grid alignment, platform s… | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 14:43 UTC | 0d 0h 0m |
