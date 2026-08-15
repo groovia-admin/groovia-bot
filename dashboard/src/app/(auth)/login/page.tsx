@@ -43,6 +43,17 @@ export default function LoginPage() {
   const [emailError, setEmailError] = useState('')
   const [passwordError, setPasswordError] = useState('')
 
+  // Falls back to the hardcoded address until the fetch resolves — a super
+  // admin can change the real value from Settings -> Support & Announcements
+  // without a code deploy; this is just picking it up.
+  const [supportEmail, setSupportEmail] = useState('admin@groovia.co.in')
+  useEffect(() => {
+    fetch('/api/public/platform-contact')
+      .then((r) => r.json())
+      .then((data) => { if (data?.email) setSupportEmail(data.email) })
+      .catch(() => {})
+  }, [])
+
   const [loading, setLoading] = useState(false)
   // Shown inline right under "Enter the code sent to…" on the OTP screen
   // itself — a floating bottom-of-viewport toast for this was easy to miss
@@ -250,6 +261,11 @@ export default function LoginPage() {
           --teal-600:#0E8375;
           --teal-500:#12A594;
           --wa-green:#1FAF5B;
+          /* The dashboard's own "positive/ready" green (Orders status
+             badges), not the WhatsApp brand green above — this page is
+             teal-led, so the verified checkmark reads as consistent with
+             the rest of the app's success color rather than a WhatsApp ad. */
+          --verify-green:#0F9D6B;
           --bg:#F5F8F7;
           --panel:#FFFFFF;
           --ink:#0E1B19;
@@ -465,7 +481,7 @@ export default function LoginPage() {
         .otp-merged{
           position:absolute;left:50%;top:0;width:64px;height:56px;
           display:flex;align-items:center;justify-content:center;
-          background:var(--wa-green);color:#fff;border-radius:var(--r-md);
+          background:var(--verify-green);color:#fff;border-radius:var(--r-md);
           opacity:1;transform:translateX(-50%);
           animation:otpMergeIn .4s ease .3s backwards;
         }
@@ -710,7 +726,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <p className="invite">Access by invitation only · <a href="mailto:admin@groovia.co.in">admin@groovia.co.in</a></p>
+            <p className="invite">Access by invitation only · <a href={`mailto:${supportEmail}`}>{supportEmail}</a></p>
           </div>
 
           <div className="powered">Powered by <b>GrooVia</b></div>

@@ -1,5 +1,5 @@
 import {
-  Store, MapPin, QrCode, Bot, Ban, Truck, CreditCard, Send, Landmark,
+  Store, MapPin, QrCode, Bot, Ban, Truck, CreditCard, Send, Landmark, LifeBuoy,
 } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -12,6 +12,7 @@ import DailySummarySettingsForm from '@/components/settings/DailySummarySettings
 import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 import ShopQrCode from '@/components/settings/ShopQrCode'
 import DeclineReasonsSettingsForm from '@/components/settings/DeclineReasonsSettingsForm'
+import PlatformSettingsForm from '@/components/settings/PlatformSettingsForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -114,18 +115,34 @@ export default async function SettingsPage() {
       : null
   }
 
-  // Super admins currently only get one real card here (Payout & Banking
-  // is an honest "not built yet" placeholder) — a 2-column masonry with a
-  // single card in it just leaves a huge empty column, which is exactly
-  // the "lots of white space" problem. Give that view a single, narrower
-  // column instead of forcing the multi-card shop-owner layout onto it.
   if (context.kind === 'super_admin') {
+    const adminClient = createAdminClient()
+    const { data: platformSettings, error: platformError } = await adminClient
+      .from('platform_settings')
+      .select('support_email, support_phone, announcement_message, announcement_enabled')
+      .eq('id', true)
+      .maybeSingle()
+
+    if (platformError) {
+      console.error('Failed to load platform settings:', platformError)
+    }
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 480 }}>
         <div>
           <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 800, color: 'var(--ink)', margin: 0 }}>Settings</h1>
           <p style={{ fontSize: 'var(--text-base)', color: 'var(--ink-muted)', marginTop: 4 }}>Platform-level configuration.</p>
         </div>
+        <SettingsCard icon={LifeBuoy} color="#0ea5e9" title="Support & Announcements" subtitle="What shop owners see when they need help, or when you need to reach all of them.">
+          <PlatformSettingsForm
+            initial={{
+              support_email: platformSettings?.support_email ?? null,
+              support_phone: platformSettings?.support_phone ?? null,
+              announcement_message: platformSettings?.announcement_message ?? null,
+              announcement_enabled: platformSettings?.announcement_enabled ?? false,
+            }}
+          />
+        </SettingsCard>
         <SettingsCard icon={Landmark} color="#64748b" title="Payout & Banking" subtitle="How shops get paid out from the platform.">
           <EmptyState
             icon={Landmark}
@@ -147,76 +164,71 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      {/* CSS multi-column instead of two independent flex columns — a fixed
-          left/right split left the shorter side with a block of dead space
-          under it whenever the two sides didn't happen to end up the same
-          height. column-count balances total height between columns
-          automatically; each card gets break-inside:avoid so it never
-          splits across the column break. */}
-      <div className="settings-columns" style={{ columnCount: 2, columnGap: 16 }}>
-        {isOwner && (
-          <div className="settings-block">
+      {/* Two explicit columns, each holding whole groups (eyebrow + its
+          card(s)) in a fixed order — not CSS multi-column masonry. Masonry
+          balances column height by re-flowing individual cards wherever
+          they fit, which scattered a labeled group's cards across both
+          columns instead of keeping them together under their own eyebrow.
+          Every card now sits under a group label, and a group never splits
+          across the column break. */}
+      <div className="settings-columns">
+        <div className="settings-col">
+          <div className="settings-group">
             <div style={eyebrowStyle}>Shop identity</div>
-            <SettingsCard icon={Store} color="#a855f7" title="Shop Profile" subtitle="Your shop's logo, shown in the dashboard sidebar and to customers.">
-              <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+            {isOwner && (
+              <SettingsCard icon={Store} color="#a855f7" title="Shop Profile" subtitle="Your shop's logo, shown in the dashboard sidebar and to customers.">
+                <ShopLogoUpload initialLogoUrl={context.shopLogoUrl} />
+              </SettingsCard>
+            )}
+            {isOwner && shopProfile && (
+              <SettingsCard icon={MapPin} color="#3b82f6" title="Shop Details" subtitle="Name, address, and phone shown to customers in the WhatsApp order link.">
+                <ShopProfileForm initial={shopProfile} />
+              </SettingsCard>
+            )}
+            <SettingsCard icon={QrCode} color="#f59e0b" title="Store QR Code" subtitle="Print or share this so customers can start ordering by scanning it.">
+              <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
             </SettingsCard>
           </div>
-        )}
 
-        {isOwner && shopProfile && (
-          <div className="settings-block">
-            <SettingsCard icon={MapPin} color="#3b82f6" title="Shop Details" subtitle="Name, address, and phone shown to customers in the WhatsApp order link.">
-              <ShopProfileForm initial={shopProfile} />
+          <div className="settings-group">
+            <div style={eyebrowStyle}>Reporting</div>
+            <SettingsCard icon={Send} color="#06b6d4" title="Daily Summary" subtitle="A morning WhatsApp recap of yesterday's orders, revenue, and top products.">
+              <DailySummarySettingsForm initial={settings} />
             </SettingsCard>
           </div>
-        )}
-
-        <div className="settings-block">
-          <SettingsCard icon={QrCode} color="#f59e0b" title="Store QR Code" subtitle="Print or share this so customers can start ordering by scanning it.">
-            <ShopQrCode slug={shopSlug} whatsappNumber={whatsappNumber} />
-          </SettingsCard>
         </div>
 
-        <div className="settings-block">
-          <div style={eyebrowStyle}>Customer communication</div>
-          <SettingsCard icon={Bot} color="#14b8a6" title="Bot Behavior" subtitle="Control what the WhatsApp bot says and how it handles new orders.">
-            <BotBehaviorSettingsForm initial={settings} />
-          </SettingsCard>
-        </div>
-
-        <div className="settings-block">
-          <SettingsCard icon={Ban} color="#ef4444" title="Order Decline Reasons" subtitle="Quick-pick reasons offered when rejecting or cancelling an order.">
-            <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
-          </SettingsCard>
-        </div>
-
-        <div className="settings-block">
-          <div style={eyebrowStyle}>Orders &amp; payments</div>
-          <SettingsCard icon={Truck} color="#22c55e" title="Order & Delivery" subtitle="Pickup/delivery availability, fees, and tax.">
-            <DeliverySettingsForm initial={settings} />
-          </SettingsCard>
-        </div>
-
-        {isOwner && (
-          <div className="settings-block">
-            <SettingsCard icon={CreditCard} color="#6366f1" title="Payment" subtitle="UPI details and accepted payment methods.">
-              <PaymentSettingsForm initial={settings} />
+        <div className="settings-col">
+          <div className="settings-group">
+            <div style={eyebrowStyle}>Customer communication</div>
+            <SettingsCard icon={Bot} color="#14b8a6" title="Bot Behavior" subtitle="Control what the WhatsApp bot says and how it handles new orders.">
+              <BotBehaviorSettingsForm initial={settings} />
+            </SettingsCard>
+            <SettingsCard icon={Ban} color="#ef4444" title="Order Decline Reasons" subtitle="Quick-pick reasons offered when rejecting or cancelling an order.">
+              <DeclineReasonsSettingsForm initial={settings?.order_decline_reasons ?? []} />
             </SettingsCard>
           </div>
-        )}
 
-        <div className="settings-block">
-          <div style={eyebrowStyle}>Reporting</div>
-          <SettingsCard icon={Send} color="#06b6d4" title="Daily Summary" subtitle="A morning WhatsApp recap of yesterday's orders, revenue, and top products.">
-            <DailySummarySettingsForm initial={settings} />
-          </SettingsCard>
+          <div className="settings-group">
+            <div style={eyebrowStyle}>Orders &amp; payments</div>
+            <SettingsCard icon={Truck} color="#22c55e" title="Order & Delivery" subtitle="Pickup/delivery availability, fees, and tax.">
+              <DeliverySettingsForm initial={settings} />
+            </SettingsCard>
+            {isOwner && (
+              <SettingsCard icon={CreditCard} color="#6366f1" title="Payment" subtitle="UPI details and accepted payment methods.">
+                <PaymentSettingsForm initial={settings} />
+              </SettingsCard>
+            )}
+          </div>
         </div>
       </div>
 
       <style>{`
-        .settings-block { break-inside: avoid; margin-bottom: 16px; }
+        .settings-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+        .settings-col { display: flex; flex-direction: column; gap: 20px; }
+        .settings-group { display: flex; flex-direction: column; gap: 16px; }
         @media (max-width: 900px) {
-          .settings-columns { column-count: 1 !important; }
+          .settings-columns { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>
