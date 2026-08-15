@@ -5,7 +5,6 @@ import { logAuditEvent } from '@/lib/audit/log'
 type UpsertConnectionBody = {
   phone_number_id?: unknown
   business_account_id?: unknown
-  display_phone_number?: unknown
   catalog_id?: unknown
 }
 
@@ -67,7 +66,6 @@ export async function PUT(request: Request, { params }: RouteContext) {
 
   const phoneNumberId = getText(body.phone_number_id)
   const businessAccountId = getText(body.business_account_id)
-  const displayPhoneNumber = getText(body.display_phone_number)
   const catalogId = getText(body.catalog_id)
 
   if (!phoneNumberId) {
@@ -81,8 +79,38 @@ export async function PUT(request: Request, { params }: RouteContext) {
     return NextResponse.json({ error: 'WhatsApp Business Account ID is required' }, { status: 400 })
   }
 
-  if (!displayPhoneNumber) {
-    return NextResponse.json({ error: 'Display phone number is required' }, { status: 400 })
+  // display_phone_number is never taken from the form anymore — a
+  // hand-typed value drifted from Meta's actual number on a real
+  // production shop (confirmed by querying Meta's own API directly),
+  // silently breaking every wa.me redirect and phone display in the
+  // app. It's now always fetched fresh from Meta via wa-bot, which also
+  // doubles as validating the Phone Number ID itself — a wrong/typo'd
+  // id fails the save loudly here instead of getting stored silently.
+  const waBotUrl = process.env.WA_BOT_INTERNAL_URL
+  const internalSecret = process.env.INTERNAL_API_SECRET
+  if (!waBotUrl || !internalSecret) {
+    return NextResponse.json({ error: 'WA_BOT_INTERNAL_URL/INTERNAL_API_SECRET not configured — cannot verify this number against Meta' }, { status: 500 })
+  }
+
+  let displayPhoneNumber: string
+  try {
+    const base = waBotUrl.replace(/\/$/, '')
+    const lookupRes = await fetch(`${base}/internal/whatsapp/phone-lookup?phoneNumberId=${encodeURIComponent(phoneNumberId)}`, {
+      headers: { 'x-internal-secret': internalSecret },
+    })
+    const lookupData = await lookupRes.json()
+
+    if (!lookupRes.ok || !lookupData.display_phone_number) {
+      return NextResponse.json(
+        { error: lookupData.error || "Couldn't verify this Phone Number ID against Meta" },
+        { status: 422 }
+      )
+    }
+
+    displayPhoneNumber = lookupData.display_phone_number
+  } catch (err) {
+    console.error('WhatsApp phone-number lookup failed:', err)
+    return NextResponse.json({ error: 'Failed to reach wa-bot to verify this number against Meta' }, { status: 502 })
   }
 
   const { data: shop, error: shopError } = await adminClient

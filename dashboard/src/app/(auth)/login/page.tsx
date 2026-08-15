@@ -160,17 +160,24 @@ export default function LoginPage() {
         }
         .login-card-wrap { animation: loginCardIn 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
         .login-logo-wrap { animation: loginLogoIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        /* Top-aligned, not vertically centered, below 960px — a centered
+           form is where mobile keyboards do the most damage: opening the
+           keyboard shrinks the visible viewport, and a centered card can
+           end up partly or fully hidden behind it (reported as the OTP
+           step "going out of screen" while typing). Top alignment means
+           the keyboard only ever eats into empty space below the card. */
+        .login-form-side { display: flex; align-items: flex-start; justify-content: center; padding: 32px 16px; }
         .login-showcase { display: none; }
         @media (min-width: 960px) {
           .login-showcase { display: flex; }
-          .login-form-side { flex: 1; }
+          .login-form-side { flex: 1; align-items: center; padding: 16px; }
         }
         .glow { position: absolute; border-radius: 50%; filter: blur(60px); pointer-events: none; }
         .float-card { position: absolute; background: #fff; border-radius: 14px; box-shadow: 0 12px 30px rgba(0,0,0,0.3); }
       `}</style>
 
       {/* Left — the login form. */}
-      <div className="login-form-side" style={{ flex: '0 0 auto', width: '100%', maxWidth: '520px', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', background: 'var(--surface)' }}>
+      <div className="login-form-side" style={{ flex: '0 0 auto', width: '100%', maxWidth: '520px', background: 'var(--surface)' }}>
         <div className="login-card-wrap" style={{ width: '100%', maxWidth: '380px' }}>
 
           <div className="login-logo-wrap" style={{ textAlign: 'center', marginBottom: '28px' }}>

@@ -80,6 +80,20 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
   const hydratedNameFromSession = useRef(false)
   const hydratedAddressFromSession = useRef(false)
 
+  // browse/checkout/placed are swapped in place (no real page navigation),
+  // so the browser never resets scroll position on its own the way it
+  // would for an actual route change. Without this, switching to
+  // checkout keeps whatever scrollTop the (usually much longer) browse
+  // grid was left at, landing the customer wherever that pixel offset
+  // happens to fall on the shorter checkout page — reported as "jumps
+  // straight to delivery/billing instead of showing items", which is
+  // really just this: items ARE still at the top, just already scrolled
+  // past. More noticeable on a wider desktop viewport (WhatsApp Web)
+  // since the catalog grid there needs more scrolling to reach checkout.
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
+
   const formatMoney = useCallback(
     (amount: number) =>
       new Intl.NumberFormat('en-IN', {
@@ -533,20 +547,19 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
               )
             }
 
-            // Multiple units under one name — a size picker instead of a
-            // direct add, since tapping "+" here wouldn't know which unit
-            // the customer means.
+            // Multiple units under one name — same card shape and the
+            // same "+" affordance as a single-unit product (Swiggy
+            // Instamart/Blinkit pattern: the plus is what a customer
+            // expects to tap to add something, not a separate "choose
+            // size" link), it just opens the size-picker sheet instead
+            // of adding directly, since tapping "+" alone wouldn't know
+            // which unit the customer means. Quantity per variant is
+            // then adjusted inside the sheet itself.
             const cheapest = group.variants[0]
             const cartQty = group.variants.reduce((sum, v) => sum + (cart[v.id]?.quantity ?? 0), 0)
             const anyInStock = group.variants.some((v) => v.stock_quantity > 0)
             return (
-              <button
-                key={group.key}
-                type="button"
-                className="card flex flex-col text-left"
-                onClick={() => anyInStock && openVariantPicker(group)}
-                disabled={!anyInStock}
-              >
+              <div key={group.key} className="card flex flex-col">
                 <ProductImage src={group.image_url} alt={group.name} />
                 <h3 className="text-sm font-medium leading-tight text-ink">{group.name}</h3>
                 <p className="text-xs mt-0.5 text-ink-muted">{group.variants.length} sizes available</p>
@@ -554,13 +567,23 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                   <span className="text-sm font-semibold text-ink">
                     {anyInStock ? `From ${formatMoney(cheapest.price)}` : 'Out of stock'}
                   </span>
-                  {anyInStock && (
-                    <span className="text-xs font-semibold text-brand-dark flex items-center gap-1">
-                      {cartQty > 0 ? `${cartQty} in cart` : 'Choose size'} ›
-                    </span>
+                  {anyInStock ? (
+                    <div className="flex items-center gap-1.5">
+                      {cartQty > 0 && <span className="text-xs font-medium text-ink-muted">{cartQty} in cart</span>}
+                      <button
+                        type="button"
+                        className="rounded-lg px-2.5 py-1.5 text-white bg-brand"
+                        onClick={() => openVariantPicker(group)}
+                        aria-label={`Choose a size for ${group.name}`}
+                      >
+                        <Plus size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs font-medium text-ink-faint">Out of stock</span>
                   )}
                 </div>
-              </button>
+              </div>
             )
           })
         )}

@@ -258,26 +258,14 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
         })
         .catch((err) => console.error('Failed to notify wa-bot staff of order auto-accept:', err))
     }
-
-    // Best-effort: same "here's what changed" WhatsApp message every
-    // other edit path already sends the customer — must never fail the
-    // edit itself if wa-bot is unreachable or unconfigured. Sent
-    // alongside the accept notification above (not instead of it) when
-    // this was the accepting edit.
-    const diffLine = removing
-      ? `❌ ${item.product_name_snapshot} — removed`
-      : `✏️ ${item.product_name_snapshot} — quantity ${previousQuantity} → ${quantity}`
-
-    fetch(`${base}/internal/orders/${orderId}/notify-edit`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-      body: JSON.stringify({ shopId: link.shop_id, diffLines: [diffLine], newTotal }),
-    })
-      .then(async (res) => {
-        if (!res.ok) console.error('wa-bot rejected the edit notify:', res.status, await res.text().catch(() => ''))
-      })
-      .catch((err) => console.error('Failed to notify wa-bot of order item edit:', err))
   }
+  // No per-item customer notify here on purpose — a shopkeeper editing
+  // several items in one sitting used to send the customer one WhatsApp
+  // message per tap, which read as a flood of unrelated "your order
+  // changed" pings instead of one coherent update. The diff is now
+  // accumulated client-side (StaffOrderEditApp.tsx) and sent as a single
+  // consolidated message from the /done route once the shopkeeper
+  // actually finishes editing.
 
   return NextResponse.json(
     { subtotal: newSubtotal, total: newTotal, removed: removing, autoAccepted },

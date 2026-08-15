@@ -1,0 +1,23 @@
+-- spatial_ref_sys ships with the postgis extension and lives in the
+-- public schema (needed for geography columns used by the nearby-shop
+-- lookup), so it's exposed over PostgREST by default and gets flagged
+-- by Supabase's linter for having RLS disabled.
+--
+-- ALTER TABLE ... ENABLE ROW LEVEL SECURITY isn't an option here: the
+-- table is owned by the role that installed the extension, not this
+-- project's `postgres` role, and Postgres requires table ownership for
+-- that statement (confirmed directly against this project: 42501 "must
+-- be owner of table spatial_ref_sys"). That's a platform-level
+-- limitation on every Supabase project with PostGIS enabled, not
+-- something specific to this repo.
+--
+-- Practical equivalent: revoke the privilege PostgREST actually relies
+-- on to expose a table to API clients. This achieves the same outcome
+-- (no public API access) without needing table ownership. The data
+-- itself is public SRID/projection reference metadata — no PII, no
+-- write path, and nothing in this codebase queries it directly — so
+-- losing API access to it has no functional impact.
+--
+-- Already applied directly (run by hand in the SQL Editor on 2026-08-11)
+-- — this file exists for the repo's own record, not as a pending change.
+REVOKE SELECT ON public.spatial_ref_sys FROM anon, authenticated;

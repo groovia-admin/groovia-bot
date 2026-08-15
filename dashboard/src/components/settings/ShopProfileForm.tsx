@@ -14,15 +14,10 @@ export type ShopProfile = {
   city: string | null;
   state: string | null;
   postal_code: string | null;
+  contact_phone: string | null;
 };
 
-export default function ShopProfileForm({
-  initial,
-  whatsappNumber,
-}: {
-  initial: ShopProfile;
-  whatsappNumber: string | null;
-}) {
+export default function ShopProfileForm({ initial }: { initial: ShopProfile }) {
   const toast = useToast();
 
   const [name, setName] = useState(initial.name);
@@ -33,11 +28,12 @@ export default function ShopProfileForm({
   const [city, setCity] = useState(initial.city ?? "");
   const [state, setState] = useState(initial.state ?? "");
   const [postalCode, setPostalCode] = useState(initial.postal_code ?? "");
-  // Only meaningful once a WhatsApp Business connection exists (whatsappNumber
-  // !== null) — the connection itself (phone_number_id, business account)
-  // stays super-admin-only, this just updates the number shown to customers
-  // and used to build the QR/"message us" link.
-  const [waNumber, setWaNumber] = useState(whatsappNumber ?? "");
+  // A real, callable number — has nothing to do with the WhatsApp
+  // connection itself (that's shared platform infrastructure, managed
+  // separately and no longer editable here — see the route's comment on
+  // why letting a shop owner overwrite it broke other shops sharing the
+  // same number). This is just what shows in the welcome message.
+  const [contactPhone, setContactPhone] = useState(initial.contact_phone ?? "");
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -51,11 +47,11 @@ export default function ShopProfileForm({
       return;
     }
 
-    let normalizedWaNumber: string | null = null;
-    if (whatsappNumber !== null) {
-      normalizedWaNumber = normalizeIndianPhone(waNumber);
-      if (!normalizedWaNumber) {
-        setError("Enter a valid 10-digit Indian WhatsApp number");
+    let normalizedContactPhone: string | null = null;
+    if (contactPhone.trim()) {
+      normalizedContactPhone = normalizeIndianPhone(contactPhone);
+      if (!normalizedContactPhone) {
+        setError("Enter a valid 10-digit Indian phone number, or leave it blank");
         return;
       }
     }
@@ -77,7 +73,7 @@ export default function ShopProfileForm({
           city: city || null,
           state: state || null,
           postal_code: postalCode || null,
-          ...(whatsappNumber !== null ? { whatsapp_display_number: normalizedWaNumber } : {}),
+          contact_phone: normalizedContactPhone,
         }),
       });
 
@@ -165,21 +161,20 @@ export default function ShopProfileForm({
       </div>
 
       <div>
-        <label style={labelStyle}>WhatsApp number</label>
-        {whatsappNumber === null ? (
-          <input style={{ ...inputStyle, background: "#F7F8FA", color: "var(--ink-muted)" }} value="Not connected" disabled />
-        ) : (
-          <input style={inputStyle} value={waNumber} onChange={(e) => setWaNumber(e.target.value)} placeholder="98765 43210" />
-        )}
+        <label style={labelStyle}>Contact phone (optional)</label>
+        <input
+          style={inputStyle}
+          value={contactPhone}
+          onChange={(e) => setContactPhone(e.target.value)}
+          placeholder="98765 43210"
+        />
         <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: "6px 0 0" }}>
-          {whatsappNumber === null
-            ? "Set up a WhatsApp connection first — contact support to get connected."
-            : "The number customers message and scan your QR to reach. Must match the number actually connected via WhatsApp Business — changing this doesn't reconnect your bot to a different number, only updates what's shown here."}
+          A real number customers can call you on directly — shown in the welcome message so they have a way to reach you beyond chat. This is separate from the WhatsApp number itself, which is managed by Groovia.
         </p>
       </div>
 
       <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: 0 }}>
-        Name, address, and this number are shown to customers in the WhatsApp welcome message when they start an order.
+        Name, address, and contact phone are shown to customers in the WhatsApp welcome message when they start an order.
       </p>
 
       <button type="submit" disabled={saving} style={saveButtonStyle(saving)}>
