@@ -280,6 +280,18 @@ function buildOrderPlacedPayload(orderNumber, orderId) {
  * webview (dashboard) has no WhatsApp conversation in progress to reply
  * into, so the confirmation has to be sent this way instead of inline
  * after creation like the native-catalog flow does.
+ *
+ * Tracked + retried on transient failure now (reported gap: unlike the
+ * new-order staff alert, this used to be pure fire-and-forget — a
+ * failed send just meant the customer never saw the confirmation or
+ * the cancel button, with the order still sitting there and nothing
+ * anywhere to say why). Reuses the same notification_deliveries /
+ * backoff machinery new_order_alert already has. Deliberately no
+ * template fallback for the 24h-window-expired case, unlike
+ * new_order_alert -- this always sends within seconds of the customer's
+ * own message that placed the order, so that failure mode is
+ * essentially unreachable here, and building a whole approved-template
+ * path for a case that can't happen isn't worth it.
  */
 async function sendOrderPlacedConfirmation(orderId, shopId) {
   const supabase = getSupabase();
@@ -307,14 +319,61 @@ async function sendOrderPlacedConfirmation(orderId, shopId) {
     return { success: false };
   }
 
-  const { body, buttons } = buildOrderPlacedPayload(order.order_number, order.id);
-  const sent = await sendButtonMessage(phone, body, buttons);
+  const payload = buildOrderPlacedPayload(order.order_number, order.id);
 
-  if (sent) {
-    logMessage(shopId, phone, 'outbound', 'system', 'interactive', body);
+  const deliveryId = await deliveryTracker.recordDelivery({
+    orderId: order.id,
+    recipientPhone: phone,
+    purpose: 'order_placed',
+    payload,
+  });
+
+  const result = await sendButtonMessageDetailed(phone, payload.body, payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(deliveryId, result.messageId);
+    logMessage(shopId, phone, 'outbound', 'system', 'interactive', payload.body);
+    return { success: true };
   }
 
-  return { success: sent };
+  await deliveryTracker.recordFailure(deliveryId, result.error, 0);
+  return { success: false };
+}
+
+/**
+ * Retry-loop handler for the 'order_placed' purpose (see index.js's
+ * RETRY_HANDLERS) -- same shape as retryNewOrderAlert below. Skips the
+ * resend if the order's no longer 'pending': the self-cancel button
+ * this message carries is only valid while it is, so a stale retry
+ * landing after staff already accepted/rejected would just be
+ * confusing, not helpful.
+ */
+async function retryOrderPlacedConfirmation(delivery) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', delivery.order_id)
+    .maybeSingle();
+
+  if (order && order.status !== 'pending') {
+    await supabase
+      .from('notification_deliveries')
+      .update({ status: 'skipped_order_resolved', updated_at: new Date().toISOString() })
+      .eq('id', delivery.id);
+    return;
+  }
+
+  const result = await sendButtonMessageDetailed(delivery.recipient_phone, delivery.payload.body, delivery.payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(delivery.id, result.messageId);
+    return;
+  }
+
+  await deliveryTracker.recordFailure(delivery.id, result.error, delivery.attempt_count);
 }
 
 /**
@@ -827,6 +886,7 @@ module.exports = {
   createOrderFromSession,
   buildOrderPlacedPayload,
   sendOrderPlacedConfirmation,
+  retryOrderPlacedConfirmation,
   notifyStaffForOrder,
   notifyStaffOfDashboardStatusChange,
   processDueNewOrderAlerts,

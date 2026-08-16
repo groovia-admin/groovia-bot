@@ -98,4 +98,6 @@ export type CheckoutFormState = {
   postalCode: string
   paymentMethod: string
   specialInstructions: string
+  deliveryLatitude: number | null
+  deliveryLongitude: number | null
 }

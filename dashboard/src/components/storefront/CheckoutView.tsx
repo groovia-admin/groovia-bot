@@ -65,10 +65,42 @@ export function CheckoutView({
     postalCode,
     paymentMethod,
     specialInstructions,
+    deliveryLatitude,
+    deliveryLongitude,
   } = form
 
   function set<K extends keyof CheckoutFormState>(key: K, value: CheckoutFormState[K]) {
     onFormChange((prev) => ({ ...prev, [key]: value }))
+  }
+
+  // Reported gap: the server already checks a delivery order's distance
+  // against the shop's configured radius, but nothing anywhere ever
+  // collected the customer's actual lat/long to check it against —
+  // the feature was silently inert. This is the only place that's
+  // collected; it's optional (radius limiting just doesn't apply if
+  // it's never provided, same as before), not required to check out.
+  const [locating, setLocating] = useState(false)
+  const [locationError, setLocationError] = useState<string | null>(null)
+
+  function useCurrentLocation() {
+    if (!navigator.geolocation) {
+      setLocationError("Your browser can't share location here.")
+      return
+    }
+    setLocating(true)
+    setLocationError(null)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        set('deliveryLatitude', position.coords.latitude)
+        set('deliveryLongitude', position.coords.longitude)
+        setLocating(false)
+      },
+      () => {
+        setLocationError("Couldn't get your location — you can still enter your address manually.")
+        setLocating(false)
+      },
+      { enableHighAccuracy: false, timeout: 8000 }
+    )
   }
 
   const [submitting, setSubmitting] = useState(false)
@@ -127,6 +159,8 @@ export function CheckoutView({
               landmark: landmark.trim() || undefined,
               city: city.trim() || undefined,
               postal_code: postalCode.trim() || undefined,
+              latitude: deliveryLatitude ?? undefined,
+              longitude: deliveryLongitude ?? undefined,
             },
           }),
       specialInstructions: specialInstructions.trim() || undefined,
@@ -147,7 +181,16 @@ export function CheckoutView({
       onPlaced(json.orderNumber)
     } catch (err) {
       console.error('Failed to submit order', err)
-      setError('Something went wrong placing your order. Please try again.')
+      // A genuine network failure here is ambiguous — the request may
+      // have reached the server and created the order before the
+      // connection dropped, or it may never have gone through at all,
+      // and there was previously no way for the customer to tell which
+      // from the storefront itself. Retrying is actually safe either
+      // way (the session is single-use, so a real duplicate can't be
+      // created), but the clearer answer is the WhatsApp confirmation
+      // that already exists for exactly this reason — pointing them
+      // there instead of leaving them guessing.
+      setError("Something went wrong placing your order. Check WhatsApp first — if it actually went through, you'll have a confirmation message there. If not, please try again.")
       setSubmitting(false)
     }
   }
@@ -165,6 +208,18 @@ export function CheckoutView({
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-4">
+        {/* Reported gap: a customer with a stale/expired link used to only
+            find out at the very last step — one small grey line easy to
+            miss, after browsing the full catalog and filling out the
+            entire checkout form. Surfaced here instead, the moment the
+            page loads, before they've invested any of that effort. */}
+        {!canCheckout && (
+          <div className="card bg-red-50 border-red-100">
+            <p className="text-sm font-medium text-red-600">This link has expired</p>
+            <p className="text-xs text-red-500 mt-0.5">Ask the shop for a fresh WhatsApp link to place an order — you can still browse the menu below.</p>
+          </div>
+        )}
+
         {!isOpen && (
           <div className="card bg-red-50 border-red-100">
             <p className="text-sm font-medium text-red-600">We&apos;re closed right now</p>
@@ -196,23 +251,27 @@ export function CheckoutView({
                         </p>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
+                        {/* w-11/h-11 (44px) tap targets, not just the icon
+                            — same fix as the browse grid: the old ~22px
+                            hit area was well under the ~44px minimum for
+                            reliable mobile taps. */}
+                        <div className="flex items-center gap-1 rounded-lg bg-brand">
                           <button
-                            className="text-white p-1"
+                            className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0"
                             onClick={() => onQuantityChange(item.product_id, item.quantity - 1)}
                             aria-label={`Decrease ${item.name} quantity`}
                             disabled={submitting}
                           >
-                            <Minus size={14} />
+                            <Minus size={16} />
                           </button>
                           <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
                           <button
-                            className="text-white p-1 disabled:opacity-40"
+                            className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                             onClick={() => onQuantityChange(item.product_id, item.quantity + 1)}
                             aria-label={`Increase ${item.name} quantity`}
                             disabled={submitting || atStockLimit}
                           >
-                            <Plus size={14} />
+                            <Plus size={16} />
                           </button>
                         </div>
                         <span className="text-sm font-semibold text-ink w-16 text-right">{formatMoney(item.subtotal)}</span>
@@ -296,7 +355,18 @@ export function CheckoutView({
           </div>
         ) : (
           <div className="card space-y-3">
-            <p className="text-sm font-medium text-ink">Delivery address</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-medium text-ink">Delivery address</p>
+              <button
+                type="button"
+                className="text-xs font-semibold text-brand-dark"
+                onClick={useCurrentLocation}
+                disabled={locating || submitting}
+              >
+                {locating ? 'Locating…' : deliveryLatitude != null ? '📍 Location added' : '📍 Use my location'}
+              </button>
+            </div>
+            {locationError && <p className="text-[11px] text-red-500 -mt-1">{locationError}</p>}
             <input
               className="input"
               value={addressLine1}
@@ -395,12 +465,6 @@ export function CheckoutView({
           <div className="card bg-red-50 border-red-100">
             <p className="text-sm text-red-600">{error}</p>
           </div>
-        )}
-
-        {!canCheckout && (
-          <p className="text-xs text-center text-ink-muted">
-            Open this page from the link WhatsApp sent you to place an order.
-          </p>
         )}
       </div>
 

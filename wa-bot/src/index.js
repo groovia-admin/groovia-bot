@@ -5,7 +5,7 @@ const logger = require('./utils/logger');
 const webhookRouter = require('./routes/webhook');
 const internalRouter = require('./routes/internal');
 const { getDueRetries } = require('./services/deliveryTracker');
-const { retryNewOrderAlert, processDueNewOrderAlerts } = require('./services/orderCreator');
+const { retryNewOrderAlert, retryOrderPlacedConfirmation, processDueNewOrderAlerts } = require('./services/orderCreator');
 const { processDueReminders } = require('./services/reminderService');
 const { processDueDailySummaries } = require('./services/dailySummaryService');
 
@@ -88,12 +88,10 @@ const server = app.listen(config.port, () => {
 // Notification retry loop — picks up genuinely transient send failures
 // (not window-expired ones, which go straight to a template fallback
 // from handleStatusUpdate instead; see deliveryTracker.js) on a backoff
-// schedule so a message doesn't just get silently lost. Only one
-// purpose exists today (new_order_alert); the map is here so adding a
-// second tracked notification type later doesn't mean touching this
-// loop, just registering its retry function.
+// schedule so a message doesn't just get silently lost.
 const RETRY_HANDLERS = {
   new_order_alert: retryNewOrderAlert,
+  order_placed: retryOrderPlacedConfirmation,
 };
 const RETRY_INTERVAL_MS = 60 * 1000;
 

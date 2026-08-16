@@ -55,6 +55,8 @@ const DEFAULT_CHECKOUT_FORM: CheckoutFormState = {
   postalCode: '',
   paymentMethod: '',
   specialInstructions: '',
+  deliveryLatitude: null,
+  deliveryLongitude: null,
 }
 
 export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) {
@@ -517,27 +519,32 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                     {product.stock_quantity <= 0 ? (
                       <span className="text-xs font-medium text-ink-faint">Out of stock</span>
                     ) : inCart ? (
-                      <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand">
-                        <button className="text-white p-1" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
-                          <Minus size={14} />
+                      // w-11/h-11 (44px) on the tap targets, not just the
+                      // icon — reported gap: the old ~22px hit area was
+                      // well under the ~44px minimum for reliable mobile
+                      // taps, on the single most-repeated interaction in
+                      // the whole storefront.
+                      <div className="flex items-center gap-1 rounded-lg bg-brand">
+                        <button className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
+                          <Minus size={16} />
                         </button>
                         <span className="text-white text-sm font-medium w-4 text-center">{inCart.quantity}</span>
                         <button
-                          className="text-white p-1 disabled:opacity-40"
+                          className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                           onClick={() => setQuantity(product, inCart.quantity + 1)}
                           aria-label="Increase quantity"
                           disabled={inCart.quantity >= product.stock_quantity}
                         >
-                          <Plus size={14} />
+                          <Plus size={16} />
                         </button>
                       </div>
                     ) : (
                       <button
-                        className="rounded-lg px-2.5 py-1.5 text-white bg-brand"
+                        className="rounded-lg text-white bg-brand w-11 h-11 flex items-center justify-center flex-shrink-0"
                         onClick={() => setQuantity(product, 1)}
                         aria-label={`Add ${product.name}`}
                       >
-                        <Plus size={16} />
+                        <Plus size={18} />
                       </button>
                     )}
                   </div>
@@ -573,11 +580,11 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                       {cartQty > 0 && <span className="text-xs font-medium text-ink-muted">{cartQty} in cart</span>}
                       <button
                         type="button"
-                        className="rounded-lg px-2.5 py-1.5 text-white bg-brand"
+                        className="rounded-lg text-white bg-brand w-11 h-11 flex items-center justify-center flex-shrink-0"
                         onClick={() => openVariantPicker(group)}
                         aria-label={`Choose a size for ${group.name}`}
                       >
-                        <Plus size={16} />
+                        <Plus size={18} />
                       </button>
                     </div>
                   ) : (
