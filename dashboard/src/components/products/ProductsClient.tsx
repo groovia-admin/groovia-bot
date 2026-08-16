@@ -104,6 +104,14 @@ export default function ProductsClient({
     return ((Number(p.price) - Number(p.cost_price)) / Number(p.price)) * 100;
   }
 
+  // Rough retail health bands, not a precise accounting threshold — good
+  // enough for "does this need attention at a glance" scanning down a list.
+  function marginColor(pct: number): string {
+    if (pct < 10) return "var(--error)";
+    if (pct < 30) return "#B7791F";
+    return "var(--brand-dark)";
+  }
+
   const activeCategories = useMemo(() => categories.filter((c) => c.is_active), [categories]);
 
   const productCountByCategory = useMemo(() => {
@@ -737,15 +745,15 @@ export default function ProductsClient({
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr>
-                <SortableTh label="Name" active={sortKey === "name"} dir={sortDir} onClick={() => toggleSort("name")} />
-                <SortableTh label="Category" active={sortKey === "category"} dir={sortDir} onClick={() => toggleSort("category")} />
-                <SortableTh label="Unit" active={sortKey === "unit"} dir={sortDir} onClick={() => toggleSort("unit")} />
-                <SortableTh label="Price" active={sortKey === "price"} dir={sortDir} onClick={() => toggleSort("price")} />
-                <SortableTh label="Cost" active={sortKey === "cost"} dir={sortDir} onClick={() => toggleSort("cost")} />
-                <SortableTh label="Margin" active={sortKey === "margin"} dir={sortDir} onClick={() => toggleSort("margin")} />
-                <SortableTh label="Stock" active={sortKey === "stock"} dir={sortDir} onClick={() => toggleSort("stock")} />
-                <SortableTh label="Status" active={sortKey === "status"} dir={sortDir} onClick={() => toggleSort("status")} />
-                <th style={{ ...S.th, textAlign: "right" }}>Actions</th>
+                <SortableTh label="Name" active={sortKey === "name"} dir={sortDir} sticky onClick={() => toggleSort("name")} />
+                <SortableTh label="Category" active={sortKey === "category"} dir={sortDir} sticky onClick={() => toggleSort("category")} />
+                <SortableTh label="Unit" active={sortKey === "unit"} dir={sortDir} sticky onClick={() => toggleSort("unit")} />
+                <SortableTh label="Price" active={sortKey === "price"} dir={sortDir} sticky onClick={() => toggleSort("price")} />
+                <SortableTh label="Cost" active={sortKey === "cost"} dir={sortDir} sticky onClick={() => toggleSort("cost")} />
+                <SortableTh label="Margin" active={sortKey === "margin"} dir={sortDir} sticky onClick={() => toggleSort("margin")} />
+                <SortableTh label="Stock" active={sortKey === "stock"} dir={sortDir} sticky onClick={() => toggleSort("stock")} />
+                <SortableTh label="Status" active={sortKey === "status"} dir={sortDir} sticky onClick={() => toggleSort("status")} />
+                <th style={{ ...S.th, textAlign: "right", position: "sticky", top: 0, background: "#FFFFFF", zIndex: 1 }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -772,7 +780,7 @@ export default function ProductsClient({
                       <td style={S.td}>{product.cost_price != null ? `₹${Number(product.cost_price).toFixed(2)}` : "—"}</td>
                       <td style={S.td}>
                         {margin(product) !== null ? (
-                          <span style={{ color: "var(--brand-dark)" }}>{Math.round(margin(product)!)}%</span>
+                          <span style={{ fontWeight: 700, color: marginColor(margin(product)!) }}>{Math.round(margin(product)!)}%</span>
                         ) : (
                           "—"
                         )}

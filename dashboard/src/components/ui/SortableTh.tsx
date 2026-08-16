@@ -14,6 +14,7 @@ export default function SortableTh({
   dir,
   align,
   width,
+  sticky,
   onClick,
 }: {
   label: string;
@@ -21,11 +22,23 @@ export default function SortableTh({
   dir: SortDir;
   align?: "left" | "right" | "center";
   width?: number | string;
+  // Pins the header row to the top of the page while scrolling a long
+  // table — needs an opaque background so body rows don't show through
+  // underneath it once it's stuck.
+  sticky?: boolean;
   onClick: () => void;
 }) {
   return (
     <th
-      style={{ ...S.th, textAlign: align ?? "left", cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", width }}
+      style={{
+        ...S.th,
+        textAlign: align ?? "left",
+        cursor: "pointer",
+        userSelect: "none",
+        whiteSpace: "nowrap",
+        width,
+        ...(sticky ? { position: "sticky" as const, top: 0, background: "#FFFFFF", zIndex: 1 } : null),
+      }}
       onClick={onClick}
       aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}
     >
