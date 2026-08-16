@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import {
   Download, TrendingUp, TrendingDown, Minus, ShoppingBag, Package, XCircle,
   PiggyBank, Clock, Boxes, MessageCircle, Layers, Users, UserCog, AlertTriangle,
-  ChevronUp, ChevronDown, BarChart3, Timer, PanelLeftClose, PanelLeftOpen,
+  ChevronUp, ChevronDown, BarChart3, Timer, PanelLeftClose, PanelLeftOpen, Table2,
 } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
@@ -172,6 +172,37 @@ function ReportHeader({ title, subtitle, exportNode }: { title: string; subtitle
         <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 3 }}>{subtitle}</p>
       </div>
       {exportNode}
+    </div>
+  );
+}
+
+type ReportView = "chart" | "table";
+
+// Every chart-backed report offers this — the chart reads fastest for a
+// glance, but the exact figure behind any one bar/point sometimes matters
+// more than the shape, so a click gets you the same data as a plain table.
+function ViewToggle({ view, onChange }: { view: ReportView; onChange: (v: ReportView) => void }) {
+  return (
+    <div style={{ display: "inline-flex", border: "1px solid var(--surface-border)", borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+      {([["chart", BarChart3, "Chart"], ["table", Table2, "Table"]] as const).map(([v, Icon, label]) => (
+        <button
+          key={v}
+          type="button"
+          onClick={() => onChange(v)}
+          title={`${label} view`}
+          aria-label={`${label} view`}
+          aria-pressed={view === v}
+          style={{
+            display: "flex", alignItems: "center", gap: 5, padding: "6px 11px", cursor: "pointer", fontFamily: "inherit",
+            fontSize: "var(--text-sm)", fontWeight: 600, border: "none",
+            borderLeft: v === "table" ? "1px solid var(--surface-border)" : "none",
+            background: view === v ? "var(--brand-light)" : "#FFFFFF",
+            color: view === v ? "var(--brand-dark)" : "var(--ink-muted)",
+          }}
+        >
+          <Icon size={13} /> {label}
+        </button>
+      ))}
     </div>
   );
 }
@@ -681,6 +712,7 @@ function StockMovementsReport({ movements, productById }: { movements: MovementR
 }
 
 function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showRevenue: boolean }) {
+  const [view, setView] = useState<ReportView>("chart");
   const byChannel = new Map<string, { count: number; revenue: number }>();
   for (const o of orders) {
     const key = o.created_via ?? "unknown";
@@ -697,11 +729,16 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
       <ReportHeader
         title="Sales by Channel"
         subtitle="Where orders actually came from — WhatsApp bot vs. the web storefront"
-        exportNode={<ExportButton rows={rows} columns={[{ key: "channel", label: "Channel" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename="channel-split.csv" />}
+        exportNode={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <ViewToggle view={view} onChange={setView} />
+            <ExportButton rows={rows} columns={[{ key: "channel", label: "Channel" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename="channel-split.csv" />
+          </div>
+        }
       />
       {entries.length === 0 ? (
         <div style={S.card}><EmptyState icon={MessageCircle} title="No orders in this period" compact /></div>
-      ) : (
+      ) : view === "chart" ? (
         <div style={S.card}>
           <RankedBarChart
             data={entries.map(([channel, v]) => ({
@@ -713,6 +750,27 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
             capitalizeLabels
           />
         </div>
+      ) : (
+        <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={S.th}>Channel</th>
+                <th style={{ ...S.th, textAlign: "right" }}>Orders</th>
+                {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Revenue</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map(([channel, v]) => (
+                <tr key={channel}>
+                  <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500, textTransform: "capitalize" }}>{channel}</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>{v.count}</td>
+                  {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(v.revenue)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -721,6 +779,7 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
 // ── Tier 2 ──────────────────────────────────────────────────────────────
 
 function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders: OrderRow[]; rangeFrom: string; rangeTo: string; showRevenue: boolean }) {
+  const [view, setView] = useState<ReportView>("chart");
   const days: string[] = [];
   const cursor = new Date(rangeFrom);
   const end = new Date(rangeTo);
@@ -743,12 +802,17 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
       <ReportHeader
         title="Sales Trends"
         subtitle={`${showRevenue ? "Revenue" : "Order count"} by day, ${rangeFrom} to ${rangeTo}`}
-        exportNode={<ExportButton rows={rows} columns={[{ key: "date", label: "Date" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename={`sales-trend-${rangeFrom}-to-${rangeTo}.csv`} />}
+        exportNode={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {orders.length > 0 && <ViewToggle view={view} onChange={setView} />}
+            <ExportButton rows={rows} columns={[{ key: "date", label: "Date" }, { key: "orders", label: "Orders" }, { key: "revenue", label: "Revenue (₹)" }]} filename={`sales-trend-${rangeFrom}-to-${rangeTo}.csv`} />
+          </div>
+        }
       />
-      <div style={S.card}>
-        {orders.length === 0 ? (
-          <EmptyState icon={TrendingUp} title="No orders in this period yet" compact />
-        ) : (
+      {orders.length === 0 ? (
+        <div style={S.card}><EmptyState icon={TrendingUp} title="No orders in this period yet" compact /></div>
+      ) : view === "chart" ? (
+        <div style={S.card}>
           <TrendLineChart
             data={trend.map((d) => ({
               label: new Date(d.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
@@ -757,8 +821,33 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
             color="var(--brand)"
             valueFormatter={(v) => (showRevenue ? fmtMoney(v) : `${v} order${v === 1 ? "" : "s"}`)}
           />
-        )}
-      </div>
+        </div>
+      ) : (
+        <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+          <div style={{ maxHeight: 420, overflowY: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...S.th, position: "sticky", top: 0, background: "#FFFFFF" }}>Date</th>
+                  <th style={{ ...S.th, textAlign: "right", position: "sticky", top: 0, background: "#FFFFFF" }}>Orders</th>
+                  {showRevenue && <th style={{ ...S.th, textAlign: "right", position: "sticky", top: 0, background: "#FFFFFF" }}>Revenue</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {trend.map((d) => (
+                  <tr key={d.date}>
+                    <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500, whiteSpace: "nowrap" }}>
+                      {new Date(d.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
+                    </td>
+                    <td style={{ ...S.td, textAlign: "right" }}>{d.count}</td>
+                    {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(d.revenue)}</td>}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -846,6 +935,7 @@ function TopProductsReport({
 }
 
 function CategoryPerformanceReport({ items, productById, categoryById, showRevenue }: { items: OrderItemRow[]; productById: Map<string, ProductRow>; categoryById: Map<string, string>; showRevenue: boolean }) {
+  const [view, setView] = useState<ReportView>("chart");
   const totals = new Map<string, { qty: number; revenue: number }>();
   for (const item of items) {
     if (item.order_status !== "completed") continue;
@@ -864,17 +954,43 @@ function CategoryPerformanceReport({ items, productById, categoryById, showReven
       <ReportHeader
         title="Category Performance"
         subtitle="Sales rolled up by product category"
-        exportNode={<ExportButton rows={rows} columns={[{ key: "category", label: "Category" }, { key: "quantity", label: "Quantity" }, { key: "revenue", label: "Revenue (₹)" }]} filename="category-performance.csv" />}
+        exportNode={
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {ranked.length > 0 && <ViewToggle view={view} onChange={setView} />}
+            <ExportButton rows={rows} columns={[{ key: "category", label: "Category" }, { key: "quantity", label: "Quantity" }, { key: "revenue", label: "Revenue (₹)" }]} filename="category-performance.csv" />
+          </div>
+        }
       />
       {ranked.length === 0 ? (
         <div style={S.card}><EmptyState icon={Layers} title="No completed orders in this period" compact /></div>
-      ) : (
+      ) : view === "chart" ? (
         <div style={S.card}>
           <RankedBarChart
             data={ranked.map((c) => ({ label: c.name, value: showRevenue ? c.revenue : c.qty }))}
             color="var(--brand-dark)"
             valueFormatter={(v) => (showRevenue ? fmtMoney(v) : String(v))}
           />
+        </div>
+      ) : (
+        <div style={{ ...S.card, padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={S.th}>Category</th>
+                <th style={{ ...S.th, textAlign: "right" }}>Quantity</th>
+                {showRevenue && <th style={{ ...S.th, textAlign: "right" }}>Revenue</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((c) => (
+                <tr key={c.name}>
+                  <td style={{ ...S.td, color: "var(--ink)", fontWeight: 500 }}>{c.name}</td>
+                  <td style={{ ...S.td, textAlign: "right" }}>{c.qty}</td>
+                  {showRevenue && <td style={{ ...S.td, textAlign: "right" }}>{fmtMoney(c.revenue)}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </div>
