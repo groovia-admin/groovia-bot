@@ -23,6 +23,7 @@ const {
   cancelOrderByCustomer,
   sendNewOrderAlertTemplateFallback,
   buildOrderPlacedPayload,
+  adjustStockForOrder,
 } = require('./orderCreator');
 const { getOrderWithItems, createEditLink } = require('./orderEditor');
 const deliveryTracker = require('./deliveryTracker');
@@ -150,54 +151,6 @@ function parseCommand(text) {
   return null;
 }
 
-// Shared by ACCEPT (decrement — items are now committed as sold) and
-// CANCEL (restore — undoes that same commitment) below; these used to
-// be two independently hand-copied ~35-line loops differing only in
-// the sign of the delta and the movement_type string, found by a
-// simplify-pass review. Best-effort throughout: a stock-adjustment
-// failure must never undo or block the status change itself, which
-// has already succeeded by the time either caller reaches this.
-async function adjustStockForOrder(supabase, order, shopId, { sign, movementType, verb }) {
-  const { data: items, error: itemsError } = await supabase
-    .from('order_items')
-    .select('product_id, product_name_snapshot, quantity')
-    .eq('order_id', order.id);
-
-  if (itemsError) {
-    logger.error({ error: itemsError, orderId: order.id }, `Failed to load order items for stock ${verb}`);
-    return;
-  }
-
-  for (const item of items || []) {
-    if (!item.product_id) continue; // custom/removed products have no stock to adjust
-
-    const delta = sign * item.quantity;
-    const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
-      p_product_id: item.product_id,
-      p_delta: delta,
-    });
-
-    if (rpcError) {
-      logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, `Failed to ${verb} stock for product`);
-      continue;
-    }
-
-    const { error: movementError } = await supabase.from('inventory_movements').insert({
-      shop_id: shopId,
-      product_id: item.product_id,
-      quantity_delta: delta,
-      movement_type: movementType,
-      reference_id: order.id,
-      notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
-      created_by: null, // no Supabase auth user for a WhatsApp-driven action
-    });
-
-    if (movementError) {
-      logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
-    }
-  }
-}
-
 // Offered as a tap-to-advance button after a successful transition, so
 // staff never have to type a command for the rest of the lifecycle —
 // only the very first step (a new order arriving) can't avoid a choice,
@@ -297,22 +250,17 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  // Stock is committed as sold on acceptance — same rule and same
-  // adjust_product_stock RPC / inventory_movements pattern the
-  // dashboard's own Accept button already uses (dashboard:
-  // /api/shop/orders/[id]/route.ts). That route only ever covered
-  // acceptance triggered from the dashboard; accepting via WhatsApp
-  // (this command, or its button) went through this completely
-  // separate code path and never decremented anything — confirmed
-  // real, reported gap, not something specific to one shop's data.
-  // Best-effort: a stock-adjustment failure must not undo or block the
-  // status change itself, which has already succeeded above. Same
-  // rule/RPC/movement-type pattern the dashboard's own status route
-  // uses (stockEffect in /api/shop/orders/[id]/route.ts) — decrement on
-  // ACCEPT (items now committed as sold), restore on CANCEL (undoes
-  // that same commitment).
-  if (command === 'ACCEPT') {
-    await adjustStockForOrder(supabase, order, shopId, { sign: -1, movementType: 'sale', verb: 'decrement' });
+  // Stock is now reserved at order PLACEMENT (see the webview's
+  // order-creation route / createOrderFromSession), not at accept —
+  // closing a real overselling race where two customers could both pass
+  // the availability check on the last unit before either order was
+  // ever triaged. ACCEPT is therefore a no-op for stock (already
+  // reserved); REJECT and CANCEL both restore it, since either one
+  // means the reservation never turns into a real sale. Best-effort:
+  // a stock-adjustment failure must not undo or block the status
+  // change itself, which has already succeeded above.
+  if (command === 'REJECT') {
+    await adjustStockForOrder(supabase, order, shopId, { sign: 1, movementType: 'cancelled_order', verb: 'restore' });
   }
   if (command === 'CANCEL') {
     await adjustStockForOrder(supabase, order, shopId, { sign: 1, movementType: 'cancelled_order', verb: 'restore' });
@@ -1131,6 +1079,26 @@ async function handleIncomingMessage(message, value) {
     }
   }
 
+  // Meta shows a native Catalog button on the WhatsApp Business profile
+  // independent of anything this bot sends, so a customer can reach it
+  // and submit a native cart at any time — reported gap: this used to
+  // have no handler at all, silently falling through to the generic
+  // fallback below with the customer's actual cart just gone, no error,
+  // no explanation. The v2 architecture is webview-based now, not
+  // native-cart-based, so this doesn't try to resurrect the old
+  // native-catalog order flow (createOrderFromSession, still intact but
+  // unmaintained since the webview redesign) — it explains what
+  // happened and hands them a fresh, working link instead.
+  if (type === 'order' && message.order) {
+    await resolveAndStartCustomerSession(
+      from,
+      name,
+      value.metadata?.phone_number_id,
+      `🛒 We've moved to a simpler ordering page for a better experience — your cart here wasn't saved, but here's a fresh link to browse and order:`
+    );
+    return;
+  }
+
   // Staff identity is resolved globally now, not derived from which
   // WhatsApp number received the message — one shared number now
   // serves multiple shops (v2 architecture), so phone_number_id no
@@ -1163,7 +1131,14 @@ async function handleIncomingMessage(message, value) {
   // single-shop-per-number case); 2+ reuses the same "pick a shop" list
   // + handler the nearby-shops-by-location flow already has, rather
   // than guessing which shop a bare "Hi" was meant for.
-  const phoneNumberId = value.metadata?.phone_number_id;
+  await resolveAndStartCustomerSession(from, name, value.metadata?.phone_number_id);
+}
+
+// Shared by the plain-message fallback above and the native-cart
+// recovery below — both need the same "resolve shop(s) for this
+// number, then start a session or ask which shop" logic, just with a
+// different message ahead of it in one case.
+async function resolveAndStartCustomerSession(from, name, phoneNumberId, preambleText) {
   const shops = await resolveShopsByPhoneNumberId(phoneNumberId);
 
   if (shops.length === 0) {
@@ -1173,6 +1148,7 @@ async function handleIncomingMessage(message, value) {
   }
 
   if (shops.length === 1) {
+    if (preambleText) await sendWhatsAppMessage(from, preambleText);
     await startCustomerOrderingSession(from, shops[0], name);
     return;
   }
@@ -1181,7 +1157,7 @@ async function handleIncomingMessage(message, value) {
 
   await sendListMessage(
     from,
-    `👋 Hi ${name}! A few shops use this number — which one are you looking for?`,
+    (preambleText ? `${preambleText}\n\n` : '') + `👋 Hi ${name}! A few shops use this number — which one are you looking for?`,
     'Select shop',
     [{ title: 'Shops', rows }]
   );

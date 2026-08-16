@@ -514,6 +514,24 @@ export async function POST(
   const shop =
     createdShops[0]
 
+  // Reported gap: no shop_settings row exists until an owner first
+  // saves the Settings page, and the reminder/auto-reject scan
+  // silently skips any shop with no settings row at all -- a shop
+  // whose first order arrives before anyone's opened Settings could
+  // sit pending forever with no nudge to staff and no update to the
+  // waiting customer. Created here instead, at shop creation, so every
+  // shop has one from minute one. upsert + ignoreDuplicates since it's
+  // unknown whether create_shop_with_owner (the RPC above) already
+  // creates one in some path -- this is belt-and-suspenders either way,
+  // not assumed to be the only place it could happen.
+  const { error: settingsError } = await adminClient
+    .from('shop_settings')
+    .upsert({ shop_id: shop.id }, { onConflict: 'shop_id', ignoreDuplicates: true })
+
+  if (settingsError) {
+    console.error('Failed to create default shop_settings row:', settingsError)
+  }
+
   const shopUpdates: Record<string, string> = {}
 
   if (description) {

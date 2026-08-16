@@ -33,6 +33,62 @@ function generateOrderNumber() {
   return `ORD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
 
+// Shared by every place stock needs adjusting on an order lifecycle
+// event. Moved here (from messageHandler.js) so reminderService.js's
+// auto-reject can call it too, without messageHandler.js and
+// reminderService.js needing to require each other.
+//
+// Stock is reserved at PLACEMENT now, not at accept (see
+// createOrderFromSession/the webview's order-creation route) — closing
+// a real overselling race where two customers could both pass the
+// availability check on the last unit before either order was ever
+// triaged by a human. Accept is now a no-op for stock (already
+// reserved); reject and cancel both restore it, whichever point in the
+// lifecycle they happen from. Best-effort throughout: a stock-
+// adjustment failure must never undo or block the status change
+// itself, which has already succeeded by the time any caller reaches
+// this.
+async function adjustStockForOrder(supabase, order, shopId, { sign, movementType, verb, createdBy = null }) {
+  const { data: items, error: itemsError } = await supabase
+    .from('order_items')
+    .select('product_id, product_name_snapshot, quantity')
+    .eq('order_id', order.id);
+
+  if (itemsError) {
+    logger.error({ error: itemsError, orderId: order.id }, `Failed to load order items for stock ${verb}`);
+    return;
+  }
+
+  for (const item of items || []) {
+    if (!item.product_id) continue; // custom/removed products have no stock to adjust
+
+    const delta = sign * item.quantity;
+    const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
+      p_product_id: item.product_id,
+      p_delta: delta,
+    });
+
+    if (rpcError) {
+      logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, `Failed to ${verb} stock for product`);
+      continue;
+    }
+
+    const { error: movementError } = await supabase.from('inventory_movements').insert({
+      shop_id: shopId,
+      product_id: item.product_id,
+      quantity_delta: delta,
+      movement_type: movementType,
+      reference_id: order.id,
+      notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+      created_by: createdBy,
+    });
+
+    if (movementError) {
+      logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
+    }
+  }
+}
+
 /**
  * Resolves a WhatsApp native-cart submission's product_items (Meta
  * retailer_id + quantity + Meta's own item_price) into real cart lines,
@@ -778,4 +834,5 @@ module.exports = {
   retryNewOrderAlert,
   sendNewOrderAlertTemplateFallback,
   resendPendingOrderAlerts,
+  adjustStockForOrder,
 };
