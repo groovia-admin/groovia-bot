@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, Trash2, Loader2 } from 'lucide-react'
+import { Minus, Plus, Trash2, Loader2 } from 'lucide-react'
 
 type OrderItem = {
   id: string
@@ -178,7 +178,7 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-1.5 rounded-lg px-2 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
+                  <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
                     <button
                       className="text-white p-1"
                       disabled={busy}
@@ -188,6 +188,19 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                       <Minus size={14} />
                     </button>
                     <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
+                    {/* Same +/- stepper shape used everywhere else in the
+                        app (customer cart, product grid) — present but
+                        permanently disabled here rather than removed, so
+                        this screen doesn't look like a different, broken
+                        component; see the note above on why increasing
+                        isn't allowed from this screen at all. */}
+                    <button
+                      className="text-white/40 p-1 cursor-not-allowed"
+                      disabled
+                      aria-label={`Increasing quantity isn't allowed here — ask the customer to place a new order for more ${item.product_name_snapshot}`}
+                    >
+                      <Plus size={14} />
+                    </button>
                   </div>
                   <span className="text-sm font-semibold text-ink w-14 text-right">₹{Number(item.subtotal).toFixed(0)}</span>
                   <button
