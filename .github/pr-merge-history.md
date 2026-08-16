@@ -103,3 +103,4 @@
 | #138 | Bump required Node.js version to 22 (wa-bot + dashboard) | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 16:54 UTC | 0d 0h 0m |
 | #139 | Open order details as a slide-over drawer instead of navigating away | dashboard | @groovia-admin | @groovia-admin | 2026-08-15 17:34 UTC | 0d 0h 0m |
 | #140 | Bot dashboard polish round3 | dashboard | @groovia-admin | @groovia-admin | 2026-08-16 10:23 UTC | 0d 0h 0m |
+| #141 | Order notes field, decrease-only edits, aligned pickup slots, cancel … | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-16 14:09 UTC | 0d 0h 0m |
