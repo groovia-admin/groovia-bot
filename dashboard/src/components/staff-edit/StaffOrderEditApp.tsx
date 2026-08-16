@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, Trash2, Loader2 } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { Minus, Plus, Trash2, Loader2 } from 'lucide-react'
+import { formatItemDiffLine } from '@/lib/orderDiffFormat'
 
 type OrderItem = {
   id: string
@@ -45,12 +46,6 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   const [ended, setEnded] = useState(false)
   const [showManualReturn, setShowManualReturn] = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  // Keyed by item id so several taps on the same item during one
-  // session collapse into a single net line (2 → 3 → 4 reads as one
-  // "2 → 4", not three separate messages worth of noise) — only the
-  // starting quantity from before this session and the latest one are
-  // kept, everything in between is just how the shopkeeper got there.
-  const diffsRef = useRef<Map<string, { name: string; from: number; to: number; removed: boolean }>>(new Map())
 
   const waLink = useMemo(() => {
     if (!whatsappNumber) return null
@@ -97,15 +92,6 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
         setError(data.error || 'Failed to update item')
         return
       }
-
-      const existing = diffsRef.current.get(item.id)
-      const from = existing ? existing.from : item.quantity
-      diffsRef.current.set(item.id, {
-        name: item.product_name_snapshot,
-        from,
-        to: nextQuantity,
-        removed: data.removed,
-      })
 
       if (data.removed) {
         setItems((prev) => prev.filter((i) => i.id !== item.id))
@@ -178,7 +164,7 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-1.5 rounded-lg px-2 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
+                  <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
                     <button
                       className="text-white p-1"
                       disabled={busy}
@@ -188,6 +174,19 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                       <Minus size={14} />
                     </button>
                     <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
+                    {/* Same +/- stepper shape used everywhere else in the
+                        app (customer cart, product grid) — present but
+                        permanently disabled here rather than removed, so
+                        this screen doesn't look like a different, broken
+                        component; see the note above on why increasing
+                        isn't allowed from this screen at all. */}
+                    <button
+                      className="text-white/40 p-1 cursor-not-allowed"
+                      disabled
+                      aria-label={`Increasing quantity isn't allowed here — ask the customer to place a new order for more ${item.product_name_snapshot}`}
+                    >
+                      <Plus size={14} />
+                    </button>
                   </div>
                   <span className="text-sm font-semibold text-ink w-14 text-right">₹{Number(item.subtotal).toFixed(0)}</span>
                   <button
@@ -252,10 +251,23 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   // server has to get this call either way. Fire-and-forget: the
   // redirect must never wait on or be blocked by this, same reasoning
   // as every other best-effort notify in this flow.
+  //
+  // diffLines is computed here, not tracked incrementally per-tap — the
+  // `items` state already holds each item's latest quantity (updated by
+  // every successful updateQuantity call) and `initialItems` never
+  // changes after mount, so comparing the two at this one point already
+  // gives the same net "from → to" per item that per-tap bookkeeping
+  // used to produce, with no extra state to keep in sync.
   function handleDone() {
-    const diffLines = [...diffsRef.current.values()]
-      .filter((d) => d.removed || d.from !== d.to)
-      .map((d) => (d.removed ? `❌ ${d.name} — removed` : `✏️ ${d.name} — quantity ${d.from} → ${d.to}`))
+    const currentById = new Map(items.map((i) => [i.id, i]))
+    const diffLines = initialItems
+      .filter((orig) => currentById.get(orig.id)?.quantity !== orig.quantity)
+      .map((orig) => {
+        const current = currentById.get(orig.id)
+        return current
+          ? formatItemDiffLine({ name: orig.product_name_snapshot, removed: false, from: orig.quantity, to: current.quantity })
+          : formatItemDiffLine({ name: orig.product_name_snapshot, removed: true })
+      })
 
     fetch(`/api/public/staff-edit/${orderId}/done`, {
       method: 'POST',

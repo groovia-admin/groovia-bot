@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { ArrowLeft, Loader2, Plus, Minus, ShoppingBag } from 'lucide-react'
-import { generateHourlySlots } from '@/lib/storefront/slots'
+import { generateHourlySlots, isShopCurrentlyOpen } from '@/lib/storefront/slots'
 import type { CartItem, StorefrontSettings, SubmitOrderBody, CheckoutFormState } from '@/lib/storefront/types'
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -80,6 +80,16 @@ export function CheckoutView({
   )
   const selectedSlot = slots.find((s) => s.id === pickupSlotId) ?? null
 
+  // Pickup already effectively got this (no slot ever shows up outside
+  // hours); delivery had no equivalent at all, so a delivery order could
+  // be placed while the shop was closed — reported as a real gap. Same
+  // check now gates both, shown up front rather than only failing at
+  // submission after the customer's filled in a delivery address.
+  const isOpen = useMemo(
+    () => isShopCurrentlyOpen(settings?.business_hours, timezone),
+    [settings?.business_hours, timezone]
+  )
+
   const paymentOptions = settings?.accepted_payment_methods?.length ? settings.accepted_payment_methods : ['cash']
 
   const deliveryFee =
@@ -92,7 +102,7 @@ export function CheckoutView({
   const grandTotal = total + deliveryFee
 
   function canSubmit() {
-    if (submitting || !canCheckout) return false
+    if (submitting || !canCheckout || !isOpen) return false
     if (items.length === 0) return false
     if (!customerName.trim()) return false
     if (!paymentMethod) return false
@@ -155,6 +165,13 @@ export function CheckoutView({
       </header>
 
       <div className="mx-auto max-w-2xl px-4 py-4 space-y-4">
+        {!isOpen && (
+          <div className="card bg-red-50 border-red-100">
+            <p className="text-sm font-medium text-red-600">We&apos;re closed right now</p>
+            <p className="text-xs text-red-500 mt-0.5">You can browse, but ordering opens back up during business hours.</p>
+          </div>
+        )}
+
         {items.length === 0 ? (
           <div className="text-center py-16">
             <ShoppingBag size={32} className="mx-auto text-ink-faint" />

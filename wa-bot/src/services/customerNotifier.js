@@ -127,13 +127,22 @@ async function notifyCustomer(orderId, status, shopId) {
   // separate-messages behavior on any failure is safe right now and
   // stops needing the fallback the moment Meta approves it -- no
   // redeploy required either way.
-  if (status === 'completed') {
-    const invoice = await generateOrderInvoicePdf(orderId, shopId);
-    const mediaId = invoice ? await uploadWhatsAppMedia(invoice.buffer, `Invoice-${invoice.orderNumber}.pdf`, 'application/pdf') : null;
+  // Computed once up front (not inside the `if` below) so the fallback
+  // path further down can reuse whatever got generated/uploaded here
+  // instead of redoing both — a simplify-pass review caught this: every
+  // completed order was generating the PDF and uploading it to Meta
+  // twice, once here and again inside sendCompletionInvoice, since the
+  // combined send below can't succeed yet (template still pending).
+  let invoice = null;
+  let invoiceMediaId = null;
 
-    if (mediaId) {
+  if (status === 'completed') {
+    invoice = await generateOrderInvoicePdf(orderId, shopId);
+    invoiceMediaId = invoice ? await uploadWhatsAppMedia(invoice.buffer, `Invoice-${invoice.orderNumber}.pdf`, 'application/pdf') : null;
+
+    if (invoiceMediaId) {
       const combinedComponents = [
-        { type: 'header', parameters: [{ type: 'document', document: { id: mediaId, filename: `Invoice-${invoice.orderNumber}.pdf` } }] },
+        { type: 'header', parameters: [{ type: 'document', document: { id: invoiceMediaId, filename: `Invoice-${invoice.orderNumber}.pdf` } }] },
         ...components,
       ];
       const combinedSent = await sendWhatsAppTemplateWithFallback(phone, template.name, template.language, combinedComponents);
@@ -155,9 +164,11 @@ async function notifyCustomer(orderId, status, shopId) {
   // the shop owner/staff already know what they marked complete; this is
   // a customer-facing document, matching the explicit "not in shop owner
   // WhatsApp" requirement. Only reached here if the combined send above
-  // wasn't even attempted or didn't succeed.
+  // wasn't even attempted or didn't succeed — reuses the invoice/media
+  // already generated above when available, only regenerating if that
+  // generation/upload itself is what failed.
   if (sent && status === 'completed') {
-    await sendCompletionInvoice(orderId, shopId, phone);
+    await sendCompletionInvoice(orderId, shopId, phone, invoiceMediaId ? { mediaId: invoiceMediaId, orderNumber: invoice.orderNumber } : null);
   }
 
   return sent;
@@ -223,24 +234,33 @@ async function generateOrderInvoicePdf(orderId, shopId) {
  * beyond what's actually asked for. Best-effort and not retried, same as
  * the receipt above: a failure here must never surface to the caller,
  * since the order's own status change already succeeded.
+ *
+ * `precomputed` lets a caller that already generated + uploaded the PDF
+ * (the combined-header send attempt above, when it has a mediaId but the
+ * template send itself failed) skip doing both again here.
  */
-async function sendCompletionInvoice(orderId, shopId, phone) {
+async function sendCompletionInvoice(orderId, shopId, phone, precomputed) {
   try {
-    const result = await generateOrderInvoicePdf(orderId, shopId);
-    if (!result) {
-      logger.warn({ orderId }, 'Invoice generation failed — skipping invoice send (best-effort)');
-      return;
-    }
-
-    const { buffer: pdfBuffer, orderNumber } = result;
-    const filename = `Invoice-${orderNumber}.pdf`;
-    const mediaId = await uploadWhatsAppMedia(pdfBuffer, filename, 'application/pdf');
+    let mediaId = precomputed?.mediaId;
+    let orderNumber = precomputed?.orderNumber;
 
     if (!mediaId) {
-      logger.warn({ orderId }, 'Invoice media upload failed — skipping invoice send (best-effort)');
-      return;
+      const result = await generateOrderInvoicePdf(orderId, shopId);
+      if (!result) {
+        logger.warn({ orderId }, 'Invoice generation failed — skipping invoice send (best-effort)');
+        return;
+      }
+
+      orderNumber = result.orderNumber;
+      mediaId = await uploadWhatsAppMedia(result.buffer, `Invoice-${orderNumber}.pdf`, 'application/pdf');
+
+      if (!mediaId) {
+        logger.warn({ orderId }, 'Invoice media upload failed — skipping invoice send (best-effort)');
+        return;
+      }
     }
 
+    const filename = `Invoice-${orderNumber}.pdf`;
     const invoiceSent = await sendWhatsAppDocument(phone, mediaId, filename, `🧾 Invoice for your order`);
     if (invoiceSent) {
       logMessage(shopId, phone, 'outbound', 'system', 'document', `Invoice PDF for order ${orderId}`);

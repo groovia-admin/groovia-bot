@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateEditLink } from '@/lib/orderEditLink'
 import { logAuditEvent } from '@/lib/audit/log'
+import { adjustOrderStock } from '@/lib/orderStock'
+import { notifyWaBot } from '@/lib/notifyWaBot'
 
 type DoneRouteContext = {
   params: Promise<{ orderId: string }>
@@ -81,42 +83,15 @@ export async function POST(request: Request, { params }: DoneRouteContext) {
   }
 
   if (accepted) {
-    // Same decrement the WhatsApp ACCEPT command and the dashboard's own
-    // status-PATCH route both already do on acceptance — reads whatever
+    // Same decrement the WhatsApp ACCEPT command uses — reads whatever
     // order_items look like right now (i.e. after every edit this
     // session), not a stale pre-edit snapshot.
-    const { data: itemsForStock, error: itemsForStockError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', orderId)
-
-    if (itemsForStockError) {
-      console.error('Failed to load order items for stock decrement:', itemsForStockError)
-    } else {
-      for (const stockItem of itemsForStock ?? []) {
-        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: stockItem.product_id,
-          p_delta: -stockItem.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: link.shop_id,
-          product_id: stockItem.product_id,
-          quantity_delta: -stockItem.quantity,
-          movement_type: 'sale',
-          reference_id: orderId,
-          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-          created_by: null, // no Supabase auth user for a WhatsApp-driven action
-        })
-      }
-    }
+    await adjustOrderStock(adminClient, {
+      orderId,
+      shopId: link.shop_id,
+      orderNumber: order.order_number,
+      direction: 'decrement',
+    })
 
     await logAuditEvent({
       shopId: link.shop_id,
@@ -131,29 +106,19 @@ export async function POST(request: Request, { params }: DoneRouteContext) {
     })
 
     if (base && internalSecret) {
-      fetch(`${base}/internal/orders/${orderId}/notify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id }),
-      })
-        .then(async (res) => {
-          if (!res.ok) console.error('wa-bot rejected the accept notify:', res.status, await res.text().catch(() => ''))
-        })
-        .catch((err) => console.error('Failed to notify wa-bot of order accept:', err))
+      notifyWaBot(base, internalSecret, `/internal/orders/${orderId}/notify`, { status: 'accepted', shopId: link.shop_id }, 'the accept notify')
 
       // Staff-facing confirmation + "Mark ready" button — without this,
       // the shop had no visible sign the order was accepted at all, and
       // no way to advance it to ready/complete short of typing a raw
       // WhatsApp command they'd have no reason to know existed.
-      fetch(`${base}/internal/orders/${orderId}/notify-staff`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-        body: JSON.stringify({ status: 'accepted', shopId: link.shop_id, via: 'an item edit' }),
-      })
-        .then(async (res) => {
-          if (!res.ok) console.error('wa-bot rejected the staff notify:', res.status, await res.text().catch(() => ''))
-        })
-        .catch((err) => console.error('Failed to notify wa-bot staff of order accept:', err))
+      notifyWaBot(
+        base,
+        internalSecret,
+        `/internal/orders/${orderId}/notify-staff`,
+        { status: 'accepted', shopId: link.shop_id, via: 'an item edit' },
+        'the staff accept notify'
+      )
     }
   }
 

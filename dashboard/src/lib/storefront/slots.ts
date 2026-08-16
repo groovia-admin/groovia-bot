@@ -36,6 +36,26 @@ function formatHourLabel(hour: number) {
   return `${displayHour}:00 ${period}`
 }
 
+// Whether the shop is open right now, by the same open/close hours
+// generateHourlySlots already uses — pickup only ever got this check
+// indirectly (the UI just doesn't offer a slot outside hours), and
+// delivery had no check at all, since it doesn't go through slots.
+// Both need a real server-side gate: nothing previously stopped an
+// order (of either type) from being placed while the shop was closed
+// if the request didn't go through the normal UI flow.
+export function isShopCurrentlyOpen(businessHours: Record<string, unknown> | null | undefined, timezone: string): boolean {
+  const open = businessHours?.open
+  const close = businessHours?.close
+  if (typeof open !== 'string' || typeof close !== 'string') return true // no hours configured — treat as always open, same default the rest of this file uses
+
+  const [openHour] = open.split(':').map(Number)
+  const [closeHour] = close.split(':').map(Number)
+  if (!Number.isInteger(openHour) || !Number.isInteger(closeHour) || closeHour <= openHour) return true
+
+  const { hour: currentHour } = getCurrentHourAndMinute(timezone)
+  return currentHour >= openHour && currentHour < closeHour
+}
+
 export function generateHourlySlots(
   businessHours: Record<string, unknown> | null | undefined,
   timezone: string
