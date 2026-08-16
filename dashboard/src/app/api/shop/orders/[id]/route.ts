@@ -159,14 +159,16 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
   }
 
-  // Stock is committed as sold on acceptance (not at order creation, since
-  // orderCreator only checks availability at that point) and restored if a
-  // shop backs out afterward. 'cancelled' is only reachable from
-  // accepted/preparing/ready (see ALLOWED_TRANSITIONS), so stock was always
-  // decremented already — 'rejected' only happens straight from 'pending',
-  // before any decrement occurred, so it needs no restore.
-  const stockEffect: 'decrement' | 'restore' | null =
-    nextStatus === 'accepted' ? 'decrement' : nextStatus === 'cancelled' ? 'restore' : null
+  // Stock is now reserved (decremented) at order placement, not on
+  // acceptance — the storefront's order route does this atomically so two
+  // concurrent checkouts can't both claim the same last unit. Accepting an
+  // order no longer touches stock at all (it's already held); rejecting or
+  // cancelling releases that hold back to the shelf. 'rejected' only
+  // happens straight from 'pending', and 'cancelled' only from
+  // accepted/preparing/ready (see ALLOWED_TRANSITIONS) — either way,
+  // reservation always happened at placement, so both restore.
+  const stockEffect: 'restore' | null =
+    nextStatus === 'rejected' || nextStatus === 'cancelled' ? 'restore' : null
 
   if (stockEffect) {
     const { data: items, error: itemsError } = await adminClient
@@ -177,13 +179,12 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
     if (itemsError) {
       console.error('Failed to load order items for stock adjustment:', itemsError)
     } else {
-      const sign = stockEffect === 'decrement' ? -1 : 1
       for (const item of items ?? []) {
         if (!item.product_id) continue // custom/removed products have no stock to adjust
 
         const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
           p_product_id: item.product_id,
-          p_delta: sign * item.quantity,
+          p_delta: item.quantity,
         })
 
         if (rpcError) {
@@ -194,8 +195,8 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
         await adminClient.from('inventory_movements').insert({
           shop_id: shopId,
           product_id: item.product_id,
-          quantity_delta: sign * item.quantity,
-          movement_type: stockEffect === 'decrement' ? 'sale' : 'cancelled_order',
+          quantity_delta: item.quantity,
+          movement_type: 'cancelled_order',
           reference_id: order.id,
           notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
           created_by: authorization.userId,

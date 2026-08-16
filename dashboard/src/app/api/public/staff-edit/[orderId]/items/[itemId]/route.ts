@@ -70,7 +70,7 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
-    .select('id, product_name_snapshot, quantity, unit_price')
+    .select('id, product_id, product_name_snapshot, quantity, unit_price')
     .eq('order_id', orderId)
 
   if (allItemsError) {
@@ -92,6 +92,52 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   }
 
   const previousQuantity = item.quantity
+  const targetQuantity = removing ? 0 : quantity
+
+  // Stock is reserved at order placement, for whatever quantities the
+  // order had then — keep that reservation in sync by the delta whenever
+  // a quantity changes here, same as the dashboard's own item-edit route.
+  // Done before touching order_items so a failed reservation (increasing
+  // past what's left on the shelf) leaves nothing half-changed.
+  if (item.product_id) {
+    const delta = previousQuantity - targetQuantity
+    if (delta > 0) {
+      const { error: restoreError } = await adminClient.rpc('adjust_product_stock', {
+        p_product_id: item.product_id,
+        p_delta: delta,
+      })
+      if (restoreError) {
+        console.error('Failed to restore stock for edited item:', restoreError)
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+      }
+    } else if (delta < 0) {
+      const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+        p_product_id: item.product_id,
+        p_qty: -delta,
+      })
+      if (reserveError) {
+        console.error('Failed to reserve additional stock for edited item:', reserveError)
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+      }
+      if (newQuantity === null) {
+        return NextResponse.json(
+          { error: `Not enough stock to increase ${item.product_name_snapshot} to ${targetQuantity}.` },
+          { status: 409 }
+        )
+      }
+    }
+    if (delta !== 0) {
+      await adminClient.from('inventory_movements').insert({
+        shop_id: link.shop_id,
+        product_id: item.product_id,
+        quantity_delta: delta,
+        movement_type: delta > 0 ? 'cancelled_order' : 'sale',
+        reference_id: orderId,
+        notes: `Order #${order.order_number} — ${item.product_name_snapshot} (edited)`,
+        created_by: null,
+      })
+    }
+  }
 
   if (removing) {
     const { error: deleteError } = await adminClient.from('order_items').delete().eq('id', itemId)

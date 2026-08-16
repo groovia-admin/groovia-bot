@@ -12,6 +12,14 @@ const requiredEnv = [
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'INTERNAL_API_SECRET',
+  // Promoted from optional to required: the ordering webview this used to
+  // point at "doesn't exist yet" when that comment was first written —
+  // it's now the only live customer ordering path there is (the native
+  // WhatsApp-catalog flow was superseded and is unreachable from the
+  // webhook router). Missing this used to degrade silently, one customer
+  // at a time, each getting "online ordering is launching soon" forever —
+  // total ordering outage with nothing at boot to say why.
+  'WEBVIEW_BASE_URL',
 ];
 
 for (const key of requiredEnv) {
@@ -29,13 +37,7 @@ module.exports = {
   phoneNumberId: process.env.PHONE_NUMBER_ID,
   graphApiVersion: process.env.GRAPH_API_VERSION || 'v25.0',
   internalApiSecret: process.env.INTERNAL_API_SECRET,
-  // Deliberately NOT in requiredEnv — the ordering webview (Phase 5)
-  // doesn't exist yet, so this has nothing to point at until then.
-  // Same reasoning as META_CATALOG_ID: a hard boot requirement here
-  // would crash-loop the whole bot for a feature nobody's finished
-  // building yet. Session-link generation checks for this being unset
-  // and fails clearly instead.
-  webviewBaseUrl: process.env.WEBVIEW_BASE_URL || null,
+  webviewBaseUrl: process.env.WEBVIEW_BASE_URL,
   // Deliberately NOT in requiredEnv, same reasoning as webviewBaseUrl —
   // the staff welcome message (messageHandler.js) still sends fine
   // without it, just with a generic line instead of a real link. Same

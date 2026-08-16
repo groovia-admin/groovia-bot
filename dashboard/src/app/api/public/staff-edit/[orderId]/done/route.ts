@@ -18,9 +18,10 @@ type DoneBody = {
 // 1. If the order was still 'pending', it's accepted now (not on the
 //    first quantity tap like before — reported as feeling wrong for the
 //    order to silently flip to "accepted" while the shopkeeper was
-//    still mid-edit, before they'd actually finished). Stock is
-//    decremented off whatever the final edited quantities are, same
-//    RPC + inventory_movements pattern the WhatsApp ACCEPT command uses.
+//    still mid-edit, before they'd actually finished). Stock itself is
+//    NOT touched here — it's reserved at order placement and each item
+//    PATCH during this session already kept that reservation in sync by
+//    its own delta, so there's nothing left to decrement on acceptance.
 // 2. If any items were actually changed this session (diffLines from
 //    StaffOrderEditApp.tsx's client-side accumulation), the customer
 //    gets one consolidated "here's what changed" message — the
@@ -81,43 +82,6 @@ export async function POST(request: Request, { params }: DoneRouteContext) {
   }
 
   if (accepted) {
-    // Same decrement the WhatsApp ACCEPT command and the dashboard's own
-    // status-PATCH route both already do on acceptance — reads whatever
-    // order_items look like right now (i.e. after every edit this
-    // session), not a stale pre-edit snapshot.
-    const { data: itemsForStock, error: itemsForStockError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', orderId)
-
-    if (itemsForStockError) {
-      console.error('Failed to load order items for stock decrement:', itemsForStockError)
-    } else {
-      for (const stockItem of itemsForStock ?? []) {
-        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: stockItem.product_id,
-          p_delta: -stockItem.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: link.shop_id,
-          product_id: stockItem.product_id,
-          quantity_delta: -stockItem.quantity,
-          movement_type: 'sale',
-          reference_id: orderId,
-          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-          created_by: null, // no Supabase auth user for a WhatsApp-driven action
-        })
-      }
-    }
-
     await logAuditEvent({
       shopId: link.shop_id,
       actorUserId: null,

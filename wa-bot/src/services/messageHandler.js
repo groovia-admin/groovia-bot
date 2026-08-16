@@ -249,46 +249,49 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     return;
   }
 
-  // Stock is committed as sold on acceptance — same rule and same
-  // adjust_product_stock RPC / inventory_movements pattern the
-  // dashboard's own Accept button already uses (dashboard:
-  // /api/shop/orders/[id]/route.ts). That route only ever covered
-  // acceptance triggered from the dashboard; accepting via WhatsApp
-  // (this command, or its button) went through this completely
-  // separate code path and never decremented anything — confirmed
-  // real, reported gap, not something specific to one shop's data.
-  // Best-effort: a stock-adjustment failure must not undo or block the
-  // order acceptance itself, which has already succeeded above.
-  if (command === 'ACCEPT') {
+  // Stock is reserved (decremented) at order placement now, not on
+  // acceptance — the storefront's order-creation route does this
+  // atomically so two concurrent checkouts can't both claim the same last
+  // unit. ACCEPT no longer touches stock at all here, matching the
+  // dashboard's own status-PATCH route (which used to decrement on accept
+  // and now doesn't either).
+
+  // REJECT releases the reservation made at placement — same
+  // RPC/movement-type pattern the dashboard's own reject path uses
+  // (stockEffect === 'restore' in /api/shop/orders/[id]/route.ts).
+  // Previously REJECT touched no stock at all, which was correct under
+  // the old decrement-on-accept model (nothing had been reserved yet) but
+  // would now leak a permanent reservation under the new one.
+  if (command === 'REJECT') {
     const { data: items, error: itemsError } = await supabase
       .from('order_items')
       .select('product_id, product_name_snapshot, quantity')
       .eq('order_id', order.id);
 
     if (itemsError) {
-      logger.error({ error: itemsError, orderId: order.id }, 'Failed to load order items for stock decrement');
+      logger.error({ error: itemsError, orderId: order.id }, 'Failed to load order items for stock restore');
     } else {
       for (const item of items || []) {
         if (!item.product_id) continue; // custom/removed products have no stock to adjust
 
         const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
           p_product_id: item.product_id,
-          p_delta: -item.quantity,
+          p_delta: item.quantity,
         });
 
         if (rpcError) {
-          logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, 'Failed to decrement stock for product');
+          logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, 'Failed to restore stock for product');
           continue;
         }
 
         const { error: movementError } = await supabase.from('inventory_movements').insert({
           shop_id: shopId,
           product_id: item.product_id,
-          quantity_delta: -item.quantity,
-          movement_type: 'sale',
+          quantity_delta: item.quantity,
+          movement_type: 'cancelled_order',
           reference_id: order.id,
           notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
-          created_by: null, // no Supabase auth user for a WhatsApp-driven action
+          created_by: null,
         });
 
         if (movementError) {
@@ -298,10 +301,8 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
     }
   }
 
-  // Mirror image of the ACCEPT block above: stock committed as sold on
-  // acceptance has to go back on cancellation, same RPC/movement-type
-  // pattern the dashboard's own cancel path uses (stockEffect === 'restore'
-  // in /api/shop/orders/[id]/route.ts). Positive delta, not negative.
+  // Same release, for an order backed out of after acceptance instead of
+  // before it — same RPC/movement-type pattern.
   if (command === 'CANCEL') {
     const { data: items, error: itemsError } = await supabase
       .from('order_items')
@@ -1163,13 +1164,35 @@ async function handleIncomingMessage(message, value) {
     return;
   }
 
+  // A customer's native Meta Commerce Cart submission — reachable any
+  // time, independent of anything this bot sends, since Meta shows a
+  // Catalog button on the shop's WhatsApp profile on its own. This used
+  // to have no handler at all and fell straight through to the fallback
+  // below, which quietly re-sent a fresh ordering link with no
+  // explanation — confirmed real, reported gap: the customer's actual
+  // cart just vanished, no error, no acknowledgment it was even
+  // received. Ordering itself lives entirely in the webview now (the
+  // native-catalog checkout this cart type used to feed is unreachable —
+  // see the comment on handleCustomerMessage below), so this doesn't try
+  // to process message.order — it says so plainly and hands the customer
+  // a fresh, working link via the exact same resolution the generic
+  // fallback below uses.
+  if (type === 'order' && message.order) {
+    await sendWhatsAppMessage(
+      from,
+      `Hi ${name}! We've moved to a smoother ordering experience — tap below to pick up right where you left off. 👇`
+    );
+  }
+
   // Fallback: a customer who didn't arrive via a QR scan or shared
   // location — still the common case, since most people just message
   // the number directly — resolves to a shop the same way the pre-v2
   // bot always did, but now starts a v2 webview session instead of
   // routing into the old native-catalog flow (handleCustomerMessage,
   // below — now unreachable from here, kept for now rather than deleted
-  // immediately; see the PR this shipped in for the cleanup list).
+  // immediately; see the PR this shipped in for the cleanup list). Also
+  // the landing spot for the native-cart case just above, which falls
+  // through into this same resolution rather than duplicating it.
   //
   // The ambiguity caveat Phase 2 originally flagged is now handled: more
   // than one active shop can share a phone_number_id under the v2

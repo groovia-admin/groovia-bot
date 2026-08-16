@@ -81,7 +81,7 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
-    .select('id, product_name_snapshot, quantity, unit_price')
+    .select('id, product_id, product_name_snapshot, quantity, unit_price')
     .eq('order_id', orderId)
 
   if (allItemsError) {
@@ -103,6 +103,55 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   }
 
   const previousQuantity = item.quantity
+  const targetQuantity = removing ? 0 : quantity
+
+  // Stock is reserved at order placement now, for the quantities the
+  // order actually had then — editing a quantity while still pending/
+  // accepted has to keep that reservation in sync by the delta, not just
+  // trust the total gets fixed some other way. Increasing a quantity
+  // needs *more* stock held (can fail if there isn't enough); decreasing
+  // or removing releases the difference back (always succeeds). Done
+  // before touching order_items so a failed reservation leaves nothing
+  // half-changed.
+  if (item.product_id) {
+    const delta = previousQuantity - targetQuantity
+    if (delta > 0) {
+      const { error: restoreError } = await adminClient.rpc('adjust_product_stock', {
+        p_product_id: item.product_id,
+        p_delta: delta,
+      })
+      if (restoreError) {
+        console.error('Failed to restore stock for edited item:', restoreError)
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+      }
+    } else if (delta < 0) {
+      const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+        p_product_id: item.product_id,
+        p_qty: -delta,
+      })
+      if (reserveError) {
+        console.error('Failed to reserve additional stock for edited item:', reserveError)
+        return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+      }
+      if (newQuantity === null) {
+        return NextResponse.json(
+          { error: `Not enough stock to increase ${item.product_name_snapshot} to ${targetQuantity}.` },
+          { status: 409 }
+        )
+      }
+    }
+    if (delta !== 0) {
+      await adminClient.from('inventory_movements').insert({
+        shop_id: shopId,
+        product_id: item.product_id,
+        quantity_delta: delta,
+        movement_type: delta > 0 ? 'cancelled_order' : 'sale',
+        reference_id: orderId,
+        notes: `Order #${order.order_number} — ${item.product_name_snapshot} (edited)`,
+        created_by: authorization.userId,
+      })
+    }
+  }
 
   if (removing) {
     const { error: deleteError } = await adminClient.from('order_items').delete().eq('id', itemId)
@@ -153,6 +202,9 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   // the customer. Auto-accepts on the first edit only (order.status
   // captured before this request's own change, guarded again here by
   // .eq('status','pending') so two racing edits can't both "win" this).
+  // Stock is not touched here — it's already reserved at placement and
+  // was just kept in sync by the delta adjustment above, independent of
+  // whether this particular edit happens to be the accepting one.
   let autoAccepted = false
   if (wasPending) {
     const { error: acceptError } = await adminClient
@@ -165,59 +217,6 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
       console.error('Failed to auto-accept order on edit:', acceptError)
     } else {
       autoAccepted = true
-    }
-  }
-
-  // Same decrement the WhatsApp ACCEPT command and the dashboard's own
-  // status-PATCH route both already do on acceptance — reads whatever
-  // order_items currently look like (including the change just applied
-  // above), not a stale pre-edit snapshot. Deliberately reloaded fresh
-  // here rather than reusing `allItems`/`remaining` from earlier in this
-  // request, since neither of those carries product_id.
-  //
-  // Known imprecision, accepted rather than solved: this only runs once,
-  // on whichever edit happens to be the one that flips 'pending' to
-  // 'accepted'. If staff then keep editing other items afterward (order
-  // is 'accepted' by then, so this block doesn't run again), stock for
-  // those later-edited items gets decremented by their pre-edit
-  // quantity, not their final one. That error always lands on the
-  // conservative side — stock ends up showing less available than is
-  // actually true, never more — so it can't cause overselling, just an
-  // occasional premature "out of stock." Judged an acceptable tradeoff
-  // against the alternative of not decrementing stock for edited orders
-  // at all.
-  if (autoAccepted) {
-    const { data: itemsForStock, error: itemsForStockError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', orderId)
-
-    if (itemsForStockError) {
-      console.error('Failed to load order items for stock decrement:', itemsForStockError)
-    } else {
-      for (const stockItem of itemsForStock ?? []) {
-        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: stockItem.product_id,
-          p_delta: -stockItem.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: shopId,
-          product_id: stockItem.product_id,
-          quantity_delta: -stockItem.quantity,
-          movement_type: 'sale',
-          reference_id: orderId,
-          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-          created_by: authorization.userId,
-        })
-      }
     }
   }
 

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
 import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
 
 function generateOrderNumber() {
   return `ORD-${randomBytes(4).toString('hex').toUpperCase()}`
@@ -11,6 +12,19 @@ function generateOrderNumber() {
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
+}
+
+// Releases whatever this request has reserved so far — used any time a
+// later check fails after reservation succeeded, so a rejected order
+// never leaves stock permanently held.
+async function releaseReservations(
+  adminClient: SupabaseClient,
+  reserved: { productId: string; quantity: number }[]
+) {
+  for (const r of reserved) {
+    const { error } = await adminClient.rpc('adjust_product_stock', { p_product_id: r.productId, p_delta: r.quantity })
+    if (error) console.error('Failed to release stock reservation for product', r.productId, error)
+  }
 }
 
 // Turns a built cart into a real order — the webview's equivalent of
@@ -51,70 +65,67 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const adminClient = createAdminClient()
 
-  // Reported gap: nothing anywhere validated a cart quantity against
-  // products.stock_quantity, so a customer could order more than a shop
-  // actually had on the shelf. Checked here against a non-destructive
-  // read of the session (before consuming it) specifically so a
-  // rejected order doesn't burn the customer's one-time link — they can
-  // adjust quantities and resubmit against the same still-active
-  // session. This is a check-then-act against current stock, not a row
-  // lock — a concurrent purchase between this check and the order
-  // actually being created could still theoretically slip through, same
-  // tolerance most storefronts accept without full inventory reservation.
+  // Non-destructive peek — the session token isn't consumed until every
+  // check below (stock, shop-active, order-acceptance/pickup/delivery/
+  // minimum/payment-method) has passed. Previously the session was
+  // consumed *before* most of these checks ran, so a customer whose shop
+  // closed or paused ordering between opening the link and tapping submit
+  // got their one-time link permanently burned by a check it could never
+  // have passed — a should-be-recoverable "shop's closed right now" turned
+  // into a dead link with no way to retry once the shop reopened.
   const { data: peekedSession } = await adminClient
     .from('order_sessions')
-    .select('cart_snapshot')
+    .select('cart_snapshot, shop_id, customer_phone')
     .eq('token_hash', hashSessionToken(token))
     .eq('status', 'active')
     .maybeSingle()
 
-  const cartItemsPreview: CartItem[] = peekedSession?.cart_snapshot?.items ?? []
-  if (cartItemsPreview.length > 0) {
-    const { data: stockRows, error: stockError } = await adminClient
-      .from('products')
-      .select('id, name, stock_quantity')
-      .in('id', cartItemsPreview.map((i) => i.product_id))
-
-    if (stockError) {
-      console.error('Failed to check stock before order submission:', stockError)
-      return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
-    }
-
-    const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]))
-    const shortages = cartItemsPreview
-      .map((item) => {
-        const product = stockById.get(item.product_id)
-        const available = product?.stock_quantity ?? 0
-        return item.quantity > available ? { name: product?.name ?? item.name, available } : null
-      })
-      .filter((s): s is { name: string; available: number } => s !== null)
-
-    if (shortages.length > 0) {
-      const detail = shortages.map((s) => `${s.name} (only ${s.available} left)`).join(', ')
-      return NextResponse.json(
-        { success: false, error: `Not enough stock for: ${detail}. Please adjust the quantity and try again.` },
-        { status: 409 }
-      )
-    }
-  }
-
-  // Single-use from here on — a retry after this point (network blip,
-  // double-tap) must fail cleanly rather than place a second order.
-  const session = await consumeOrderSession(adminClient, token)
-  if (!session) {
+  if (!peekedSession) {
     return NextResponse.json({ success: false, error: 'Session expired or already used' }, { status: 410 })
   }
 
-  const cartItems = session.cart_snapshot?.items ?? []
-  if (cartItems.length === 0) {
+  const cartItemsPreview: CartItem[] = peekedSession.cart_snapshot?.items ?? []
+  if (cartItemsPreview.length === 0) {
     return NextResponse.json({ success: false, error: 'Your cart is empty' }, { status: 400 })
   }
-  const cartTotal = session.cart_snapshot?.total ?? cartItems.reduce((sum, i) => sum + i.subtotal, 0)
+
+  // Soft, consolidated stock check first — cheap, and produces a single
+  // clear "X (only N left), Y (only M left)" message covering every
+  // shortage at once for the common (non-racing) case. The real,
+  // race-safe gate is the atomic per-item reservation further down; this
+  // pass exists purely so a customer who's simply out of sync with
+  // current stock gets a helpful message instead of a generic one.
+  const { data: stockRows, error: stockError } = await adminClient
+    .from('products')
+    .select('id, name, stock_quantity')
+    .in('id', cartItemsPreview.map((i) => i.product_id))
+
+  if (stockError) {
+    console.error('Failed to check stock before order submission:', stockError)
+    return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
+  }
+
+  const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]))
+  const shortages = cartItemsPreview
+    .map((item) => {
+      const product = stockById.get(item.product_id)
+      const available = product?.stock_quantity ?? 0
+      return item.quantity > available ? { name: product?.name ?? item.name, available } : null
+    })
+    .filter((s): s is { name: string; available: number } => s !== null)
+
+  if (shortages.length > 0) {
+    const detail = shortages.map((s) => `${s.name} (only ${s.available} left)`).join(', ')
+    return NextResponse.json(
+      { success: false, error: `Not enough stock for: ${detail}. Please adjust the quantity and try again.` },
+      { status: 409 }
+    )
+  }
 
   const { data: shop, error: shopError } = await adminClient
     .from('shops')
     .select('id, latitude, longitude')
-    .eq('id', session.shop_id)
+    .eq('id', peekedSession.shop_id)
     .eq('is_active', true)
     .maybeSingle()
 
@@ -135,6 +146,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
   }
 
+  const previewCartTotal = cartItemsPreview.reduce((sum, i) => sum + i.subtotal, 0)
+
   if (settings && !settings.order_acceptance_enabled) {
     return NextResponse.json({ success: false, error: 'This shop is not accepting orders right now' }, { status: 409 })
   }
@@ -144,7 +157,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (body.orderType === 'delivery' && settings && !settings.allow_delivery) {
     return NextResponse.json({ success: false, error: 'Delivery is not available at this shop' }, { status: 409 })
   }
-  if (settings?.minimum_order_amount && cartTotal < settings.minimum_order_amount) {
+  if (settings?.minimum_order_amount && previewCartTotal < settings.minimum_order_amount) {
     return NextResponse.json(
       { success: false, error: `Minimum order amount is ${settings.minimum_order_amount}` },
       { status: 409 }
@@ -153,6 +166,57 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (settings?.accepted_payment_methods?.length && !settings.accepted_payment_methods.includes(body.paymentMethod)) {
     return NextResponse.json({ success: false, error: 'Payment method not accepted at this shop' }, { status: 400 })
   }
+
+  // Real reservation — atomic per item via reserve_product_stock, so two
+  // concurrent checkouts racing for the last unit of something can't both
+  // win. Stock used to only ever get decremented when staff accepted the
+  // order, which meant every pending order sat with its stock fully
+  // unreserved and available to the next customer — this is what actually
+  // closes that gap, not just the soft check above. If any single item
+  // fails partway through this loop, everything already reserved in it is
+  // released before returning, and the session is still untouched — the
+  // customer can adjust their cart and resubmit against the same link.
+  const reserved: { productId: string; quantity: number }[] = []
+
+  for (const item of cartItemsPreview) {
+    const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+      p_product_id: item.product_id,
+      p_qty: item.quantity,
+    })
+
+    if (reserveError) {
+      console.error('Stock reservation failed:', reserveError)
+      await releaseReservations(adminClient, reserved)
+      return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
+    }
+
+    if (newQuantity === null) {
+      await releaseReservations(adminClient, reserved)
+      return NextResponse.json(
+        { success: false, error: `${item.name} just sold out. Please adjust your cart and try again.` },
+        { status: 409 }
+      )
+    }
+
+    reserved.push({ productId: item.product_id, quantity: item.quantity })
+  }
+
+  // Single-use from here on — a retry after this point (network blip,
+  // double-tap) must fail cleanly rather than place a second order. If
+  // consumption loses a race (e.g. a duplicate submit got here first),
+  // everything just reserved above must be put back.
+  const session = await consumeOrderSession(adminClient, token)
+  if (!session) {
+    await releaseReservations(adminClient, reserved)
+    return NextResponse.json({ success: false, error: 'Session expired or already used' }, { status: 410 })
+  }
+
+  const cartItems = session.cart_snapshot?.items ?? []
+  if (cartItems.length === 0) {
+    await releaseReservations(adminClient, reserved)
+    return NextResponse.json({ success: false, error: 'Your cart is empty' }, { status: 400 })
+  }
+  const cartTotal = session.cart_snapshot?.total ?? cartItems.reduce((sum, i) => sum + i.subtotal, 0)
 
   // Find-or-create the customer row (shop_id, phone) — mirrors wa-bot's
   // createOrderFromSession. session.customer_phone is already in the raw
@@ -167,6 +231,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (customerLookupError) {
     console.error('Customer lookup failed:', customerLookupError)
+    await releaseReservations(adminClient, reserved)
     return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
   }
 
@@ -190,6 +255,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     if (createCustomerError || !createdCustomer) {
       console.error('Failed to create customer:', createCustomerError)
+      await releaseReservations(adminClient, reserved)
       return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
     }
     customerId = createdCustomer.id
@@ -212,6 +278,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     ) {
       deliveryDistanceKm = haversineDistanceKm(shop.latitude, shop.longitude, addr.latitude, addr.longitude)
       if (deliveryDistanceKm > settings.delivery_radius_km) {
+        await releaseReservations(adminClient, reserved)
         return NextResponse.json(
           { success: false, error: `This address is outside the shop's ${settings.delivery_radius_km}km delivery area` },
           { status: 409 }
@@ -247,6 +314,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     if (addressError || !createdAddress) {
       console.error('Failed to save delivery address:', addressError)
+      await releaseReservations(adminClient, reserved)
       return NextResponse.json({ success: false, error: 'Something went wrong saving your address' }, { status: 500 })
     }
 
@@ -281,6 +349,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (orderError || !order) {
     console.error('Failed to create order:', orderError)
+    await releaseReservations(adminClient, reserved)
     return NextResponse.json({ success: false, error: 'Something went wrong placing your order' }, { status: 500 })
   }
 
@@ -307,6 +376,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (itemsError) console.error('Failed to insert order items:', itemsError)
   if (detailsError) console.error('Failed to insert order customer details:', detailsError)
+
+  // Stock is now reserved (decremented) right here at placement, not on
+  // later staff acceptance — record the movement the same way accept used
+  // to. Best-effort: the order and its reservation both already exist
+  // regardless of whether this log write succeeds.
+  for (const item of cartItems) {
+    if (!item.product_id) continue
+    const { error: movementError } = await adminClient.from('inventory_movements').insert({
+      shop_id: shop.id,
+      product_id: item.product_id,
+      quantity_delta: -item.quantity,
+      movement_type: 'sale',
+      reference_id: order.id,
+      notes: `Order #${order.order_number} — ${item.name}`,
+      created_by: null, // customer-initiated via the public storefront, no dashboard user
+    })
+    if (movementError) console.error('Failed to record inventory movement for product', item.product_id, movementError)
+  }
 
   // Best-effort: ask wa-bot to send the same "order placed, cancel
   // within 5 min" WhatsApp message the native-catalog flow sends inline.

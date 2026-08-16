@@ -514,6 +514,23 @@ export async function POST(
   const shop =
     createdShops[0]
 
+  // Without this, a shop had no shop_settings row until an owner opened
+  // Settings and saved something — until then, the reminder job's
+  // `if (!settings) continue` (wa-bot/src/services/reminderService.js)
+  // silently skipped that shop entirely: a pending order could sit
+  // forever with zero staff nudges and zero auto-reject, with nothing
+  // anywhere to say why. Table defaults cover every other column (see
+  // order_decline_reasons's own default in its migration), so a bare
+  // insert with just shop_id is enough. Best-effort — a failure here
+  // must not fail shop creation itself, which has already succeeded.
+  const { error: settingsSeedError } = await adminClient
+    .from('shop_settings')
+    .insert({ shop_id: shop.id })
+
+  if (settingsSeedError) {
+    console.error('Failed to seed default shop_settings for new shop:', settingsSeedError)
+  }
+
   const shopUpdates: Record<string, string> = {}
 
   if (description) {
