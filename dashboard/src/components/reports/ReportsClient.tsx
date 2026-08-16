@@ -10,6 +10,7 @@ import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
 import { toCsv, downloadCsv } from "@/lib/csv";
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from "@/lib/orderAging";
+import { TrendLineChart, RankedBarChart } from "@/components/reports/charts";
 
 type OrderRow = {
   id: string;
@@ -689,7 +690,6 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
     byChannel.set(key, existing);
   }
   const entries = Array.from(byChannel.entries()).sort((a, b) => b[1].count - a[1].count);
-  const maxCount = Math.max(1, ...entries.map(([, v]) => v.count));
   const rows = entries.map(([channel, v]) => ({ channel, orders: v.count, revenue: v.revenue.toFixed(2) }));
 
   return (
@@ -703,18 +703,15 @@ function ChannelSplitReport({ orders, showRevenue }: { orders: OrderRow[]; showR
         <div style={S.card}><EmptyState icon={MessageCircle} title="No orders in this period" compact /></div>
       ) : (
         <div style={S.card}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {entries.map(([channel, v]) => (
-              <div key={channel} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 100, fontSize: "var(--text-sm)", color: "var(--ink-muted)", textTransform: "capitalize" }}>{channel}</div>
-                <div style={{ flex: 1, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
-                  <div style={{ width: `${(v.count / maxCount) * 100}%`, height: "100%", background: "var(--brand)" }} />
-                </div>
-                <div style={{ width: 40, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{v.count}</div>
-                {showRevenue && <div style={{ width: 80, fontSize: "var(--text-sm)", color: "var(--ink-muted)", textAlign: "right" }}>{fmtMoney(v.revenue)}</div>}
-              </div>
-            ))}
-          </div>
+          <RankedBarChart
+            data={entries.map(([channel, v]) => ({
+              label: channel,
+              value: v.count,
+              valueLabel: showRevenue ? `${v.count} · ${fmtMoney(v.revenue)}` : `${v.count} order${v.count === 1 ? "" : "s"}`,
+            }))}
+            color="var(--brand)"
+            capitalizeLabels
+          />
         </div>
       )}
     </div>
@@ -739,7 +736,6 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
     }
   }
   const trend = days.map((d) => ({ date: d, ...buckets.get(d)! }));
-  const max = Math.max(1, ...trend.map((d) => (showRevenue ? d.revenue : d.count)));
   const rows = trend.map((d) => ({ date: d.date, orders: d.count, revenue: d.revenue.toFixed(2) }));
 
   return (
@@ -753,19 +749,14 @@ function SalesTrendReport({ orders, rangeFrom, rangeTo, showRevenue }: { orders:
         {orders.length === 0 ? (
           <EmptyState icon={TrendingUp} title="No orders in this period yet" compact />
         ) : (
-          <div style={{ display: "flex", alignItems: "flex-end", gap: Math.max(1, 3 - Math.floor(days.length / 40)), height: 140, overflowX: "auto" }}>
-            {trend.map((d) => {
-              const value = showRevenue ? d.revenue : d.count;
-              const pct = Math.max(2, (value / max) * 100);
-              return (
-                <div
-                  key={d.date}
-                  title={`${d.date}: ${showRevenue ? fmtMoney(d.revenue) : d.count + " orders"}`}
-                  style={{ flex: 1, minWidth: 3, height: `${pct}%`, background: value > 0 ? "var(--brand)" : "var(--surface-border)", borderRadius: "3px 3px 0 0" }}
-                />
-              );
-            })}
-          </div>
+          <TrendLineChart
+            data={trend.map((d) => ({
+              label: new Date(d.date).toLocaleDateString("en-IN", { day: "2-digit", month: "short" }),
+              value: showRevenue ? d.revenue : d.count,
+            }))}
+            color="var(--brand)"
+            valueFormatter={(v) => (showRevenue ? fmtMoney(v) : `${v} order${v === 1 ? "" : "s"}`)}
+          />
         )}
       </div>
     </div>
@@ -866,7 +857,6 @@ function CategoryPerformanceReport({ items, productById, categoryById, showReven
     totals.set(catName, existing);
   }
   const ranked = Array.from(totals.entries()).map(([name, v]) => ({ name, ...v })).sort((a, b) => (showRevenue ? b.revenue - a.revenue : b.qty - a.qty));
-  const max = Math.max(1, ...ranked.map((c) => (showRevenue ? c.revenue : c.qty)));
   const rows = ranked.map((c) => ({ category: c.name, quantity: c.qty, revenue: c.revenue.toFixed(2) }));
 
   return (
@@ -880,20 +870,11 @@ function CategoryPerformanceReport({ items, productById, categoryById, showReven
         <div style={S.card}><EmptyState icon={Layers} title="No completed orders in this period" compact /></div>
       ) : (
         <div style={S.card}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {ranked.map((c) => {
-              const value = showRevenue ? c.revenue : c.qty;
-              return (
-                <div key={c.name} style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 130, fontSize: "var(--text-sm)", color: "var(--ink-muted)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                  <div style={{ flex: 1, background: "var(--surface)", borderRadius: 4, height: 8, overflow: "hidden" }}>
-                    <div style={{ width: `${(value / max) * 100}%`, height: "100%", background: "var(--brand-dark)" }} />
-                  </div>
-                  <div style={{ width: 70, fontSize: "var(--text-sm)", color: "var(--ink)", fontWeight: 600, textAlign: "right" }}>{showRevenue ? fmtMoney(c.revenue) : c.qty}</div>
-                </div>
-              );
-            })}
-          </div>
+          <RankedBarChart
+            data={ranked.map((c) => ({ label: c.name, value: showRevenue ? c.revenue : c.qty }))}
+            color="var(--brand-dark)"
+            valueFormatter={(v) => (showRevenue ? fmtMoney(v) : String(v))}
+          />
         </div>
       )}
     </div>

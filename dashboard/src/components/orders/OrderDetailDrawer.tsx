@@ -147,7 +147,7 @@ export default function OrderDetailDrawer({
                   {details?.customer_phone_snapshot && details?.customer_name_snapshot ? ` · ${details.customer_phone_snapshot}` : ""}
                 </p>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={S.badge(statusColor, statusBg)}>{order.status}</span>
+                  <span style={{ ...S.badge(statusColor, statusBg), textTransform: "capitalize" }}>{order.status}</span>
                   {order.status === "pending" && (() => {
                     const minutes = getOrderAgeMinutes(order.created_at);
                     const level = getAgingLevel(minutes);

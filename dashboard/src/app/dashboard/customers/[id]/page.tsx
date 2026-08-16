@@ -132,7 +132,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                       </Link>
                     </td>
                     <td style={S.td}>
-                      <span style={S.badge(color, background)}>{o.status}</span>
+                      <span style={{ ...S.badge(color, background), textTransform: 'capitalize' }}>{o.status}</span>
                     </td>
                     <td style={{ ...S.td, whiteSpace: 'nowrap' }}>
                       {new Date(o.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}

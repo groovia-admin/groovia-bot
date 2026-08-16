@@ -81,7 +81,7 @@ export default async function OrderDetailPage({ params }: { params: Promise<{ id
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={S.badge(statusColor, statusBg)}>{order.status}</span>
+          <span style={{ ...S.badge(statusColor, statusBg), textTransform: 'capitalize' }}>{order.status}</span>
           {order.status === 'pending' && (() => {
             const minutes = getOrderAgeMinutes(order.created_at)
             const level = getAgingLevel(minutes)

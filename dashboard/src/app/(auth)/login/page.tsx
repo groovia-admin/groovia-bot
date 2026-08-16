@@ -261,11 +261,6 @@ export default function LoginPage() {
           --teal-600:#0E8375;
           --teal-500:#12A594;
           --wa-green:#1FAF5B;
-          /* The dashboard's own "positive/ready" green (Orders status
-             badges), not the WhatsApp brand green above — this page is
-             teal-led, so the verified checkmark reads as consistent with
-             the rest of the app's success color rather than a WhatsApp ad. */
-          --verify-green:#0F9D6B;
           --bg:#F5F8F7;
           --panel:#FFFFFF;
           --ink:#0E1B19;
@@ -481,7 +476,8 @@ export default function LoginPage() {
         .otp-merged{
           position:absolute;left:50%;top:0;width:64px;height:56px;
           display:flex;align-items:center;justify-content:center;
-          background:var(--verify-green);color:#fff;border-radius:var(--r-md);
+          background:linear-gradient(180deg,var(--teal-600),var(--teal-700));color:#fff;border-radius:var(--r-md);
+          box-shadow:0 12px 26px -14px rgba(11,107,95,.9),inset 0 1px 0 rgba(255,255,255,.16);
           opacity:1;transform:translateX(-50%);
           animation:otpMergeIn .4s ease .3s backwards;
         }

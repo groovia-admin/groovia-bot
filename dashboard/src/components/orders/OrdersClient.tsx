@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format, formatDistanceToNowStrict } from "date-fns";
-import { Search, ShoppingBag, Check, RefreshCw, Download, ChevronDown } from "lucide-react";
+import { Search, ShoppingBag, Check, RefreshCw, Download, ChevronDown, Eye } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import InfoTooltip from "@/components/ui/InfoTooltip";
 import EmptyState from "@/components/ui/EmptyState";
@@ -21,6 +21,8 @@ type SortKey = "order" | "customer" | "items" | "status" | "placed" | "total";
 // How often to silently re-fetch the order list in the background so a new
 // WhatsApp order shows up without the staff member hitting refresh.
 const AUTO_REFRESH_MS = 2 * 60 * 1000;
+
+const PAGE_SIZE = 25;
 
 type OrderRow = {
   id: string;
@@ -196,6 +198,20 @@ export default function OrdersClient({
       }
     });
   }, [filtered, sortKey, sortDir]);
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const paginated = useMemo(() => sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), [sorted, page]);
+
+  // Any change to what's being shown (search, status tab, date range, sort,
+  // or the underlying data itself) can move the current page out of range —
+  // e.g. page 3 of "Pending" no longer exists once you switch to "Rejected".
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, dateFrom, dateTo, sortKey, sortDir]);
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
 
   // Bulk actions only ever apply to pending orders — accepting is the only
   // status change safe to fire off in a batch without per-order context
@@ -431,6 +447,10 @@ export default function OrdersClient({
           {STATUS_TABS.map((tab) => {
             const active = statusFilter === tab.value;
             const count = tab.value === "all" ? orders.length : counts[tab.value] ?? 0;
+            // "All" keeps the generic brand treatment (it isn't one status);
+            // every real status tab uses its own badge color when active, so
+            // the filter reads the same color language as the Status column.
+            const [tabColor, tabBg] = tab.value === "all" ? ["var(--brand-dark)", "var(--brand-light)"] : STATUS_STYLE[tab.value];
             return (
               <button
                 key={tab.value}
@@ -443,9 +463,9 @@ export default function OrdersClient({
                   fontWeight: 600,
                   cursor: "pointer",
                   fontFamily: "inherit",
-                  border: "1px solid " + (active ? "var(--brand)" : "var(--surface-border)"),
-                  background: active ? "var(--brand-light)" : "#FFFFFF",
-                  color: active ? "var(--brand-dark)" : "var(--ink-muted)",
+                  border: "1px solid " + (active ? tabColor : "var(--surface-border)"),
+                  background: active ? tabBg : "#FFFFFF",
+                  color: active ? tabColor : "var(--ink-muted)",
                 }}
               >
                 {tab.label} {count > 0 && <span style={{ opacity: 0.7 }}>({count})</span>}
@@ -521,7 +541,7 @@ export default function OrdersClient({
                   </td>
                 </tr>
               ) : (
-                sorted.map((o) => {
+                paginated.map((o) => {
                   const [color, background] = STATUS_STYLE[o.status];
                   const busy = busyId === o.id;
                   const isAgingUrgent = o.status === "pending" && getAgingLevel(getOrderAgeMinutes(o.created_at, now)) === "urgent";
@@ -572,6 +592,7 @@ export default function OrdersClient({
                                   border: 0,
                                   cursor: busy ? "default" : "pointer",
                                   opacity: busy ? 0.6 : 1,
+                                  textTransform: "capitalize",
                                 }}
                               >
                                 {o.status}
@@ -612,7 +633,7 @@ export default function OrdersClient({
                               )}
                             </div>
                           ) : (
-                            <span style={S.badge(color, background)}>{o.status}</span>
+                            <span style={{ ...S.badge(color, background), textTransform: "capitalize" }}>{o.status}</span>
                           )}
                           {o.status === "pending" && <OrderAgeBadge createdAt={o.created_at} now={now} />}
                         </div>
@@ -641,9 +662,11 @@ export default function OrdersClient({
                           <button
                             type="button"
                             onClick={() => setOpenOrderId(o.id)}
-                            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", fontFamily: "inherit", color: "var(--ink-muted)", fontSize: "var(--text-sm)" }}
+                            title="View order"
+                            aria-label={`View order ${o.order_number}`}
+                            style={{ background: "none", border: "none", padding: 4, cursor: "pointer", color: "var(--ink-muted)", display: "flex", borderRadius: 6 }}
                           >
-                            View
+                            <Eye size={16} />
                           </button>
                         </div>
                       </td>
@@ -654,6 +677,35 @@ export default function OrdersClient({
             </tbody>
           </table>
         </div>
+
+        {sorted.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 16px", borderTop: "1px solid var(--surface-border)", flexWrap: "wrap" }}>
+            <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)" }}>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, sorted.length)} of {sorted.length}
+            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <button
+                type="button"
+                disabled={page === 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                style={{ ...S.btn("var(--surface)", "var(--ink-muted)"), padding: "6px 12px", opacity: page === 1 ? 0.5 : 1, border: "1px solid var(--surface-border)" }}
+              >
+                Previous
+              </button>
+              <span style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", padding: "0 6px" }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                type="button"
+                disabled={page === totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                style={{ ...S.btn("var(--surface)", "var(--ink-muted)"), padding: "6px 12px", opacity: page === totalPages ? 0.5 : 1, border: "1px solid var(--surface-border)" }}
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {reasonPrompt && (
