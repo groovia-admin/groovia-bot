@@ -150,6 +150,54 @@ function parseCommand(text) {
   return null;
 }
 
+// Shared by ACCEPT (decrement — items are now committed as sold) and
+// CANCEL (restore — undoes that same commitment) below; these used to
+// be two independently hand-copied ~35-line loops differing only in
+// the sign of the delta and the movement_type string, found by a
+// simplify-pass review. Best-effort throughout: a stock-adjustment
+// failure must never undo or block the status change itself, which
+// has already succeeded by the time either caller reaches this.
+async function adjustStockForOrder(supabase, order, shopId, { sign, movementType, verb }) {
+  const { data: items, error: itemsError } = await supabase
+    .from('order_items')
+    .select('product_id, product_name_snapshot, quantity')
+    .eq('order_id', order.id);
+
+  if (itemsError) {
+    logger.error({ error: itemsError, orderId: order.id }, `Failed to load order items for stock ${verb}`);
+    return;
+  }
+
+  for (const item of items || []) {
+    if (!item.product_id) continue; // custom/removed products have no stock to adjust
+
+    const delta = sign * item.quantity;
+    const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
+      p_product_id: item.product_id,
+      p_delta: delta,
+    });
+
+    if (rpcError) {
+      logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, `Failed to ${verb} stock for product`);
+      continue;
+    }
+
+    const { error: movementError } = await supabase.from('inventory_movements').insert({
+      shop_id: shopId,
+      product_id: item.product_id,
+      quantity_delta: delta,
+      movement_type: movementType,
+      reference_id: order.id,
+      notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+      created_by: null, // no Supabase auth user for a WhatsApp-driven action
+    });
+
+    if (movementError) {
+      logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
+    }
+  }
+}
+
 // Offered as a tap-to-advance button after a successful transition, so
 // staff never have to type a command for the rest of the lifecycle —
 // only the very first step (a new order arriving) can't avoid a choice,
@@ -258,87 +306,16 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   // separate code path and never decremented anything — confirmed
   // real, reported gap, not something specific to one shop's data.
   // Best-effort: a stock-adjustment failure must not undo or block the
-  // order acceptance itself, which has already succeeded above.
+  // status change itself, which has already succeeded above. Same
+  // rule/RPC/movement-type pattern the dashboard's own status route
+  // uses (stockEffect in /api/shop/orders/[id]/route.ts) — decrement on
+  // ACCEPT (items now committed as sold), restore on CANCEL (undoes
+  // that same commitment).
   if (command === 'ACCEPT') {
-    const { data: items, error: itemsError } = await supabase
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', order.id);
-
-    if (itemsError) {
-      logger.error({ error: itemsError, orderId: order.id }, 'Failed to load order items for stock decrement');
-    } else {
-      for (const item of items || []) {
-        if (!item.product_id) continue; // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
-          p_product_id: item.product_id,
-          p_delta: -item.quantity,
-        });
-
-        if (rpcError) {
-          logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, 'Failed to decrement stock for product');
-          continue;
-        }
-
-        const { error: movementError } = await supabase.from('inventory_movements').insert({
-          shop_id: shopId,
-          product_id: item.product_id,
-          quantity_delta: -item.quantity,
-          movement_type: 'sale',
-          reference_id: order.id,
-          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
-          created_by: null, // no Supabase auth user for a WhatsApp-driven action
-        });
-
-        if (movementError) {
-          logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
-        }
-      }
-    }
+    await adjustStockForOrder(supabase, order, shopId, { sign: -1, movementType: 'sale', verb: 'decrement' });
   }
-
-  // Mirror image of the ACCEPT block above: stock committed as sold on
-  // acceptance has to go back on cancellation, same RPC/movement-type
-  // pattern the dashboard's own cancel path uses (stockEffect === 'restore'
-  // in /api/shop/orders/[id]/route.ts). Positive delta, not negative.
   if (command === 'CANCEL') {
-    const { data: items, error: itemsError } = await supabase
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', order.id);
-
-    if (itemsError) {
-      logger.error({ error: itemsError, orderId: order.id }, 'Failed to load order items for stock restore');
-    } else {
-      for (const item of items || []) {
-        if (!item.product_id) continue; // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
-          p_product_id: item.product_id,
-          p_delta: item.quantity,
-        });
-
-        if (rpcError) {
-          logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, 'Failed to restore stock for product');
-          continue;
-        }
-
-        const { error: movementError } = await supabase.from('inventory_movements').insert({
-          shop_id: shopId,
-          product_id: item.product_id,
-          quantity_delta: item.quantity,
-          movement_type: 'cancelled_order',
-          reference_id: order.id,
-          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
-          created_by: null,
-        });
-
-        if (movementError) {
-          logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
-        }
-      }
-    }
+    await adjustStockForOrder(supabase, order, shopId, { sign: 1, movementType: 'cancelled_order', verb: 'restore' });
   }
 
   // Write audit log — best-effort. supabase-js query builders are
@@ -744,6 +721,20 @@ async function handleShopSlugEntry(from, slug, name) {
   await startCustomerOrderingSession(from, shop, name);
 }
 
+// Shared by the two "pick a shop" list prompts below — nearby-by-
+// location and the multi-shop-on-one-number fallback both build the
+// same row shape (id/title, differing only in what the description
+// line shows), and both hand off to the same nearby_shop_ interactive
+// handler regardless of which prompt led there.
+function buildShopPickerRows(shops, describeShop) {
+  // List messages cap at 10 rows total — cap at 9 to stay under it.
+  return shops.slice(0, 9).map((shop) => ({
+    id: `nearby_shop_${shop.id}`,
+    title: shop.name.slice(0, 24),
+    description: describeShop(shop)?.slice(0, 72) || undefined,
+  }));
+}
+
 // Entry B: customer shares their location cold. Not logged to the
 // per-shop conversation log — a location share doesn't belong to any
 // one shop yet, and logMessage requires a shopId to attach to.
@@ -755,13 +746,7 @@ async function handleLocationShare(from, location, name) {
     return;
   }
 
-  // List messages cap at 10 rows total (same limit already handled for
-  // the staff order-edit list) — cap at 9 nearby results.
-  const rows = nearby.slice(0, 9).map((shop) => ({
-    id: `nearby_shop_${shop.id}`,
-    title: shop.name.slice(0, 24),
-    description: `${Number(shop.distance_km).toFixed(1)} km away`.slice(0, 72),
-  }));
+  const rows = buildShopPickerRows(nearby, (shop) => `${Number(shop.distance_km).toFixed(1)} km away`);
 
   await sendListMessage(
     from,
@@ -1192,11 +1177,7 @@ async function handleIncomingMessage(message, value) {
     return;
   }
 
-  const rows = shops.slice(0, 9).map((shop) => ({
-    id: `nearby_shop_${shop.id}`,
-    title: shop.name.slice(0, 24),
-    description: [shop.address_line_1, shop.city].filter(Boolean).join(', ').slice(0, 72) || undefined,
-  }));
+  const rows = buildShopPickerRows(shops, (shop) => [shop.address_line_1, shop.city].filter(Boolean).join(', '));
 
   await sendListMessage(
     from,

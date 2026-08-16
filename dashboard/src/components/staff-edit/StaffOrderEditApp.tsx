@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Minus, Plus, Trash2, Loader2 } from 'lucide-react'
+import { formatItemDiffLine } from '@/lib/orderDiffFormat'
 
 type OrderItem = {
   id: string
@@ -45,12 +46,6 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   const [ended, setEnded] = useState(false)
   const [showManualReturn, setShowManualReturn] = useState(false)
   const [cancelling, setCancelling] = useState(false)
-  // Keyed by item id so several taps on the same item during one
-  // session collapse into a single net line (2 → 3 → 4 reads as one
-  // "2 → 4", not three separate messages worth of noise) — only the
-  // starting quantity from before this session and the latest one are
-  // kept, everything in between is just how the shopkeeper got there.
-  const diffsRef = useRef<Map<string, { name: string; from: number; to: number; removed: boolean }>>(new Map())
 
   const waLink = useMemo(() => {
     if (!whatsappNumber) return null
@@ -97,15 +92,6 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
         setError(data.error || 'Failed to update item')
         return
       }
-
-      const existing = diffsRef.current.get(item.id)
-      const from = existing ? existing.from : item.quantity
-      diffsRef.current.set(item.id, {
-        name: item.product_name_snapshot,
-        from,
-        to: nextQuantity,
-        removed: data.removed,
-      })
 
       if (data.removed) {
         setItems((prev) => prev.filter((i) => i.id !== item.id))
@@ -265,10 +251,23 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   // server has to get this call either way. Fire-and-forget: the
   // redirect must never wait on or be blocked by this, same reasoning
   // as every other best-effort notify in this flow.
+  //
+  // diffLines is computed here, not tracked incrementally per-tap — the
+  // `items` state already holds each item's latest quantity (updated by
+  // every successful updateQuantity call) and `initialItems` never
+  // changes after mount, so comparing the two at this one point already
+  // gives the same net "from → to" per item that per-tap bookkeeping
+  // used to produce, with no extra state to keep in sync.
   function handleDone() {
-    const diffLines = [...diffsRef.current.values()]
-      .filter((d) => d.removed || d.from !== d.to)
-      .map((d) => (d.removed ? `❌ ${d.name} — removed` : `✏️ ${d.name} — quantity ${d.from} → ${d.to}`))
+    const currentById = new Map(items.map((i) => [i.id, i]))
+    const diffLines = initialItems
+      .filter((orig) => currentById.get(orig.id)?.quantity !== orig.quantity)
+      .map((orig) => {
+        const current = currentById.get(orig.id)
+        return current
+          ? formatItemDiffLine({ name: orig.product_name_snapshot, removed: false, from: orig.quantity, to: current.quantity })
+          : formatItemDiffLine({ name: orig.product_name_snapshot, removed: true })
+      })
 
     fetch(`/api/public/staff-edit/${orderId}/done`, {
       method: 'POST',

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'
+import { formatItemDiffLine } from '@/lib/orderDiffFormat'
 
 type ItemRouteContext = {
   params: Promise<{ id: string; itemId: string }>
@@ -288,8 +289,8 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     // this was the accepting edit, so the customer both gets the
     // formal confirmation and sees exactly what changed.
     const diffLine = removing
-      ? `❌ ${item.product_name_snapshot} — removed`
-      : `✏️ ${item.product_name_snapshot} — quantity ${previousQuantity} → ${quantity}`
+      ? formatItemDiffLine({ name: item.product_name_snapshot, removed: true })
+      : formatItemDiffLine({ name: item.product_name_snapshot, removed: false, from: previousQuantity, to: quantity })
 
     fetch(`${base}/internal/orders/${orderId}/notify-edit`, {
       method: 'POST',

@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateEditLink } from '@/lib/orderEditLink'
 import { logAuditEvent } from '@/lib/audit/log'
+import { adjustOrderStock } from '@/lib/orderStock'
+import { notifyWaBot } from '@/lib/notifyWaBot'
 
 type CancelRouteContext = {
   params: Promise<{ orderId: string }>
@@ -71,40 +73,13 @@ export async function POST(request: Request, { params }: CancelRouteContext) {
     return NextResponse.json({ error: 'Failed to cancel order' }, { status: 500 })
   }
 
-  // Stock restore — mirror image of the accept-time decrement (see the
-  // /done route's twin of this block).
-  const { data: itemsForStock, error: itemsForStockError } = await adminClient
-    .from('order_items')
-    .select('product_id, product_name_snapshot, quantity')
-    .eq('order_id', orderId)
-
-  if (itemsForStockError) {
-    console.error('Failed to load order items for stock restore:', itemsForStockError)
-  } else {
-    for (const stockItem of itemsForStock ?? []) {
-      if (!stockItem.product_id) continue
-
-      const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-        p_product_id: stockItem.product_id,
-        p_delta: stockItem.quantity,
-      })
-
-      if (rpcError) {
-        console.error('Failed to restore stock for product', stockItem.product_id, rpcError)
-        continue
-      }
-
-      await adminClient.from('inventory_movements').insert({
-        shop_id: link.shop_id,
-        product_id: stockItem.product_id,
-        quantity_delta: stockItem.quantity,
-        movement_type: 'cancelled_order',
-        reference_id: orderId,
-        notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-        created_by: null,
-      })
-    }
-  }
+  // Stock restore — mirror image of the accept-time decrement.
+  await adjustOrderStock(adminClient, {
+    orderId,
+    shopId: link.shop_id,
+    orderNumber: order.order_number,
+    direction: 'restore',
+  })
 
   await logAuditEvent({
     shopId: link.shop_id,
@@ -123,25 +98,15 @@ export async function POST(request: Request, { params }: CancelRouteContext) {
   if (waBotUrl && internalSecret) {
     const base = waBotUrl.replace(/\/$/, '')
 
-    fetch(`${base}/internal/orders/${orderId}/notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-      body: JSON.stringify({ status: 'cancelled', shopId: link.shop_id }),
-    })
-      .then(async (res) => {
-        if (!res.ok) console.error('wa-bot rejected the cancel notify:', res.status, await res.text().catch(() => ''))
-      })
-      .catch((err) => console.error('Failed to notify wa-bot of order cancel:', err))
+    notifyWaBot(base, internalSecret, `/internal/orders/${orderId}/notify`, { status: 'cancelled', shopId: link.shop_id }, 'the cancel notify')
 
-    fetch(`${base}/internal/orders/${orderId}/notify-staff`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-internal-secret': internalSecret },
-      body: JSON.stringify({ status: 'cancelled', shopId: link.shop_id, reason, via: 'the edit screen' }),
-    })
-      .then(async (res) => {
-        if (!res.ok) console.error('wa-bot rejected the staff cancel notify:', res.status, await res.text().catch(() => ''))
-      })
-      .catch((err) => console.error('Failed to notify wa-bot staff of order cancel:', err))
+    notifyWaBot(
+      base,
+      internalSecret,
+      `/internal/orders/${orderId}/notify-staff`,
+      { status: 'cancelled', shopId: link.shop_id, reason, via: 'the edit screen' },
+      'the staff cancel notify'
+    )
   }
 
   return NextResponse.json({ success: true })
