@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
+import { findMatchingRestrictedTerm } from '@/lib/restrictedProducts'
 
 type CreateProductBody = {
   name?: unknown
@@ -83,6 +84,17 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: 'Name, unit, and category are required' },
       { status: 400 }
+    )
+  }
+
+  // Platform-wide list, managed only by Groovia super admins (see
+  // /dashboard/restricted-items) — a shop can never create a product
+  // whose name matches a restricted term (tobacco, alcohol, etc.).
+  const restrictedMatch = await findMatchingRestrictedTerm(adminClient, name)
+  if (restrictedMatch) {
+    return NextResponse.json(
+      { error: `"${name}" can't be added — it matches a restricted item ("${restrictedMatch}"). Contact Groovia support if you believe this is wrong.` },
+      { status: 403 }
     )
   }
 

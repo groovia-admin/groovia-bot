@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
+import { isShopCurrentlyOpen } from '@/lib/storefront/slots'
 import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
 
 function generateOrderNumber() {
@@ -113,7 +114,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const { data: shop, error: shopError } = await adminClient
     .from('shops')
-    .select('id, latitude, longitude')
+    .select('id, latitude, longitude, timezone')
     .eq('id', session.shop_id)
     .eq('is_active', true)
     .maybeSingle()
@@ -125,7 +126,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const { data: settings, error: settingsError } = await adminClient
     .from('shop_settings')
     .select(
-      'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, order_acceptance_enabled'
+      'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, order_acceptance_enabled, business_hours'
     )
     .eq('shop_id', shop.id)
     .maybeSingle()
@@ -143,6 +144,15 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
   if (body.orderType === 'delivery' && settings && !settings.allow_delivery) {
     return NextResponse.json({ success: false, error: 'Delivery is not available at this shop' }, { status: 409 })
+  }
+  // Pickup only ever had this indirectly (the UI just doesn't offer a
+  // slot outside business hours); delivery had no time gate at all,
+  // since it doesn't go through slots — reported as a real gap, a
+  // delivery order could be placed at 2am while the shop was closed.
+  // Checked here, server-side, for both order types, not just relied
+  // on the UI not offering the option.
+  if (!isShopCurrentlyOpen(settings?.business_hours, shop.timezone)) {
+    return NextResponse.json({ success: false, error: "We're closed right now — please check back during business hours." }, { status: 409 })
   }
   if (settings?.minimum_order_amount && cartTotal < settings.minimum_order_amount) {
     return NextResponse.json(
