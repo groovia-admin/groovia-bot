@@ -274,6 +274,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       pickup_slot_label: body.orderType === 'pickup' ? body.pickupSlotLabel : null,
       delivery_address_id: deliveryAddressId,
       delivery_distance_km: deliveryDistanceKm,
+      notes: body.specialInstructions?.trim() || null,
       created_via: 'webview',
     })
     .select('id, order_number')

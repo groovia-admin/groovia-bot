@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Minus, Plus, Trash2, Loader2 } from 'lucide-react'
+import { Minus, Trash2, Loader2 } from 'lucide-react'
 
 type OrderItem = {
   id: string
@@ -20,6 +20,7 @@ type Props = {
   initialItems: OrderItem[]
   initialFees: { delivery_fee: number; tax_amount: number; discount_amount: number }
   whatsappNumber: string | null
+  orderStatus: 'pending' | 'accepted'
 }
 
 // The mobile-first, no-login twin of OrderItemsEditor.tsx (dashboard) —
@@ -29,13 +30,21 @@ type Props = {
 // notification is NOT per-tap though (see handleDone below) — several
 // quick +/- taps used to read to the customer as a flood of unrelated
 // "your order changed" messages instead of one coherent update.
-export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initialItems, initialFees, whatsappNumber }: Props) {
+//
+// Deliberately decrease/remove only, no increase — a shopkeeper bumping
+// a quantity up (or, if that ever gets built, adding a whole new item)
+// changes what the customer pays without them agreeing to it in the
+// moment, unlike a decrease (always makes the bill go down, never a
+// surprise). If a shop genuinely has more to add, that's a new
+// conversation with the customer, not a silent edit to this one.
+export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initialItems, initialFees, whatsappNumber, orderStatus }: Props) {
   const [items, setItems] = useState<OrderItem[]>(initialItems)
   const [fees] = useState(initialFees)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ended, setEnded] = useState(false)
   const [showManualReturn, setShowManualReturn] = useState(false)
+  const [cancelling, setCancelling] = useState(false)
   // Keyed by item id so several taps on the same item during one
   // session collapse into a single net line (2 → 3 → 4 reads as one
   // "2 → 4", not three separate messages worth of noise) — only the
@@ -169,7 +178,7 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  <div className="flex items-center gap-1.5 rounded-lg px-1 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
+                  <div className="flex items-center gap-1.5 rounded-lg px-2 py-1 bg-brand" style={{ opacity: busy ? 0.6 : 1 }}>
                     <button
                       className="text-white p-1"
                       disabled={busy}
@@ -179,14 +188,6 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
                       <Minus size={14} />
                     </button>
                     <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
-                    <button
-                      className="text-white p-1"
-                      disabled={busy}
-                      onClick={() => updateQuantity(item, item.quantity + 1)}
-                      aria-label={`Increase ${item.product_name_snapshot} quantity`}
-                    >
-                      <Plus size={14} />
-                    </button>
                   </div>
                   <span className="text-sm font-semibold text-ink w-14 text-right">₹{Number(item.subtotal).toFixed(0)}</span>
                   <button
@@ -204,6 +205,17 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
         </div>
 
         <p className="text-xs text-ink-faint text-center mt-3">Changes save automatically — the customer gets one summary once you tap Done.</p>
+
+        {orderStatus === 'accepted' && (
+          <button
+            type="button"
+            className="w-full text-center text-xs font-semibold text-red-600 mt-3 py-1"
+            onClick={handleCancel}
+            disabled={cancelling}
+          >
+            {cancelling ? 'Cancelling…' : 'Cancel this order'}
+          </button>
+        )}
 
         <div className="card mt-4">
           <div className="flex justify-between text-sm text-ink-muted py-1">
@@ -252,5 +264,39 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
     }).catch((err) => console.error('Failed to send Done to server', err))
 
     setEnded(true)
+  }
+
+  // Reported missing from the mobile flow entirely — WhatsApp's own
+  // CANCEL command exists (typed, requires a reason), but a shopkeeper
+  // already looking at this screen shouldn't have to switch apps and
+  // type a command to back out of an order they're staring at. A reason
+  // is still required here too, same as the WhatsApp command, since the
+  // customer already believes this order is being prepared.
+  async function handleCancel() {
+    const reason = window.prompt("Why are you cancelling this order? The customer will see this.")
+    if (!reason || !reason.trim()) return
+
+    setCancelling(true)
+    setError(null)
+
+    try {
+      const response = await fetch(`/api/public/staff-edit/${orderId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, reason: reason.trim() }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.error || 'Failed to cancel order')
+        setCancelling(false)
+        return
+      }
+
+      setEnded(true)
+    } catch {
+      setError('Failed to cancel order. Please try again.')
+      setCancelling(false)
+    }
   }
 }

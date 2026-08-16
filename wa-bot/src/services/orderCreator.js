@@ -6,8 +6,11 @@ const { logMessage } = require('./conversationLogger');
 const deliveryTracker = require('./deliveryTracker');
 
 // Registered once new_order_alert is created + approved in Meta as a
-// plain Utility text template with 6 numbered body variables (order
-// number, total, customer name, pickup slot, payment method, items) and
+// plain Utility text template with 7 numbered body variables (order
+// number, total, customer name, pickup slot, payment method, customer
+// note, items — note added after the customer-instructions field was
+// wired up; still unset most of the time, {{6}} should read "None" or
+// similar in that case since a template variable can't be blank) and
 // 3 quick-reply buttons (Accept/Reject/Edit, static labels — the
 // dynamic order id travels in each button's payload override instead).
 // Templates bypass the 24h customer-service window entirely, which is
@@ -270,12 +273,20 @@ async function sendOrderPlacedConfirmation(orderId, shopId) {
  * resend catch-up, both DB-reconstructed — no in-memory session exists
  * by the time either runs) — one body/button shape either way.
  */
-function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, paymentMethod, itemsText }) {
+function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, paymentMethod, itemsText, notes }) {
+  // A customer note (ring the bell, less spicy, call before delivering)
+  // used to be captured nowhere at all — reported as a real gap, since
+  // it's exactly the kind of thing that has to reach staff BEFORE they
+  // accept, not buried somewhere they'd only see after. Shown right
+  // under payment, above the item list, so it can't be missed scrolling
+  // past a long order.
+  const notesLine = notes ? `📝 Note: ${notes}\n\n` : '';
   const body =
     `🆕 *New order ${order.order_number}* — ₹${Number(total).toFixed(2)}\n\n` +
     `👤 ${customerName || 'Customer'}\n` +
     `⏰ Pickup: ${pickupSlot}\n` +
     `💵 Payment: ${paymentMethod}\n\n` +
+    notesLine +
     `Items:\n${itemsText}`;
 
   const buttons = [
@@ -294,6 +305,7 @@ function buildNewOrderAlertPayload(order, { customerName, total, pickupSlot, pay
     pickupSlot,
     paymentMethod,
     itemsText,
+    notes: notes || null,
     body,
     buttons,
   };
@@ -327,6 +339,7 @@ async function notifyStaffForOrder(order) {
     pickupSlot: order.pickup_slot_label,
     paymentMethod: order.payment_method,
     itemsText,
+    notes: order.notes,
   });
 
   await Promise.all(
@@ -413,7 +426,7 @@ async function notifyStaffOfDashboardStatusChange(orderId, shopId, status, actor
 }
 
 const NEW_ORDER_SELECT =
-  `id, order_number, shop_id, status, total_amount, pickup_slot_label, payment_method,
+  `id, order_number, shop_id, status, total_amount, pickup_slot_label, payment_method, notes,
    order_items ( product_name_snapshot, quantity, subtotal ),
    order_customer_details ( customer_name_snapshot )`;
 
@@ -600,7 +613,7 @@ async function retryNewOrderAlert(delivery) {
  * created/approved in Meta yet, not a bug in this code.
  */
 async function sendNewOrderAlertTemplateFallback(delivery) {
-  const { orderNumber, total, customerName, pickupSlot, paymentMethod, itemsText } = delivery.payload;
+  const { orderNumber, total, customerName, pickupSlot, paymentMethod, itemsText, notes } = delivery.payload;
 
   const components = [
     {
@@ -611,6 +624,7 @@ async function sendNewOrderAlertTemplateFallback(delivery) {
         { type: 'text', text: String(customerName) },
         { type: 'text', text: String(pickupSlot) },
         { type: 'text', text: String(paymentMethod) },
+        { type: 'text', text: notes ? String(notes) : 'None' },
         { type: 'text', text: String(itemsText) },
       ],
     },

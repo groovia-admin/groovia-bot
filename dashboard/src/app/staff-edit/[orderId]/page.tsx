@@ -43,10 +43,9 @@ export default async function StaffEditPage({ params, searchParams }: StaffEditP
   const items = order.order_items ?? []
   const whatsappNumber = connection?.display_phone_number?.replace(/[^0-9]/g, '') || null
 
-  // Editing a 'pending' order now auto-accepts it on the first change
-  // (see the PATCH route) — so 'accepted' has to stay editable too,
-  // otherwise that very first edit would immediately lock the page out
-  // from any further changes.
+  // A still-'pending' order stays editable too (tapping Done there is
+  // what accepts it now — see the /done route), so 'accepted' has to
+  // remain reachable here as well for any edits made after that.
   if (order.status !== 'pending' && order.status !== 'accepted') {
     return (
       <ExpiredState message={`Order ${order.order_number} can no longer be edited (already ${order.status}).`} />
@@ -66,6 +65,7 @@ export default async function StaffEditPage({ params, searchParams }: StaffEditP
         discount_amount: order.discount_amount,
       }}
       whatsappNumber={whatsappNumber}
+      orderStatus={order.status as 'pending' | 'accepted'}
     />
   )
 }

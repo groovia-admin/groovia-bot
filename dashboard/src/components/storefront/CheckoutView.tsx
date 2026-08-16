@@ -64,6 +64,7 @@ export function CheckoutView({
     city,
     postalCode,
     paymentMethod,
+    specialInstructions,
   } = form
 
   function set<K extends keyof CheckoutFormState>(key: K, value: CheckoutFormState[K]) {
@@ -118,6 +119,7 @@ export function CheckoutView({
               postal_code: postalCode.trim() || undefined,
             },
           }),
+      specialInstructions: specialInstructions.trim() || undefined,
     }
 
     try {
@@ -255,11 +257,17 @@ export function CheckoutView({
             {slots.length === 0 ? (
               <p className="text-sm text-ink-muted">We&apos;re closed for today — please check back during business hours.</p>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              // A fixed 2-column grid, not flex-wrap — flex-wrap sized each
+              // pill to its own label width, so slots wrapped raggedly
+              // (some pairs shared a row, most didn't) and read as if they
+              // were in no particular order even though they're generated
+              // strictly chronologically. Equal-width grid cells make the
+              // real (already-correct) order actually visible.
+              <div className="grid grid-cols-2 gap-2">
                 {slots.map((slot) => (
                   <button
                     key={slot.id}
-                    className={slot.id === pickupSlotId ? 'btn text-white bg-brand' : 'btn-secondary'}
+                    className={slot.id === pickupSlotId ? 'btn text-white bg-brand justify-center' : 'btn-secondary justify-center'}
                     onClick={() => set('pickupSlotId', slot.id)}
                     disabled={submitting}
                   >
@@ -329,6 +337,21 @@ export function CheckoutView({
               </label>
             ))}
           </div>
+        </div>
+
+        <div className="card">
+          <label className="text-sm font-medium text-ink block mb-1.5" htmlFor="specialInstructions">
+            Note for the shop (optional)
+          </label>
+          <textarea
+            id="specialInstructions"
+            className="input"
+            rows={2}
+            value={specialInstructions}
+            onChange={(e) => set('specialInstructions', e.target.value)}
+            placeholder="e.g. ring the bell, less spicy, call before delivering"
+            disabled={submitting}
+          />
         </div>
 
         {items.length > 0 && (

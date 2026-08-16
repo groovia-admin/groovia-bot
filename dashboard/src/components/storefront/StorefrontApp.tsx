@@ -54,6 +54,7 @@ const DEFAULT_CHECKOUT_FORM: CheckoutFormState = {
   city: '',
   postalCode: '',
   paymentMethod: '',
+  specialInstructions: '',
 }
 
 export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) {

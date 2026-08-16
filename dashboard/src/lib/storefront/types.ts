@@ -78,6 +78,7 @@ export type SubmitOrderBody = {
   paymentMethod: string
   pickupSlotLabel?: string
   deliveryAddress?: DeliveryAddressInput
+  specialInstructions?: string
 }
 
 export type SubmitOrderResult = { success: true; orderNumber: string } | { success: false; error: string }
@@ -96,4 +97,5 @@ export type CheckoutFormState = {
   city: string
   postalCode: string
   paymentMethod: string
+  specialInstructions: string
 }
