@@ -8,6 +8,7 @@ import {
   Calendar,
   CheckCircle,
   ExternalLink,
+  Flag,
   MapPin,
   MessageSquare,
   MoreVertical,
@@ -16,6 +17,8 @@ import {
   Store,
   XCircle,
 } from "lucide-react";
+import { ToggleRow } from "@/components/settings/settingsStyles";
+import { FLAG_DEFINITIONS, FLAG_KEYS, type FeatureFlags } from "@/lib/featureFlags";
 import type { Shop, SubscriptionStatus } from "@/types/database";
 
 type ShopRow = Pick<
@@ -233,6 +236,15 @@ export default function ShopsClient({
   const [whatsappSaving, setWhatsappSaving] = useState(false);
   const [whatsappError, setWhatsappError] = useState("");
 
+  const [flagsShop, setFlagsShop] = useState<{ id: string; name: string } | null>(null);
+  const [flagsForm, setFlagsForm] = useState<FeatureFlags>(
+    Object.fromEntries(FLAG_KEYS.map((key) => [key, false])) as FeatureFlags
+  );
+  const [flagsLoading, setFlagsLoading] = useState(false);
+  const [flagsSaving, setFlagsSaving] = useState(false);
+  const [flagsSyncing, setFlagsSyncing] = useState(false);
+  const [flagsError, setFlagsError] = useState("");
+
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -319,6 +331,85 @@ export default function ShopsClient({
       setWhatsappError("Failed to save WhatsApp connection. Please try again.");
     } finally {
       setWhatsappSaving(false);
+    }
+  }
+
+  async function openFlagsModal(shop: ShopRow) {
+    setFlagsShop({ id: shop.id, name: shop.name });
+    setFlagsError("");
+    setFlagsForm(Object.fromEntries(FLAG_KEYS.map((key) => [key, false])) as FeatureFlags);
+    setFlagsLoading(true);
+    setOpenMenu(null);
+
+    try {
+      const response = await fetch(`/api/admin/shops/${shop.id}/feature-flags`);
+      const data = await response.json();
+
+      if (response.ok && data.flags) {
+        setFlagsForm(data.flags);
+      } else if (!response.ok) {
+        setFlagsError(data.error || "Failed to load feature flags");
+      }
+    } catch {
+      setFlagsError("Failed to load feature flags. Please try again.");
+    } finally {
+      setFlagsLoading(false);
+    }
+  }
+
+  function closeFlagsModal() {
+    setFlagsShop(null);
+    setFlagsError("");
+  }
+
+  async function handleSaveFlags() {
+    if (!flagsShop) return;
+
+    setFlagsSaving(true);
+    setFlagsError("");
+
+    try {
+      const response = await fetch(`/api/admin/shops/${flagsShop.id}/feature-flags`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(flagsForm),
+      });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFlagsError(data.error || "Failed to save feature flags");
+        return;
+      }
+
+      showToast(`Feature flags saved for ${flagsShop.name}`);
+      closeFlagsModal();
+    } catch {
+      setFlagsError("Failed to save feature flags. Please try again.");
+    } finally {
+      setFlagsSaving(false);
+    }
+  }
+
+  async function handleSyncCatalogNow() {
+    if (!flagsShop) return;
+
+    setFlagsSyncing(true);
+    setFlagsError("");
+
+    try {
+      const response = await fetch(`/api/admin/shops/${flagsShop.id}/sync-catalog`, { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setFlagsError(data.error || "Catalog sync failed");
+        return;
+      }
+
+      showToast(`Catalog synced for ${flagsShop.name} — ${data.synced ?? 0} product(s) pushed`);
+    } catch {
+      setFlagsError("Failed to reach the sync service. Please try again.");
+    } finally {
+      setFlagsSyncing(false);
     }
   }
 
@@ -1243,6 +1334,27 @@ export default function ShopsClient({
                                   Manage WhatsApp
                                 </button>
 
+                                <button
+                                  type="button"
+                                  onClick={() => openFlagsModal(shop)}
+                                  style={{
+                                    width: "100%",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: 8,
+                                    padding: "8px 14px",
+                                    background: "none",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    color: "var(--ink)",
+                                    fontSize: "var(--text-base)",
+                                    fontFamily: "inherit",
+                                  }}
+                                >
+                                  <Flag size={14} />
+                                  Manage feature flags
+                                </button>
+
                                 <div
                                   style={{
                                     borderTop: "1px solid var(--surface-border)",
@@ -2020,6 +2132,113 @@ export default function ShopsClient({
                   </button>
                 </div>
               </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {flagsShop && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 50,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+          }}
+        >
+          <div
+            style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }}
+            onClick={closeFlagsModal}
+          />
+
+          <div
+            style={{
+              position: "relative",
+              background: "#FFFFFF",
+              border: "1px solid var(--surface-border)",
+              borderRadius: 16,
+              width: "100%",
+              maxWidth: 440,
+              padding: 24,
+              maxHeight: "calc(100vh - 32px)",
+              overflowY: "auto",
+            }}
+          >
+            <h2 style={{ fontSize: "var(--text-md)", fontWeight: 700, color: "var(--ink)", marginTop: 0, marginBottom: 4 }}>
+              Feature flags — {flagsShop.name}
+            </h2>
+            <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", marginTop: 0, marginBottom: 20 }}>
+              Roll new capabilities out to this shop ahead of everyone else.
+            </p>
+
+            {flagsLoading ? (
+              <p style={{ fontSize: "var(--text-base)", color: "var(--ink-faint)" }}>Loading…</p>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {flagsError && (
+                  <div
+                    style={{
+                      color: "var(--error)",
+                      background: "rgba(239,68,68,0.1)",
+                      border: "1px solid rgba(239,68,68,0.2)",
+                      borderRadius: 8,
+                      padding: "10px 14px",
+                      fontSize: "var(--text-base)",
+                    }}
+                  >
+                    {flagsError}
+                  </div>
+                )}
+
+                {FLAG_DEFINITIONS.map((flag) => (
+                  <div key={flag.key} style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    <ToggleRow
+                      label={flag.label}
+                      on={!!flagsForm[flag.key]}
+                      onToggle={() => setFlagsForm((f) => ({ ...f, [flag.key]: !f[flag.key] }))}
+                      disabled={flagsSaving}
+                    />
+                    <p style={{ fontSize: "var(--text-xs)", color: "var(--ink-faint)", margin: 0 }}>{flag.description}</p>
+                  </div>
+                ))}
+
+                <div style={{ display: "flex", justifyContent: "flex-start" }}>
+                  <button
+                    type="button"
+                    onClick={handleSyncCatalogNow}
+                    disabled={flagsSyncing}
+                    style={{
+                      ...S.btn("var(--surface)", "var(--ink)"),
+                      border: "1px solid var(--surface-border)",
+                      opacity: flagsSyncing ? 0.6 : 1,
+                    }}
+                  >
+                    {flagsSyncing ? "Syncing…" : "Sync catalog now"}
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                  <button
+                    type="button"
+                    onClick={closeFlagsModal}
+                    disabled={flagsSaving}
+                    style={{ ...S.btn("var(--surface-border)", "var(--ink-muted)"), flex: 1, justifyContent: "center", opacity: flagsSaving ? 0.6 : 1 }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveFlags}
+                    disabled={flagsSaving}
+                    style={{ ...S.btn("var(--brand)", "#fff"), flex: 1, justifyContent: "center", opacity: flagsSaving ? 0.6 : 1 }}
+                  >
+                    {flagsSaving ? "Saving…" : "Save flags"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

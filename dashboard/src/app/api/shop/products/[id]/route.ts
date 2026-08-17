@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
+import { triggerCatalogAutoSyncIfEnabled } from '@/lib/catalogSync'
 
 type UpdateProductBody = {
   name?: unknown
@@ -198,6 +199,18 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
       .eq('shop_id', shopId)
       .maybeSingle()
     previousStockQuantity = existing?.stock_quantity ?? null
+
+    // is_available follows stock at the zero boundary automatically —
+    // same rule the order-lifecycle stock RPCs apply — unless this same
+    // request also explicitly set is_available itself, which wins.
+    if (previousStockQuantity !== null && !Object.prototype.hasOwnProperty.call(body, 'is_available')) {
+      const newStockQuantity = changes.stock_quantity as number
+      if (newStockQuantity <= 0) {
+        changes.is_available = false
+      } else if (previousStockQuantity <= 0 && newStockQuantity > 0) {
+        changes.is_available = true
+      }
+    }
   }
 
   const { data: product, error } = await adminClient
@@ -230,6 +243,10 @@ export async function PATCH(request: Request, { params }: ProductRouteContext) {
         created_by: authorization.userId,
       })
     }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(changes, 'is_available')) {
+    triggerCatalogAutoSyncIfEnabled(adminClient, shopId)
   }
 
   return NextResponse.json(

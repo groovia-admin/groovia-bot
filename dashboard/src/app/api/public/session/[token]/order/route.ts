@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
 import { isShopCurrentlyOpen } from '@/lib/storefront/slots'
+import { triggerCatalogAutoSyncIfEnabled } from '@/lib/catalogSync'
 import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
 
 function generateOrderNumber() {
@@ -209,6 +210,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   // before the customer/order rows exist so a failure here never leaves
   // an order behind with no stock actually backing it.
   const reserved: { productId: string; quantity: number }[] = []
+  // reserve_product_stock already flips is_available itself when it takes
+  // a product to zero — this just tracks whether that happened for
+  // anything in this cart, so a catalog sync can be triggered once for
+  // the whole order below, not per item.
+  let anyProductSoldOut = false
   for (const item of cartItems) {
     if (!item.product_id) continue
 
@@ -231,6 +237,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       )
     }
 
+    if (newQuantity <= 0) anyProductSoldOut = true
     reserved.push({ productId: item.product_id, quantity: item.quantity })
   }
 
@@ -413,6 +420,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       }))
     )
     if (movementError) console.error('Failed to record inventory movements for order', order.id, movementError)
+  }
+
+  // If this order just took something to zero, a shop with catalog
+  // auto-sync on shouldn't need to notice and manually sync — see
+  // triggerCatalogAutoSyncIfEnabled (no-op if the flag is off).
+  if (anyProductSoldOut) {
+    triggerCatalogAutoSyncIfEnabled(adminClient, shop.id)
   }
 
   // Best-effort: ask wa-bot to send the same "order placed, cancel
