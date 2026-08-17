@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { validateEditLink } from '@/lib/orderEditLink'
 import { logAuditEvent } from '@/lib/audit/log'
-import { adjustOrderStock } from '@/lib/orderStock'
 import { notifyWaBot } from '@/lib/notifyWaBot'
 
 type DoneRouteContext = {
@@ -83,16 +82,13 @@ export async function POST(request: Request, { params }: DoneRouteContext) {
   }
 
   if (accepted) {
-    // Same decrement the WhatsApp ACCEPT command uses — reads whatever
-    // order_items look like right now (i.e. after every edit this
-    // session), not a stale pre-edit snapshot.
-    await adjustOrderStock(adminClient, {
-      orderId,
-      shopId: link.shop_id,
-      orderNumber: order.order_number,
-      direction: 'decrement',
-    })
-
+    // No stock adjustment here anymore — reserved at placement now (see
+    // the webview's order-creation route), so accepting is a no-op for
+    // stock. Known, accepted imprecision carried over from the old
+    // decrement-on-accept design: if items were edited down before this
+    // Done tap, the difference stays reserved rather than being released
+    // back — same "under-represents available stock, never oversells"
+    // tradeoff already accepted elsewhere in this codebase, not a new one.
     await logAuditEvent({
       shopId: link.shop_id,
       actorUserId: null,

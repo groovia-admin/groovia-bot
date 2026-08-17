@@ -46,6 +46,8 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   const [ended, setEnded] = useState(false)
   const [showManualReturn, setShowManualReturn] = useState(false)
   const [cancelling, setCancelling] = useState(false)
+  const [showCancelForm, setShowCancelForm] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
 
   const waLink = useMemo(() => {
     if (!whatsappNumber) return null
@@ -205,15 +207,59 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
 
         <p className="text-xs text-ink-faint text-center mt-3">Changes save automatically — the customer gets one summary once you tap Done.</p>
 
-        {orderStatus === 'accepted' && (
+        {orderStatus === 'accepted' && !showCancelForm && (
           <button
             type="button"
             className="w-full text-center text-xs font-semibold text-red-600 mt-3 py-1"
-            onClick={handleCancel}
-            disabled={cancelling}
+            onClick={() => setShowCancelForm(true)}
           >
-            {cancelling ? 'Cancelling…' : 'Cancel this order'}
+            Cancel this order
           </button>
+        )}
+
+        {/* An inline form, not window.prompt() — prompt()/confirm() are
+            unreliable inside WhatsApp's in-app browser (some versions
+            silently no-op them), which is exactly why tapping Cancel
+            reportedly did nothing at all. Kept in-page like every other
+            action on this screen instead of depending on a native
+            browser dialog this webview can't control. */}
+        {orderStatus === 'accepted' && showCancelForm && (
+          <div className="card bg-red-50 border-red-100 mt-3">
+            <label className="text-xs font-semibold text-red-600 block mb-1.5" htmlFor="cancelReason">
+              Why are you cancelling? The customer will see this.
+            </label>
+            <textarea
+              id="cancelReason"
+              className="input"
+              rows={2}
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              placeholder="e.g. out of stock, can't fulfil today"
+              disabled={cancelling}
+              autoFocus
+            />
+            <div className="flex gap-2 mt-2">
+              <button
+                type="button"
+                className="btn-secondary flex-1 justify-center text-xs"
+                onClick={() => {
+                  setShowCancelForm(false)
+                  setCancelReason('')
+                }}
+                disabled={cancelling}
+              >
+                Never mind
+              </button>
+              <button
+                type="button"
+                className="flex-1 justify-center text-xs rounded-lg py-2 text-white bg-red-600 disabled:opacity-50"
+                onClick={handleCancel}
+                disabled={cancelling || !cancelReason.trim()}
+              >
+                {cancelling ? 'Cancelling…' : 'Confirm cancellation'}
+              </button>
+            </div>
+          </div>
         )}
 
         <div className="card mt-4">
@@ -285,8 +331,8 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
   // is still required here too, same as the WhatsApp command, since the
   // customer already believes this order is being prepared.
   async function handleCancel() {
-    const reason = window.prompt("Why are you cancelling this order? The customer will see this.")
-    if (!reason || !reason.trim()) return
+    const reason = cancelReason.trim()
+    if (!reason) return
 
     setCancelling(true)
     setError(null)
@@ -295,7 +341,7 @@ export function StaffOrderEditApp({ orderId, orderNumber, shopName, token, initi
       const response = await fetch(`/api/public/staff-edit/${orderId}/cancel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, reason: reason.trim() }),
+        body: JSON.stringify({ token, reason }),
       })
       const data = await response.json()
 

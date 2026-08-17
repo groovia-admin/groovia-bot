@@ -12,6 +12,14 @@ const requiredEnv = [
   'SUPABASE_URL',
   'SUPABASE_SERVICE_ROLE_KEY',
   'INTERNAL_API_SECRET',
+  // Promoted from optional: this used to silently degrade every
+  // customer to a generic "ordering is launching soon" message with no
+  // error, no log, nothing to say why -- fine when the webview was an
+  // unfinished feature nothing depended on yet, wrong now that it's the
+  // only way a customer can actually place an order. A crash at boot
+  // that gets noticed and fixed immediately beats a silent outage that
+  // might not be.
+  'WEBVIEW_BASE_URL',
 ];
 
 for (const key of requiredEnv) {
@@ -29,13 +37,7 @@ module.exports = {
   phoneNumberId: process.env.PHONE_NUMBER_ID,
   graphApiVersion: process.env.GRAPH_API_VERSION || 'v25.0',
   internalApiSecret: process.env.INTERNAL_API_SECRET,
-  // Deliberately NOT in requiredEnv — the ordering webview (Phase 5)
-  // doesn't exist yet, so this has nothing to point at until then.
-  // Same reasoning as META_CATALOG_ID: a hard boot requirement here
-  // would crash-loop the whole bot for a feature nobody's finished
-  // building yet. Session-link generation checks for this being unset
-  // and fails clearly instead.
-  webviewBaseUrl: process.env.WEBVIEW_BASE_URL || null,
+  webviewBaseUrl: process.env.WEBVIEW_BASE_URL,
   // Deliberately NOT in requiredEnv, same reasoning as webviewBaseUrl —
   // the staff welcome message (messageHandler.js) still sends fine
   // without it, just with a generic line instead of a real link. Same

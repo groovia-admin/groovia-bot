@@ -2,6 +2,7 @@ const logger = require('../utils/logger');
 const { getSupabase, getActiveStaffPhones } = require('./shopResolver');
 const { sendWhatsAppTemplateWithFallback } = require('./whatsappClient');
 const { notifyCustomer } = require('./customerNotifier');
+const { adjustStockForOrder } = require('./orderCreator');
 
 // Registered separately from templates.js's ORDER_TEMPLATES registry —
 // that one is keyed by orders.status for customer-facing notifications;
@@ -133,6 +134,12 @@ async function autoRejectOrder(supabase, order) {
 
   if (!updated) return; // someone else already acted on it — nothing to notify
 
+  // Stock was reserved at placement (see orderCreator.js/the webview's
+  // order-creation route) — auto-reject bypasses the normal REJECT
+  // command entirely (a direct DB update above, not handleOrderCommand),
+  // so it needs this same restore explicitly; it doesn't get it for free.
+  await adjustStockForOrder(supabase, order, order.shop_id, { sign: 1, movementType: 'cancelled_order', verb: 'restore' });
+
   try {
     await notifyCustomer(order.id, 'rejected', order.shop_id);
   } catch (err) {
@@ -191,7 +198,16 @@ async function processDueReminders() {
 
   for (const order of orders) {
     const settings = settingsByShop.get(order.shop_id);
-    if (!settings) continue;
+    // A shop with no shop_settings row at all used to silently get zero
+    // reminders and zero auto-reject forever, with nothing anywhere
+    // saying why -- fixed at the source (every shop now gets a row at
+    // creation, see the admin shop-creation route), but this logs loudly
+    // instead of silently skipping in case that ever fails or a shop
+    // predates the fix, so it's at least visible instead of invisible.
+    if (!settings) {
+      logger.warn({ shopId: order.shop_id, orderId: order.id }, 'No shop_settings row for this shop — skipping reminder/auto-reject check');
+      continue;
+    }
 
     const minutesSinceAlert = (now - new Date(order.shop_alert_sent_at).getTime()) / 60000;
 

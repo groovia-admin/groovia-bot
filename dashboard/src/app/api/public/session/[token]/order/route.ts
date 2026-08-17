@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
 import { isShopCurrentlyOpen } from '@/lib/storefront/slots'
+import { adjustOrderStock } from '@/lib/orderStock'
 import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
 
 function generateOrderNumber() {
@@ -52,70 +53,68 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   const adminClient = createAdminClient()
 
-  // Reported gap: nothing anywhere validated a cart quantity against
-  // products.stock_quantity, so a customer could order more than a shop
-  // actually had on the shelf. Checked here against a non-destructive
-  // read of the session (before consuming it) specifically so a
-  // rejected order doesn't burn the customer's one-time link — they can
-  // adjust quantities and resubmit against the same still-active
-  // session. This is a check-then-act against current stock, not a row
-  // lock — a concurrent purchase between this check and the order
-  // actually being created could still theoretically slip through, same
-  // tolerance most storefronts accept without full inventory reservation.
+  // Everything through the settings checks below runs against this
+  // non-destructive peek, not the consumed session — reported gap: the
+  // old order used to consume the session FIRST and only discover the
+  // shop had gone inactive/closed/stopped-accepting-orders afterward,
+  // which burned the customer's one-time link on a failure that was
+  // never theirs to begin with (no way to retry once the shop reopened,
+  // short of a brand new WhatsApp message). Consuming the session is
+  // now the last gate before actually writing the order, not the first
+  // check performed.
   const { data: peekedSession } = await adminClient
     .from('order_sessions')
-    .select('cart_snapshot')
+    .select('shop_id, cart_snapshot')
     .eq('token_hash', hashSessionToken(token))
     .eq('status', 'active')
     .maybeSingle()
 
-  const cartItemsPreview: CartItem[] = peekedSession?.cart_snapshot?.items ?? []
-  if (cartItemsPreview.length > 0) {
-    const { data: stockRows, error: stockError } = await adminClient
-      .from('products')
-      .select('id, name, stock_quantity')
-      .in('id', cartItemsPreview.map((i) => i.product_id))
-
-    if (stockError) {
-      console.error('Failed to check stock before order submission:', stockError)
-      return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
-    }
-
-    const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]))
-    const shortages = cartItemsPreview
-      .map((item) => {
-        const product = stockById.get(item.product_id)
-        const available = product?.stock_quantity ?? 0
-        return item.quantity > available ? { name: product?.name ?? item.name, available } : null
-      })
-      .filter((s): s is { name: string; available: number } => s !== null)
-
-    if (shortages.length > 0) {
-      const detail = shortages.map((s) => `${s.name} (only ${s.available} left)`).join(', ')
-      return NextResponse.json(
-        { success: false, error: `Not enough stock for: ${detail}. Please adjust the quantity and try again.` },
-        { status: 409 }
-      )
-    }
-  }
-
-  // Single-use from here on — a retry after this point (network blip,
-  // double-tap) must fail cleanly rather than place a second order.
-  const session = await consumeOrderSession(adminClient, token)
-  if (!session) {
+  if (!peekedSession) {
     return NextResponse.json({ success: false, error: 'Session expired or already used' }, { status: 410 })
   }
 
-  const cartItems = session.cart_snapshot?.items ?? []
-  if (cartItems.length === 0) {
+  // Reported gap: nothing anywhere validated a cart quantity against
+  // products.stock_quantity, so a customer could order more than a shop
+  // actually had on the shelf. Checked non-destructively for the same
+  // reason as above — a rejected order shouldn't burn the link either.
+  const cartItemsPreview: CartItem[] = peekedSession.cart_snapshot?.items ?? []
+  if (cartItemsPreview.length === 0) {
     return NextResponse.json({ success: false, error: 'Your cart is empty' }, { status: 400 })
   }
-  const cartTotal = session.cart_snapshot?.total ?? cartItems.reduce((sum, i) => sum + i.subtotal, 0)
+
+  const { data: stockRows, error: stockError } = await adminClient
+    .from('products')
+    .select('id, name, stock_quantity')
+    .in('id', cartItemsPreview.map((i) => i.product_id))
+
+  if (stockError) {
+    console.error('Failed to check stock before order submission:', stockError)
+    return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
+  }
+
+  const stockById = new Map((stockRows ?? []).map((p) => [p.id, p]))
+  const shortages = cartItemsPreview
+    .map((item) => {
+      const product = stockById.get(item.product_id)
+      const available = product?.stock_quantity ?? 0
+      return item.quantity > available ? { name: product?.name ?? item.name, available } : null
+    })
+    .filter((s): s is { name: string; available: number } => s !== null)
+
+  if (shortages.length > 0) {
+    const detail = shortages.map((s) => `${s.name} (only ${s.available} left)`).join(', ')
+    return NextResponse.json(
+      { success: false, error: `Not enough stock for: ${detail}. Please adjust the quantity and try again.` },
+      { status: 409 }
+    )
+  }
+
+  const cartTotalPreview = peekedSession.cart_snapshot?.total ?? cartItemsPreview.reduce((sum, i) => sum + i.subtotal, 0)
 
   const { data: shop, error: shopError } = await adminClient
     .from('shops')
     .select('id, latitude, longitude, timezone')
-    .eq('id', session.shop_id)
+    .eq('id', peekedSession.shop_id)
     .eq('is_active', true)
     .maybeSingle()
 
@@ -154,7 +153,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (!isShopCurrentlyOpen(settings?.business_hours, shop.timezone)) {
     return NextResponse.json({ success: false, error: "We're closed right now — please check back during business hours." }, { status: 409 })
   }
-  if (settings?.minimum_order_amount && cartTotal < settings.minimum_order_amount) {
+  if (settings?.minimum_order_amount && cartTotalPreview < settings.minimum_order_amount) {
     return NextResponse.json(
       { success: false, error: `Minimum order amount is ${settings.minimum_order_amount}` },
       { status: 409 }
@@ -163,6 +162,22 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (settings?.accepted_payment_methods?.length && !settings.accepted_payment_methods.includes(body.paymentMethod)) {
     return NextResponse.json({ success: false, error: 'Payment method not accepted at this shop' }, { status: 400 })
   }
+
+  // Single-use from here on — a retry after this point (network blip,
+  // double-tap) must fail cleanly rather than place a second order. This
+  // is now the LAST gate, not the first — everything above ran against
+  // the non-destructive peek, so a failure on any of those checks never
+  // burns the link.
+  const session = await consumeOrderSession(adminClient, token)
+  if (!session) {
+    return NextResponse.json({ success: false, error: 'Session expired or already used' }, { status: 410 })
+  }
+
+  const cartItems = session.cart_snapshot?.items ?? []
+  if (cartItems.length === 0) {
+    return NextResponse.json({ success: false, error: 'Your cart is empty' }, { status: 400 })
+  }
+  const cartTotal = session.cart_snapshot?.total ?? cartItems.reduce((sum, i) => sum + i.subtotal, 0)
 
   // Find-or-create the customer row (shop_id, phone) — mirrors wa-bot's
   // createOrderFromSession. session.customer_phone is already in the raw
@@ -318,6 +333,24 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (itemsError) console.error('Failed to insert order items:', itemsError)
   if (detailsError) console.error('Failed to insert order customer details:', detailsError)
+
+  // Reserved here, at placement, not later at accept — closes a real
+  // overselling race: the stock check above (against the session's cart
+  // snapshot) only proves availability at the instant it ran, so two
+  // customers checking out the last unit near-simultaneously could both
+  // pass it before either order was ever triaged by a human. Reserving
+  // immediately means the second one now correctly fails at its own
+  // check. Accept no longer decrements at all (see messageHandler.js/
+  // the dashboard status route); reject and cancel both restore this
+  // same reservation, whichever happens.
+  if (!itemsError) {
+    await adjustOrderStock(adminClient, {
+      orderId: order.id,
+      shopId: shop.id,
+      orderNumber: order.order_number,
+      direction: 'decrement',
+    })
+  }
 
   // Best-effort: ask wa-bot to send the same "order placed, cancel
   // within 5 min" WhatsApp message the native-catalog flow sends inline.

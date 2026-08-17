@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { requireShopRole, hasStaffPermission } from '@/lib/auth/require-shop-role'
 import { logAuditEvent } from '@/lib/audit/log'
+import { adjustOrderStock } from '@/lib/orderStock'
 import type { OrderStatus } from '@/types/database'
 
 type OrderRouteContext = {
@@ -159,49 +160,21 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
   }
 
-  // Stock is committed as sold on acceptance (not at order creation, since
-  // orderCreator only checks availability at that point) and restored if a
-  // shop backs out afterward. 'cancelled' is only reachable from
-  // accepted/preparing/ready (see ALLOWED_TRANSITIONS), so stock was always
-  // decremented already — 'rejected' only happens straight from 'pending',
-  // before any decrement occurred, so it needs no restore.
-  const stockEffect: 'decrement' | 'restore' | null =
-    nextStatus === 'accepted' ? 'decrement' : nextStatus === 'cancelled' ? 'restore' : null
-
-  if (stockEffect) {
-    const { data: items, error: itemsError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', order.id)
-
-    if (itemsError) {
-      console.error('Failed to load order items for stock adjustment:', itemsError)
-    } else {
-      const sign = stockEffect === 'decrement' ? -1 : 1
-      for (const item of items ?? []) {
-        if (!item.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: item.product_id,
-          p_delta: sign * item.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to adjust stock for product', item.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: shopId,
-          product_id: item.product_id,
-          quantity_delta: sign * item.quantity,
-          movement_type: stockEffect === 'decrement' ? 'sale' : 'cancelled_order',
-          reference_id: order.id,
-          notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
-          created_by: authorization.userId,
-        })
-      }
-    }
+  // Stock is reserved at order PLACEMENT now (see the webview's
+  // order-creation route), not at acceptance — closes a real
+  // overselling race where two customers could both pass the
+  // availability check on the last unit before either order was ever
+  // triaged. 'accepted' is therefore a no-op for stock (already
+  // reserved). Both 'rejected' and 'cancelled' restore it, since either
+  // one means the reservation never turns into a real sale.
+  if (nextStatus === 'rejected' || nextStatus === 'cancelled') {
+    await adjustOrderStock(adminClient, {
+      orderId: order.id,
+      shopId,
+      orderNumber: order.order_number,
+      direction: 'restore',
+      createdBy: authorization.userId,
+    })
   }
 
   await logAuditEvent({

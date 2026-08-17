@@ -33,6 +33,62 @@ function generateOrderNumber() {
   return `ORD-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 }
 
+// Shared by every place stock needs adjusting on an order lifecycle
+// event. Moved here (from messageHandler.js) so reminderService.js's
+// auto-reject can call it too, without messageHandler.js and
+// reminderService.js needing to require each other.
+//
+// Stock is reserved at PLACEMENT now, not at accept (see
+// createOrderFromSession/the webview's order-creation route) — closing
+// a real overselling race where two customers could both pass the
+// availability check on the last unit before either order was ever
+// triaged by a human. Accept is now a no-op for stock (already
+// reserved); reject and cancel both restore it, whichever point in the
+// lifecycle they happen from. Best-effort throughout: a stock-
+// adjustment failure must never undo or block the status change
+// itself, which has already succeeded by the time any caller reaches
+// this.
+async function adjustStockForOrder(supabase, order, shopId, { sign, movementType, verb, createdBy = null }) {
+  const { data: items, error: itemsError } = await supabase
+    .from('order_items')
+    .select('product_id, product_name_snapshot, quantity')
+    .eq('order_id', order.id);
+
+  if (itemsError) {
+    logger.error({ error: itemsError, orderId: order.id }, `Failed to load order items for stock ${verb}`);
+    return;
+  }
+
+  for (const item of items || []) {
+    if (!item.product_id) continue; // custom/removed products have no stock to adjust
+
+    const delta = sign * item.quantity;
+    const { error: rpcError } = await supabase.rpc('adjust_product_stock', {
+      p_product_id: item.product_id,
+      p_delta: delta,
+    });
+
+    if (rpcError) {
+      logger.error({ error: rpcError, orderId: order.id, productId: item.product_id }, `Failed to ${verb} stock for product`);
+      continue;
+    }
+
+    const { error: movementError } = await supabase.from('inventory_movements').insert({
+      shop_id: shopId,
+      product_id: item.product_id,
+      quantity_delta: delta,
+      movement_type: movementType,
+      reference_id: order.id,
+      notes: `Order #${order.order_number} — ${item.product_name_snapshot}`,
+      created_by: createdBy,
+    });
+
+    if (movementError) {
+      logger.error({ error: movementError, orderId: order.id, productId: item.product_id }, 'Failed to record inventory movement');
+    }
+  }
+}
+
 /**
  * Resolves a WhatsApp native-cart submission's product_items (Meta
  * retailer_id + quantity + Meta's own item_price) into real cart lines,
@@ -224,6 +280,18 @@ function buildOrderPlacedPayload(orderNumber, orderId) {
  * webview (dashboard) has no WhatsApp conversation in progress to reply
  * into, so the confirmation has to be sent this way instead of inline
  * after creation like the native-catalog flow does.
+ *
+ * Tracked + retried on transient failure now (reported gap: unlike the
+ * new-order staff alert, this used to be pure fire-and-forget — a
+ * failed send just meant the customer never saw the confirmation or
+ * the cancel button, with the order still sitting there and nothing
+ * anywhere to say why). Reuses the same notification_deliveries /
+ * backoff machinery new_order_alert already has. Deliberately no
+ * template fallback for the 24h-window-expired case, unlike
+ * new_order_alert -- this always sends within seconds of the customer's
+ * own message that placed the order, so that failure mode is
+ * essentially unreachable here, and building a whole approved-template
+ * path for a case that can't happen isn't worth it.
  */
 async function sendOrderPlacedConfirmation(orderId, shopId) {
   const supabase = getSupabase();
@@ -251,14 +319,61 @@ async function sendOrderPlacedConfirmation(orderId, shopId) {
     return { success: false };
   }
 
-  const { body, buttons } = buildOrderPlacedPayload(order.order_number, order.id);
-  const sent = await sendButtonMessage(phone, body, buttons);
+  const payload = buildOrderPlacedPayload(order.order_number, order.id);
 
-  if (sent) {
-    logMessage(shopId, phone, 'outbound', 'system', 'interactive', body);
+  const deliveryId = await deliveryTracker.recordDelivery({
+    orderId: order.id,
+    recipientPhone: phone,
+    purpose: 'order_placed',
+    payload,
+  });
+
+  const result = await sendButtonMessageDetailed(phone, payload.body, payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(deliveryId, result.messageId);
+    logMessage(shopId, phone, 'outbound', 'system', 'interactive', payload.body);
+    return { success: true };
   }
 
-  return { success: sent };
+  await deliveryTracker.recordFailure(deliveryId, result.error, 0);
+  return { success: false };
+}
+
+/**
+ * Retry-loop handler for the 'order_placed' purpose (see index.js's
+ * RETRY_HANDLERS) -- same shape as retryNewOrderAlert below. Skips the
+ * resend if the order's no longer 'pending': the self-cancel button
+ * this message carries is only valid while it is, so a stale retry
+ * landing after staff already accepted/rejected would just be
+ * confusing, not helpful.
+ */
+async function retryOrderPlacedConfirmation(delivery) {
+  const supabase = getSupabase();
+  if (!supabase) return;
+
+  const { data: order } = await supabase
+    .from('orders')
+    .select('status')
+    .eq('id', delivery.order_id)
+    .maybeSingle();
+
+  if (order && order.status !== 'pending') {
+    await supabase
+      .from('notification_deliveries')
+      .update({ status: 'skipped_order_resolved', updated_at: new Date().toISOString() })
+      .eq('id', delivery.id);
+    return;
+  }
+
+  const result = await sendButtonMessageDetailed(delivery.recipient_phone, delivery.payload.body, delivery.payload.buttons);
+
+  if (result.success) {
+    await deliveryTracker.markSent(delivery.id, result.messageId);
+    return;
+  }
+
+  await deliveryTracker.recordFailure(delivery.id, result.error, delivery.attempt_count);
 }
 
 /**
@@ -771,6 +886,7 @@ module.exports = {
   createOrderFromSession,
   buildOrderPlacedPayload,
   sendOrderPlacedConfirmation,
+  retryOrderPlacedConfirmation,
   notifyStaffForOrder,
   notifyStaffOfDashboardStatusChange,
   processDueNewOrderAlerts,
@@ -778,4 +894,5 @@ module.exports = {
   retryNewOrderAlert,
   sendNewOrderAlertTemplateFallback,
   resendPendingOrderAlerts,
+  adjustStockForOrder,
 };
