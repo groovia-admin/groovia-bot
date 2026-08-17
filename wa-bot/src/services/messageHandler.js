@@ -239,14 +239,34 @@ async function handleOrderCommand(from, parsed, shopId, shopUser) {
   if (command === 'COMPLETE') updateData.completed_at  = new Date().toISOString();
   if (command === 'CANCEL')  { updateData.cancelled_at = new Date().toISOString(); updateData.cancellation_reason = reason; }
 
-  const { error: updateError } = await supabase
+  // Guarded by .eq('status', order.status) so a second staff member
+  // racing this one (dashboard or another WhatsApp tap on the same
+  // order at nearly the same moment) can't silently clobber a
+  // transition that already happened. Checked via .select() + null
+  // rather than trusting "no error" — PostgREST returns success with
+  // zero rows affected when the WHERE clause matches nothing. Same
+  // guard already used correctly in reminderService.js's
+  // autoRejectOrder and the staff-edit cancel/done routes; this command
+  // handler and the dashboard's status PATCH were the two places it was
+  // missing.
+  const { data: updated, error: updateError } = await supabase
     .from('orders')
     .update(updateData)
-    .eq('id', order.id);
+    .eq('id', order.id)
+    .eq('status', order.status)
+    .select('id')
+    .maybeSingle();
 
   if (updateError) {
     logger.error({ updateError, orderNumber: order.order_number }, 'Order update failed');
     await sendWhatsAppMessage(from, `❌ Failed to update order *${order.order_number}*. Please try again.`);
+    return;
+  }
+
+  if (!updated) {
+    await sendWhatsAppMessage(from,
+      `⚠️ Order *${order.order_number}* was already updated by someone else just now — please check its current status.`
+    );
     return;
   }
 

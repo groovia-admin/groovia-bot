@@ -67,28 +67,31 @@ export async function POST(request: Request, { params }: DoneRouteContext) {
   if (order.status === 'pending') {
     // Guarded by .eq('status','pending') so a racing request (e.g. the
     // customer's own self-cancel, or staff accepting via WhatsApp at the
-    // same moment) can't double-accept.
-    const { error: acceptError } = await adminClient
+    // same moment) can't double-accept. Checked via .select() + null
+    // rather than trusting "no error" — a zero-row match still returns
+    // success, and without this check a losing request here would go on
+    // to send duplicate accept notifications for a transition it didn't
+    // actually cause.
+    const { data: acceptedRow, error: acceptError } = await adminClient
       .from('orders')
       .update({ status: 'accepted', accepted_at: new Date().toISOString() })
       .eq('id', orderId)
       .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
 
     if (acceptError) {
       console.error('Failed to accept order on Done:', acceptError)
-    } else {
+    } else if (acceptedRow) {
       accepted = true
     }
   }
 
   if (accepted) {
-    // No stock adjustment here anymore — reserved at placement now (see
-    // the webview's order-creation route), so accepting is a no-op for
-    // stock. Known, accepted imprecision carried over from the old
-    // decrement-on-accept design: if items were edited down before this
-    // Done tap, the difference stays reserved rather than being released
-    // back — same "under-represents available stock, never oversells"
-    // tradeoff already accepted elsewhere in this codebase, not a new one.
+    // No stock adjustment here — stock is kept in sync with
+    // order_items.quantity on every individual edit (see the items
+    // route), not deferred to this Done tap, so there's nothing left to
+    // reconcile here regardless of how many edits happened first.
     await logAuditEvent({
       shopId: link.shop_id,
       actorUserId: null,

@@ -82,7 +82,7 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
-    .select('id, product_name_snapshot, quantity, unit_price')
+    .select('id, product_id, product_name_snapshot, quantity, unit_price')
     .eq('order_id', orderId)
 
   if (allItemsError) {
@@ -104,11 +104,45 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   }
 
   const previousQuantity = item.quantity
+  const targetQuantity = removing ? 0 : quantity
+
+  // Stock for this item was already reserved at order placement for
+  // previousQuantity — keep the reservation in sync with the edit before
+  // touching order_items, so a failure here (not enough stock to raise
+  // the quantity) aborts before any row changes. Decreasing releases the
+  // difference back; increasing reserves more atomically, which can
+  // genuinely fail if stock sold out elsewhere since placement.
+  const stockDelta = previousQuantity - targetQuantity
+  const stockProductId = item.product_id
+  const stockProductName = item.product_name_snapshot
+
+  if (stockProductId && stockDelta < 0) {
+    const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+      p_product_id: stockProductId,
+      p_qty: -stockDelta,
+    })
+
+    if (reserveError) {
+      console.error('Failed to reserve additional stock for product', stockProductId, reserveError)
+      return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+    }
+
+    if (newQuantity === null) {
+      return NextResponse.json(
+        { error: `Not enough stock to increase ${stockProductName} to ${targetQuantity}.` },
+        { status: 409 }
+      )
+    }
+  }
 
   if (removing) {
     const { error: deleteError } = await adminClient.from('order_items').delete().eq('id', itemId)
     if (deleteError) {
       console.error('Failed to remove order item:', deleteError)
+      // The reservation above (if any) must not be left stranded.
+      if (stockProductId && stockDelta < 0) {
+        await adminClient.rpc('adjust_product_stock', { p_product_id: stockProductId, p_delta: -stockDelta })
+      }
       return NextResponse.json({ error: 'Failed to remove item' }, { status: 500 })
     }
   } else {
@@ -120,8 +154,37 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
     if (updateItemError) {
       console.error('Failed to update item quantity:', updateItemError)
+      // The reservation above (if any) must not be left stranded.
+      if (stockProductId && stockDelta < 0) {
+        await adminClient.rpc('adjust_product_stock', { p_product_id: stockProductId, p_delta: -stockDelta })
+      }
       return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
     }
+  }
+
+  // Stock reservation is now in sync with order_items.quantity — release
+  // the difference back if the edit decreased quantity, and record the
+  // movement either way. (The increase case already reserved the stock
+  // above, before order_items was touched.)
+  if (stockProductId && stockDelta !== 0) {
+    if (stockDelta > 0) {
+      const { error: releaseError } = await adminClient.rpc('adjust_product_stock', {
+        p_product_id: stockProductId,
+        p_delta: stockDelta,
+      })
+      if (releaseError) console.error('Failed to release stock for product', stockProductId, releaseError)
+    }
+
+    const { error: movementError } = await adminClient.from('inventory_movements').insert({
+      shop_id: shopId,
+      product_id: stockProductId,
+      quantity_delta: -stockDelta,
+      movement_type: stockDelta > 0 ? 'cancelled_order' : 'sale',
+      reference_id: orderId,
+      notes: `Order #${order.order_number} — ${stockProductName}`,
+      created_by: authorization.userId,
+    })
+    if (movementError) console.error('Failed to record inventory movement:', movementError)
   }
 
   const { data: remaining, error: remainingError } = await adminClient
@@ -153,74 +216,35 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   // it silently stayed 'pending' with no formal confirmation reaching
   // the customer. Auto-accepts on the first edit only (order.status
   // captured before this request's own change, guarded again here by
-  // .eq('status','pending') so two racing edits can't both "win" this).
+  // .eq('status','pending') so two racing edits can't both "win" this —
+  // checked via .select() + null rather than trusting "no error", since
+  // a zero-row match returns success with nothing to show for it).
   let autoAccepted = false
   if (wasPending) {
-    const { error: acceptError } = await adminClient
+    const { data: acceptedRow, error: acceptError } = await adminClient
       .from('orders')
       .update({ status: 'accepted', accepted_at: new Date().toISOString() })
       .eq('id', orderId)
       .eq('status', 'pending')
+      .select('id')
+      .maybeSingle()
 
     if (acceptError) {
       console.error('Failed to auto-accept order on edit:', acceptError)
-    } else {
+    } else if (acceptedRow) {
       autoAccepted = true
     }
+    // else: someone else (WhatsApp ACCEPT, another edit, the dashboard
+    // status route) already transitioned this order in the moment
+    // between our read and this write — this request's own item edit
+    // above still applies, it just isn't the one that gets credit for
+    // accepting.
   }
 
-  // Same decrement the WhatsApp ACCEPT command and the dashboard's own
-  // status-PATCH route both already do on acceptance — reads whatever
-  // order_items currently look like (including the change just applied
-  // above), not a stale pre-edit snapshot. Deliberately reloaded fresh
-  // here rather than reusing `allItems`/`remaining` from earlier in this
-  // request, since neither of those carries product_id.
-  //
-  // Known imprecision, accepted rather than solved: this only runs once,
-  // on whichever edit happens to be the one that flips 'pending' to
-  // 'accepted'. If staff then keep editing other items afterward (order
-  // is 'accepted' by then, so this block doesn't run again), stock for
-  // those later-edited items gets decremented by their pre-edit
-  // quantity, not their final one. That error always lands on the
-  // conservative side — stock ends up showing less available than is
-  // actually true, never more — so it can't cause overselling, just an
-  // occasional premature "out of stock." Judged an acceptable tradeoff
-  // against the alternative of not decrementing stock for edited orders
-  // at all.
-  if (autoAccepted) {
-    const { data: itemsForStock, error: itemsForStockError } = await adminClient
-      .from('order_items')
-      .select('product_id, product_name_snapshot, quantity')
-      .eq('order_id', orderId)
-
-    if (itemsForStockError) {
-      console.error('Failed to load order items for stock decrement:', itemsForStockError)
-    } else {
-      for (const stockItem of itemsForStock ?? []) {
-        if (!stockItem.product_id) continue // custom/removed products have no stock to adjust
-
-        const { error: rpcError } = await adminClient.rpc('adjust_product_stock', {
-          p_product_id: stockItem.product_id,
-          p_delta: -stockItem.quantity,
-        })
-
-        if (rpcError) {
-          console.error('Failed to decrement stock for product', stockItem.product_id, rpcError)
-          continue
-        }
-
-        await adminClient.from('inventory_movements').insert({
-          shop_id: shopId,
-          product_id: stockItem.product_id,
-          quantity_delta: -stockItem.quantity,
-          movement_type: 'sale',
-          reference_id: orderId,
-          notes: `Order #${order.order_number} — ${stockItem.product_name_snapshot}`,
-          created_by: authorization.userId,
-        })
-      }
-    }
-  }
+  // Stock itself no longer needs any acceptance-time adjustment — it's
+  // kept in sync with order_items.quantity on every edit above,
+  // regardless of whether this particular request also happened to be
+  // the one that auto-accepted the order.
 
   await logAuditEvent({
     shopId,
