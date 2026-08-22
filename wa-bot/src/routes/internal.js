@@ -49,9 +49,13 @@ router.post('/orders/:orderId/notify', requireInternalSecret, async (req, res) =
 });
 
 // POST /internal/shops/:shopId/sync-catalog
-// On-demand push of a shop's active products to its Meta Commerce
-// Catalog (retailer_id = products.id). Not automatic on product save —
-// call this after editing products, or on a manual "Sync catalog" action.
+// Pushes a shop's active products to its Meta Commerce Catalog
+// (retailer_id = products.id). Called two ways from the dashboard: a
+// Super Admin's manual "Sync catalog now" button (always runs), and an
+// automatic trigger when a product's availability flips due to stock
+// hitting/leaving zero (only when that shop's catalog_auto_sync_enabled
+// flag is on — checked by the caller, not here, so the manual button
+// still works for a shop with the flag off).
 router.post('/shops/:shopId/sync-catalog', requireInternalSecret, async (req, res) => {
   const { shopId } = req.params;
 

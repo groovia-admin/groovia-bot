@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { consumeOrderSession, hashSessionToken } from '@/lib/orderSession'
 import { haversineDistanceKm } from '@/lib/storefront/geo'
 import { isShopCurrentlyOpen } from '@/lib/storefront/slots'
-import { adjustOrderStock } from '@/lib/orderStock'
+import { triggerCatalogAutoSyncIfEnabled } from '@/lib/catalogSync'
 import type { SubmitOrderBody, CartItem } from '@/lib/storefront/types'
 
 function generateOrderNumber() {
@@ -13,6 +14,27 @@ function generateOrderNumber() {
 
 function isNonEmptyString(v: unknown): v is string {
   return typeof v === 'string' && v.trim().length > 0
+}
+
+// Releases whatever this request has reserved so far via
+// reserve_product_stock — used any time a later step fails after
+// reservation succeeded, so a rejected/failed order never leaves stock
+// permanently held. adjust_product_stock's unconditional add-back can't
+// itself fail in a way that would oversell, so no rollback-of-rollback
+// is needed here.
+async function releaseReservations(
+  adminClient: SupabaseClient,
+  reserved: { productId: string; quantity: number }[]
+) {
+  for (const r of reserved) {
+    const { error } = await adminClient.rpc('adjust_product_stock', {
+      p_product_id: r.productId,
+      p_delta: r.quantity,
+    })
+    if (error) {
+      console.error('Failed to release stock reservation for product', r.productId, error)
+    }
+  }
 }
 
 // Turns a built cart into a real order — the webview's equivalent of
@@ -179,6 +201,46 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   }
   const cartTotal = session.cart_snapshot?.total ?? cartItems.reduce((sum, i) => sum + i.subtotal, 0)
 
+  // Reserved here, atomically, before anything else is created — the
+  // stock check above only proves availability at the instant it ran; a
+  // second customer finishing checkout for the same last unit in the gap
+  // between that check and here would otherwise still be able to
+  // double-sell it. reserve_product_stock does the check-and-decrement
+  // in one UPDATE, so only one of two concurrent callers can win. Done
+  // before the customer/order rows exist so a failure here never leaves
+  // an order behind with no stock actually backing it.
+  const reserved: { productId: string; quantity: number }[] = []
+  // reserve_product_stock already flips is_available itself when it takes
+  // a product to zero — this just tracks whether that happened for
+  // anything in this cart, so a catalog sync can be triggered once for
+  // the whole order below, not per item.
+  let anyProductSoldOut = false
+  for (const item of cartItems) {
+    if (!item.product_id) continue
+
+    const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+      p_product_id: item.product_id,
+      p_qty: item.quantity,
+    })
+
+    if (reserveError) {
+      console.error('Failed to reserve stock for product', item.product_id, reserveError)
+      await releaseReservations(adminClient, reserved)
+      return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
+    }
+
+    if (newQuantity === null) {
+      await releaseReservations(adminClient, reserved)
+      return NextResponse.json(
+        { success: false, error: `${item.name} just sold out. Please adjust your cart and try again.` },
+        { status: 409 }
+      )
+    }
+
+    if (newQuantity <= 0) anyProductSoldOut = true
+    reserved.push({ productId: item.product_id, quantity: item.quantity })
+  }
+
   // Find-or-create the customer row (shop_id, phone) — mirrors wa-bot's
   // createOrderFromSession. session.customer_phone is already in the raw
   // webhook phone shape (bare digits) it was created with, matching what
@@ -192,6 +254,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (customerLookupError) {
     console.error('Customer lookup failed:', customerLookupError)
+    await releaseReservations(adminClient, reserved)
     return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
   }
 
@@ -215,6 +278,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     if (createCustomerError || !createdCustomer) {
       console.error('Failed to create customer:', createCustomerError)
+      await releaseReservations(adminClient, reserved)
       return NextResponse.json({ success: false, error: 'Something went wrong' }, { status: 500 })
     }
     customerId = createdCustomer.id
@@ -237,6 +301,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
     ) {
       deliveryDistanceKm = haversineDistanceKm(shop.latitude, shop.longitude, addr.latitude, addr.longitude)
       if (deliveryDistanceKm > settings.delivery_radius_km) {
+        await releaseReservations(adminClient, reserved)
         return NextResponse.json(
           { success: false, error: `This address is outside the shop's ${settings.delivery_radius_km}km delivery area` },
           { status: 409 }
@@ -272,6 +337,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
     if (addressError || !createdAddress) {
       console.error('Failed to save delivery address:', addressError)
+      await releaseReservations(adminClient, reserved)
       return NextResponse.json({ success: false, error: 'Something went wrong saving your address' }, { status: 500 })
     }
 
@@ -307,6 +373,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
 
   if (orderError || !order) {
     console.error('Failed to create order:', orderError)
+    await releaseReservations(adminClient, reserved)
     return NextResponse.json({ success: false, error: 'Something went wrong placing your order' }, { status: 500 })
   }
 
@@ -334,22 +401,32 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   if (itemsError) console.error('Failed to insert order items:', itemsError)
   if (detailsError) console.error('Failed to insert order customer details:', detailsError)
 
-  // Reserved here, at placement, not later at accept — closes a real
-  // overselling race: the stock check above (against the session's cart
-  // snapshot) only proves availability at the instant it ran, so two
-  // customers checking out the last unit near-simultaneously could both
-  // pass it before either order was ever triaged by a human. Reserving
-  // immediately means the second one now correctly fails at its own
-  // check. Accept no longer decrements at all (see messageHandler.js/
-  // the dashboard status route); reject and cancel both restore this
-  // same reservation, whichever happens.
-  if (!itemsError) {
-    await adjustOrderStock(adminClient, {
-      orderId: order.id,
-      shopId: shop.id,
-      orderNumber: order.order_number,
-      direction: 'decrement',
-    })
+  // Stock itself was already reserved atomically above, before this order
+  // existed — this just records the audit trail for it now that we have
+  // an order id to attach it to. Accept no longer decrements at all (see
+  // messageHandler.js/the dashboard status route); reject and cancel both
+  // restore this same reservation via adjust_product_stock, whichever
+  // happens.
+  if (!itemsError && reserved.length > 0) {
+    const { error: movementError } = await adminClient.from('inventory_movements').insert(
+      reserved.map((r) => ({
+        shop_id: shop.id,
+        product_id: r.productId,
+        quantity_delta: -r.quantity,
+        movement_type: 'sale',
+        reference_id: order.id,
+        notes: `Order #${order.order_number}`,
+        created_by: null,
+      }))
+    )
+    if (movementError) console.error('Failed to record inventory movements for order', order.id, movementError)
+  }
+
+  // If this order just took something to zero, a shop with catalog
+  // auto-sync on shouldn't need to notice and manually sync — see
+  // triggerCatalogAutoSyncIfEnabled (no-op if the flag is off).
+  if (anyProductSoldOut) {
+    triggerCatalogAutoSyncIfEnabled(adminClient, shop.id)
   }
 
   // Best-effort: ask wa-bot to send the same "order placed, cancel

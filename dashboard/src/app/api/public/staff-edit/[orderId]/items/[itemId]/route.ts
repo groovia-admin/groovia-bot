@@ -70,7 +70,7 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
   const { data: allItems, error: allItemsError } = await adminClient
     .from('order_items')
-    .select('id, product_name_snapshot, quantity, unit_price')
+    .select('id, product_id, product_name_snapshot, quantity, unit_price')
     .eq('order_id', orderId)
 
   if (allItemsError) {
@@ -92,11 +92,44 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
   }
 
   const previousQuantity = item.quantity
+  const targetQuantity = removing ? 0 : quantity
+
+  // Stock for this item was already reserved at order placement for
+  // previousQuantity — keep the reservation in sync with the edit before
+  // touching order_items, same as the dashboard's twin of this route.
+  // Decreasing releases the difference back; increasing reserves more
+  // atomically, which can genuinely fail if stock sold out elsewhere
+  // since placement.
+  const stockDelta = previousQuantity - targetQuantity
+  const stockProductId = item.product_id
+  const stockProductName = item.product_name_snapshot
+
+  if (stockProductId && stockDelta < 0) {
+    const { data: newQuantity, error: reserveError } = await adminClient.rpc('reserve_product_stock', {
+      p_product_id: stockProductId,
+      p_qty: -stockDelta,
+    })
+
+    if (reserveError) {
+      console.error('Failed to reserve additional stock for product', stockProductId, reserveError)
+      return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
+    }
+
+    if (newQuantity === null) {
+      return NextResponse.json(
+        { error: `Not enough stock to increase ${stockProductName} to ${targetQuantity}.` },
+        { status: 409 }
+      )
+    }
+  }
 
   if (removing) {
     const { error: deleteError } = await adminClient.from('order_items').delete().eq('id', itemId)
     if (deleteError) {
       console.error('Failed to remove order item:', deleteError)
+      if (stockProductId && stockDelta < 0) {
+        await adminClient.rpc('adjust_product_stock', { p_product_id: stockProductId, p_delta: -stockDelta })
+      }
       return NextResponse.json({ error: 'Failed to remove item' }, { status: 500 })
     }
   } else {
@@ -108,8 +141,35 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
 
     if (updateItemError) {
       console.error('Failed to update item quantity:', updateItemError)
+      if (stockProductId && stockDelta < 0) {
+        await adminClient.rpc('adjust_product_stock', { p_product_id: stockProductId, p_delta: -stockDelta })
+      }
       return NextResponse.json({ error: 'Failed to update item' }, { status: 500 })
     }
+  }
+
+  // Stock reservation is now in sync with order_items.quantity — release
+  // the difference back if the edit decreased quantity, and record the
+  // movement either way.
+  if (stockProductId && stockDelta !== 0) {
+    if (stockDelta > 0) {
+      const { error: releaseError } = await adminClient.rpc('adjust_product_stock', {
+        p_product_id: stockProductId,
+        p_delta: stockDelta,
+      })
+      if (releaseError) console.error('Failed to release stock for product', stockProductId, releaseError)
+    }
+
+    const { error: movementError } = await adminClient.from('inventory_movements').insert({
+      shop_id: link.shop_id,
+      product_id: stockProductId,
+      quantity_delta: -stockDelta,
+      movement_type: stockDelta > 0 ? 'cancelled_order' : 'sale',
+      reference_id: orderId,
+      notes: `Order #${order.order_number} — ${stockProductName}`,
+      created_by: null,
+    })
+    if (movementError) console.error('Failed to record inventory movement:', movementError)
   }
 
   const { data: remaining, error: remainingError } = await adminClient
@@ -148,12 +208,16 @@ export async function PATCH(request: Request, { params }: ItemRouteContext) {
     metadata: { target_name: `Order #${order.order_number} — ${item.product_name_snapshot}`, via: 'staff_edit_link' },
   })
 
-  // No accept/stock/notify logic here on purpose anymore — reported as
-  // feeling wrong for the order to silently flip to "accepted" the
-  // moment the first quantity got tapped, while the shopkeeper was still
-  // mid-edit and hadn't tapped Done. All of that (status change, stock
-  // decrement, staff/customer notify) now happens once, from the /done
-  // route, exactly when the shopkeeper actually finishes.
+  // No accept/notify logic here on purpose — reported as feeling wrong
+  // for the order to silently flip to "accepted" the moment the first
+  // quantity got tapped, while the shopkeeper was still mid-edit and
+  // hadn't tapped Done. Status change and staff/customer notify happen
+  // once, from the /done route, exactly when the shopkeeper actually
+  // finishes. Stock is different: it's kept in sync with
+  // order_items.quantity on every edit (above), not deferred to Done —
+  // otherwise multiple edits before Done would each need their own delta
+  // against whatever the previous edit left behind, which Done has no
+  // way to reconstruct after the fact.
 
   return NextResponse.json(
     { subtotal: newSubtotal, total: newTotal, removed: removing },

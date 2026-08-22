@@ -147,17 +147,35 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
   if (nextStatus === 'rejected') changes.rejection_reason = reason
   if (nextStatus === 'cancelled') changes.cancellation_reason = reason
 
+  // Guarded by .eq('status', order.status) — the specific status just
+  // read above, not just the id — so a second actor racing this one
+  // (another staff member tapping Accept/Reject on the same order via
+  // the dashboard or WhatsApp at nearly the same moment, which is
+  // completely normal with 2+ staff) can't silently overwrite a
+  // transition that already happened. Checked via .select() + null
+  // rather than trusting "no error", since PostgREST returns success
+  // with zero rows affected when the WHERE clause simply matches
+  // nothing — same pattern already used correctly elsewhere (e.g.
+  // reminderService.js's autoRejectOrder, the staff-edit cancel route).
   const { data: updatedOrder, error: updateError } = await adminClient
     .from('orders')
     .update(changes)
     .eq('id', id)
     .eq('shop_id', shopId)
+    .eq('status', order.status)
     .select('id, status, order_number')
-    .single()
+    .maybeSingle()
 
   if (updateError) {
     console.error('Failed to update order status:', updateError)
     return NextResponse.json({ error: 'Failed to update order' }, { status: 500 })
+  }
+
+  if (!updatedOrder) {
+    return NextResponse.json(
+      { error: 'This order was already updated by someone else — refresh to see its current status.' },
+      { status: 409 }
+    )
   }
 
   // Stock is reserved at order PLACEMENT now (see the webview's

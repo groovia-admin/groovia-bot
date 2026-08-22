@@ -62,15 +62,30 @@ export async function POST(request: Request, { params }: CancelRouteContext) {
     )
   }
 
-  const { error: cancelError } = await adminClient
+  // Checked via .select() + null rather than trusting "no error" — a
+  // zero-row match (e.g. staff already cancelled/completed it via
+  // WhatsApp in the moment between the read above and this write) still
+  // returns success, and without this check the request would go on to
+  // restore stock and send cancel notifications for a transition it
+  // didn't actually cause.
+  const { data: cancelledRow, error: cancelError } = await adminClient
     .from('orders')
     .update({ status: 'cancelled', cancelled_at: new Date().toISOString(), cancellation_reason: reason })
     .eq('id', orderId)
     .eq('status', 'accepted')
+    .select('id')
+    .maybeSingle()
 
   if (cancelError) {
     console.error('Failed to cancel order:', cancelError)
     return NextResponse.json({ error: 'Failed to cancel order' }, { status: 500 })
+  }
+
+  if (!cancelledRow) {
+    return NextResponse.json(
+      { error: 'This order was already updated by someone else — refresh to see its current status.' },
+      { status: 409 }
+    )
   }
 
   // Stock restore — mirror image of the accept-time decrement.
