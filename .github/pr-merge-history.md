@@ -113,3 +113,4 @@
 | #147 | Master Catalog: close the restricted-terms bypass, collapsible catego… | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 17:10 UTC | 0d 0h 0m |
 | #149 | Give the Super Admin Overview real platform signal, not just 4 static… | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 17:11 UTC | 0d 0h 0m |
 | #150 | Show a real identity for the Super Admin in the sidebar footer | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 17:12 UTC | 0d 0h 0m |
+| #151 | Bot mobile dashboard block flag | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-22 17:12 UTC | 0d 0h 0m |
