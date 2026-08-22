@@ -5,6 +5,7 @@ import { Plus, Minus, ShoppingBag, Loader2, CheckCircle2, Search, X } from 'luci
 import { CheckoutView } from './CheckoutView'
 import CartLoader from '@/components/ui/CartLoader'
 import ProductImage from './ProductImage'
+import { isShopCurrentlyOpen } from '@/lib/storefront/slots'
 import type {
   CartItem,
   StorefrontProduct,
@@ -299,6 +300,15 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     [products]
   )
 
+  // Previously only surfaced at the very end of checkout, after
+  // browsing the full catalog and filling out the whole form -- shown
+  // here too, from the first screen, so a customer knows immediately
+  // rather than discovering it after investing all that effort.
+  const isOpen = useMemo(
+    () => isShopCurrentlyOpen(settings?.business_hours, shop.timezone),
+    [settings?.business_hours, shop.timezone]
+  )
+
   function setLineQuantity(productId: string, quantity: number) {
     const stock = stockByProductId[productId]
     const clamped = stock != null ? Math.min(quantity, stock) : quantity
@@ -440,6 +450,9 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             {!settings.order_acceptance_enabled && (
               <span className="status-badge bg-red-50 text-red-600">Not accepting orders right now</span>
             )}
+            {settings.order_acceptance_enabled && !isOpen && (
+              <span className="status-badge bg-red-50 text-red-600">Closed right now — opens back up during business hours</span>
+            )}
           </div>
         )}
 
@@ -510,7 +523,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
               const product = group.variants[0]
               const inCart = cart[product.id]
               return (
-                <div key={group.key} className="card flex flex-col">
+                <div key={group.key} className="card p-3 flex flex-col">
                   <ProductImage src={product.image_url} alt={product.name} />
                   <h3 className="text-sm font-medium leading-tight text-ink">{product.name}</h3>
                   <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
@@ -519,32 +532,34 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                     {product.stock_quantity <= 0 ? (
                       <span className="text-xs font-medium text-ink-faint">Out of stock</span>
                     ) : inCart ? (
-                      // w-11/h-11 (44px) on the tap targets, not just the
-                      // icon — reported gap: the old ~22px hit area was
-                      // well under the ~44px minimum for reliable mobile
-                      // taps, on the single most-repeated interaction in
-                      // the whole storefront.
-                      <div className="flex items-center gap-1 rounded-lg bg-brand">
-                        <button className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
-                          <Minus size={16} />
+                      // w-9/h-9 (36px) tap targets -- 44px (the full
+                      // guideline figure) made a two-button stepper
+                      // pill roughly 2.5x wider than the plain "+"
+                      // button on other cards, visibly throwing off
+                      // the row layout in a narrow 2-column card. 36px
+                      // is still a real improvement over the original
+                      // ~22px hit area without that side effect.
+                      <div className="flex items-center gap-0.5 rounded-lg bg-brand">
+                        <button className="text-white w-9 h-9 flex items-center justify-center flex-shrink-0" onClick={() => setQuantity(product, inCart.quantity - 1)} aria-label="Decrease quantity">
+                          <Minus size={14} />
                         </button>
                         <span className="text-white text-sm font-medium w-4 text-center">{inCart.quantity}</span>
                         <button
-                          className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                          className="text-white w-9 h-9 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                           onClick={() => setQuantity(product, inCart.quantity + 1)}
                           aria-label="Increase quantity"
                           disabled={inCart.quantity >= product.stock_quantity}
                         >
-                          <Plus size={16} />
+                          <Plus size={14} />
                         </button>
                       </div>
                     ) : (
                       <button
-                        className="rounded-lg text-white bg-brand w-11 h-11 flex items-center justify-center flex-shrink-0"
+                        className="rounded-lg text-white bg-brand w-9 h-9 flex items-center justify-center flex-shrink-0"
                         onClick={() => setQuantity(product, 1)}
                         aria-label={`Add ${product.name}`}
                       >
-                        <Plus size={18} />
+                        <Plus size={16} />
                       </button>
                     )}
                   </div>
@@ -567,7 +582,7 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             const cartQty = group.variants.reduce((sum, v) => sum + (cart[v.id]?.quantity ?? 0), 0)
             const anyInStock = group.variants.some((v) => v.stock_quantity > 0)
             return (
-              <div key={group.key} className="card flex flex-col">
+              <div key={group.key} className="card p-3 flex flex-col">
                 <ProductImage src={group.image_url} alt={group.name} />
                 <h3 className="text-sm font-medium leading-tight text-ink">{group.name}</h3>
                 <p className="text-xs mt-0.5 text-ink-muted">{group.variants.length} sizes available</p>
@@ -580,11 +595,11 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                       {cartQty > 0 && <span className="text-xs font-medium text-ink-muted">{cartQty} in cart</span>}
                       <button
                         type="button"
-                        className="rounded-lg text-white bg-brand w-11 h-11 flex items-center justify-center flex-shrink-0"
+                        className="rounded-lg text-white bg-brand w-9 h-9 flex items-center justify-center flex-shrink-0"
                         onClick={() => openVariantPicker(group)}
                         aria-label={`Choose a size for ${group.name}`}
                       >
-                        <Plus size={18} />
+                        <Plus size={16} />
                       </button>
                     </div>
                   ) : (

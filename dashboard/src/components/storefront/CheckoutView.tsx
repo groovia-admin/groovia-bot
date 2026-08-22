@@ -251,27 +251,28 @@ export function CheckoutView({
                         </p>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0">
-                        {/* w-11/h-11 (44px) tap targets, not just the icon
-                            — same fix as the browse grid: the old ~22px
-                            hit area was well under the ~44px minimum for
-                            reliable mobile taps. */}
-                        <div className="flex items-center gap-1 rounded-lg bg-brand">
+                        {/* w-9/h-9 (36px) tap targets -- dialed back from
+                            an earlier 44px pass, which made this pill
+                            visibly oversized next to the price column;
+                            still a real improvement over the original
+                            ~22px hit area. */}
+                        <div className="flex items-center gap-0.5 rounded-lg bg-brand">
                           <button
-                            className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0"
+                            className="text-white w-9 h-9 flex items-center justify-center flex-shrink-0"
                             onClick={() => onQuantityChange(item.product_id, item.quantity - 1)}
                             aria-label={`Decrease ${item.name} quantity`}
                             disabled={submitting}
                           >
-                            <Minus size={16} />
+                            <Minus size={14} />
                           </button>
                           <span className="text-white text-sm font-medium w-4 text-center">{item.quantity}</span>
                           <button
-                            className="text-white w-11 h-11 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
+                            className="text-white w-9 h-9 flex items-center justify-center flex-shrink-0 disabled:opacity-40"
                             onClick={() => onQuantityChange(item.product_id, item.quantity + 1)}
                             aria-label={`Increase ${item.name} quantity`}
                             disabled={submitting || atStockLimit}
                           >
-                            <Plus size={16} />
+                            <Plus size={14} />
                           </button>
                         </div>
                         <span className="text-sm font-semibold text-ink w-16 text-right">{formatMoney(item.subtotal)}</span>
