@@ -4,7 +4,7 @@
 // flag later means adding one entry here, not touching both places by
 // hand. No server-only imports, so this is safe to import from client
 // components too.
-export type FeatureFlagKey = 'catalog_auto_sync_enabled'
+export type FeatureFlagKey = 'catalog_auto_sync_enabled' | 'block_mobile_dashboard_enabled'
 
 export type FeatureFlagDefinition = {
   key: FeatureFlagKey
@@ -18,6 +18,12 @@ export const FLAG_DEFINITIONS: FeatureFlagDefinition[] = [
     label: 'Catalog auto-sync',
     description:
       "Automatically push stock/availability changes to this shop's WhatsApp Commerce Catalog. Turn on only after WhatsApp and a Meta Commerce Catalog are connected — see \"Manage WhatsApp\" for this shop.",
+  },
+  {
+    key: 'block_mobile_dashboard_enabled',
+    label: 'Block mobile dashboard access',
+    description:
+      'Staff are already blocked from opening the dashboard on a mobile browser. Turning this on extends that same block to owners and managers at this shop too.',
   },
 ]
 

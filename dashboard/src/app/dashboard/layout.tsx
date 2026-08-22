@@ -33,10 +33,29 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const context = await getViewerContext()
   if (context.kind === 'unauthenticated') redirect('/login')
 
-  if (context.kind === 'shop_user' && context.role === 'staff') {
+  if (context.kind === 'shop_user') {
     const userAgent = (await headers()).get('user-agent') ?? ''
-    if (MOBILE_UA_REGEX.test(userAgent)) {
+    const isMobileUa = MOBILE_UA_REGEX.test(userAgent)
+
+    // Staff are always blocked on mobile — the baseline this codebase
+    // already shipped. Owners/managers are only blocked too if Super
+    // Admin has turned block_mobile_dashboard_enabled on for this shop
+    // (see FLAG_DEFINITIONS) — off by default, so this is strictly an
+    // extension of the existing rule, never a relaxation of it.
+    if (isMobileUa && context.role === 'staff') {
       return <StaffMobileBlocked />
+    }
+
+    if (isMobileUa && context.role !== 'staff') {
+      const { data: mobileBlockSettings } = await createAdminClient()
+        .from('shop_settings')
+        .select('block_mobile_dashboard_enabled')
+        .eq('shop_id', context.shopId)
+        .maybeSingle()
+
+      if (mobileBlockSettings?.block_mobile_dashboard_enabled) {
+        return <StaffMobileBlocked audience="shop" />
+      }
     }
   }
 
