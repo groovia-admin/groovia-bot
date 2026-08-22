@@ -87,8 +87,8 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
   return (
     <form onSubmit={handleSave} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
       <div style={noticeStyle}>
-        The welcome message, reminders, and auto-reject are live. Auto-accept, business hours, and
-        the away message are saved here but not yet enforced by the WhatsApp bot — orders still
+        The welcome message, reminders, auto-reject, and the away message are all live. Auto-accept
+        and business hours are saved here but not yet enforced by the WhatsApp bot — orders still
         need manual Accept/Reject and the bot replies at any hour today.
       </div>
 
@@ -121,13 +121,16 @@ export default function BotBehaviorSettingsForm({ initial }: { initial: Partial<
       </div>
 
       <div>
-        <label style={labelStyle}>Away message (shown outside business hours)</label>
+        <label style={labelStyle}>Away message</label>
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--ink-muted)", margin: "2px 0 6px" }}>
+          Shown instead of the order screen whenever &quot;Accepting new orders&quot; above is switched off — a customer can&apos;t browse or check out until it&apos;s back on.
+        </p>
         <textarea
           style={{ ...inputStyle, resize: "vertical" }}
           rows={2}
           value={awayMessage}
           onChange={(e) => setAwayMessage(e.target.value)}
-          placeholder="Sorry, we're closed right now. We open at 9 AM."
+          placeholder="Sorry, we're not accepting orders right now. Please check back later."
         />
       </div>
 

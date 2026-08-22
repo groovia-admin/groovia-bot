@@ -9,7 +9,7 @@ type PublicShopPageProps = {
 
 const SHOP_COLUMNS = 'id, slug, name, description, logo_url, city, state, address_line_1, currency_code, timezone'
 const SETTINGS_COLUMNS =
-  'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, business_hours, order_acceptance_enabled'
+  'allow_pickup, allow_delivery, minimum_order_amount, delivery_fee, delivery_radius_km, free_delivery_above, accepted_payment_methods, business_hours, order_acceptance_enabled, away_message'
 
 // Server-rendered shell (fast first paint, no client round-trip for the
 // shop header) wrapping the interactive StorefrontApp client component,

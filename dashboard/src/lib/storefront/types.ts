@@ -58,6 +58,7 @@ export type StorefrontSettings = {
   accepted_payment_methods: string[] | null
   business_hours: Record<string, unknown> | null
   order_acceptance_enabled: boolean
+  away_message: string | null
 } | null
 
 export type DeliveryAddressInput = {

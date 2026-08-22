@@ -6,13 +6,26 @@ import { useState } from 'react'
 // categories — a shimmer placeholder that fades into the real image (once
 // it's actually loaded) reads as "the app is doing something" instead of
 // the abrupt blank-then-pop that looked like unexplained lag.
-export default function ProductImage({ src, alt }: { src: string | null; alt: string }) {
+//
+// soldOut grays the photo out and overlays a red "Sold out" label on the
+// image itself, replacing the old plain "Out of stock" text that lived
+// down in the price row — the point being a glance at the grid should
+// immediately show which items aren't available, not require reading
+// each card's price line.
+export default function ProductImage({ src, alt, soldOut }: { src: string | null; alt: string; soldOut?: boolean }) {
   const [loaded, setLoaded] = useState(false)
+
+  const soldOutOverlay = soldOut && (
+    <div className="absolute inset-0 flex items-center justify-center bg-ink/10">
+      <span className="rounded bg-white/90 px-2 py-0.5 text-xs font-bold text-red-600">Sold out</span>
+    </div>
+  )
 
   if (!src) {
     return (
-      <div className="h-24 w-full rounded-lg mb-2 flex items-center justify-center bg-surface-hover">
-        <span className="text-2xl font-bold text-ink-faint">{alt.charAt(0).toUpperCase()}</span>
+      <div className="relative h-24 w-full rounded-lg mb-2 flex items-center justify-center bg-surface-hover">
+        <span className={`text-2xl font-bold text-ink-faint ${soldOut ? 'opacity-40' : ''}`}>{alt.charAt(0).toUpperCase()}</span>
+        {soldOutOverlay}
       </div>
     )
   }
@@ -38,8 +51,13 @@ export default function ProductImage({ src, alt }: { src: string | null; alt: st
         loading="lazy"
         onLoad={() => setLoaded(true)}
         className="h-full w-full object-cover"
-        style={{ opacity: loaded ? 1 : 0, transition: 'opacity 0.25s ease' }}
+        style={{
+          opacity: loaded ? 1 : 0,
+          transition: 'opacity 0.25s ease',
+          filter: soldOut ? 'grayscale(1)' : undefined,
+        }}
       />
+      {soldOutOverlay}
     </div>
   )
 }
