@@ -1,11 +1,12 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getViewerContext } from '@/lib/auth/viewer-context'
 import { redirect } from 'next/navigation'
-import { Store, ShoppingBag, Users, AlertTriangle, Clock, Plus, Package, Settings } from 'lucide-react'
+import { Store, ShoppingBag, Users, AlertTriangle, Clock, Plus, Package, Settings, ScrollText } from 'lucide-react'
 import { startOfTodayUtc, getLocalHour } from '@/lib/timezone'
 import PauseOrdersToggle from '@/components/settings/PauseOrdersToggle'
 import { getOrderAgeMinutes, getAgingLevel, formatAgeShort, AGING_COLOR } from '@/lib/orderAging'
 import EmptyState from '@/components/ui/EmptyState'
+import { ACTION_LABEL, actorLabel } from '@/lib/auditLabels'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,23 +18,63 @@ export default async function DashboardPage() {
   if (context.kind === 'super_admin') {
     const adminClient = createAdminClient()
 
+    // A single "today" cutoff for a platform-wide count spanning many
+    // shop timezones is inherently approximate — UTC midnight, same
+    // tradeoff as picking any one reference zone. Per-shop precision
+    // (like the merchant Overview's own todayStart) isn't meaningful
+    // once you're summing across shops in different zones anyway.
+    const todayStartUtc = startOfTodayUtc('UTC')
+    const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
     const [
       { count: totalShops },
       { count: activeShops },
       { count: trialShops },
       { count: paidShops },
+      { count: ordersToday },
+      { count: pendingOrdersNow },
+      { data: allShops },
+      { data: connections },
+      { data: productsRaw },
+      { data: recentShops },
+      { data: recentActivity },
     ] = await Promise.all([
       adminClient.from('shops').select('*', { count: 'exact', head: true }),
       adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('is_active', true),
       adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('subscription_status', 'trial'),
       adminClient.from('shops').select('*', { count: 'exact', head: true }).eq('subscription_status', 'active'),
+      adminClient.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', todayStartUtc),
+      adminClient.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+      // Row-level data (not just counts) needed for the per-shop
+      // trial/onboarding derivations below — same shape reports/page.tsx
+      // already fetches for the same purpose.
+      adminClient.from('shops').select('id, is_active, subscription_status, trial_ends_at'),
+      adminClient.from('whatsapp_connections').select('shop_id'),
+      adminClient.from('products').select('shop_id'),
+      adminClient
+        .from('shops')
+        .select('id, name, slug, city, subscription_status, is_active, created_at')
+        .order('created_at', { ascending: false })
+        .limit(6),
+      adminClient
+        .from('audit_logs')
+        .select('id, shop_id, actor_type, action, entity_type, metadata, created_at, shops ( name )')
+        .order('created_at', { ascending: false })
+        .limit(8),
     ])
 
-    const { data: recentShops } = await adminClient
-      .from('shops')
-      .select('id, name, slug, city, subscription_status, is_active, created_at')
-      .order('created_at', { ascending: false })
-      .limit(6)
+    const connectedShopIds = new Set((connections ?? []).map((c) => c.shop_id))
+    const shopIdsWithProducts = new Set((productsRaw ?? []).map((p) => p.shop_id))
+
+    const expiringTrialsCount = (allShops ?? []).filter(
+      (s) => s.subscription_status === 'trial' && s.trial_ends_at && new Date(s.trial_ends_at).getTime() <= Date.parse(in7Days)
+    ).length
+    const pastDueOrSuspendedCount = (allShops ?? []).filter(
+      (s) => s.subscription_status === 'past_due' || s.subscription_status === 'suspended'
+    ).length
+    const onboardingGapCount = (allShops ?? []).filter(
+      (s) => s.is_active && (!connectedShopIds.has(s.id) || !shopIdsWithProducts.has(s.id))
+    ).length
 
     return (
       <div className="space-y-6">
@@ -50,49 +91,124 @@ export default async function DashboardPage() {
           <StatCard icon={Store}         label="Paid"         value={paidShops   ?? 0} color="text-brand" />
         </div>
 
-        {/* Recent shops */}
-        <div className="card">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-ink">Recently Added Shops</h2>
-            <a href="/dashboard/shops" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
-              View all →
-            </a>
+        {/* Platform activity today */}
+        <div className="grid grid-cols-2 gap-4">
+          <StatCard icon={ShoppingBag} label="Orders Today (all shops)" value={ordersToday ?? 0} color="text-brand" />
+          <StatCard icon={Clock}       label="Pending Right Now (all shops)" value={pendingOrdersNow ?? 0} color="text-amber-600" urgent={!!pendingOrdersNow && pendingOrdersNow > 0} />
+        </div>
+
+        {/* Needs attention */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <StatCard
+            icon={AlertTriangle}
+            label="Trials Expiring ≤7 Days"
+            value={expiringTrialsCount}
+            color="text-amber-600"
+            urgent={expiringTrialsCount > 0}
+            href="/dashboard/reports"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Past Due / Suspended"
+            value={pastDueOrSuspendedCount}
+            color="text-red-600"
+            urgent={pastDueOrSuspendedCount > 0}
+            href="/dashboard/reports"
+          />
+          <StatCard
+            icon={AlertTriangle}
+            label="Active Shops Not Fully Set Up"
+            value={onboardingGapCount}
+            color="text-amber-600"
+            urgent={onboardingGapCount > 0}
+            href="/dashboard/reports"
+          />
+        </div>
+
+        <div className="grid-2up">
+          {/* Recent shops */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-ink">Recently Added Shops</h2>
+              <a href="/dashboard/shops" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+                View all →
+              </a>
+            </div>
+
+            {!recentShops?.length ? (
+              <EmptyState icon={Store} title="No shops yet" compact />
+            ) : (
+              <div className="space-y-0">
+                {recentShops.map((shop, i) => (
+                  <div
+                    key={shop.id}
+                    className="flex items-center justify-between py-3"
+                    style={{ borderBottom: i < recentShops.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
+                        style={{ background: 'var(--brand-light)', color: 'var(--brand-dark)' }}
+                      >
+                        {shop.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-ink">{shop.name}</p>
+                        <p className="text-xs text-ink-muted">{shop.city ?? '—'} · /{shop.slug}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <SubBadge status={shop.subscription_status} />
+                      <span className="text-xs text-ink-muted hidden sm:block">
+                        {new Date(shop.created_at).toLocaleDateString('en-IN', {
+                          day: '2-digit', month: 'short', year: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          {!recentShops?.length ? (
-            <EmptyState icon={Store} title="No shops yet" compact />
-          ) : (
-            <div className="space-y-0">
-              {recentShops.map((shop, i) => (
-                <div
-                  key={shop.id}
-                  className="flex items-center justify-between py-3"
-                  style={{ borderBottom: i < recentShops.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-bold"
-                      style={{ background: 'var(--brand-light)', color: 'var(--brand-dark)' }}
-                    >
-                      {shop.name.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-ink">{shop.name}</p>
-                      <p className="text-xs text-ink-muted">{shop.city ?? '—'} · /{shop.slug}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <SubBadge status={shop.subscription_status} />
-                    <span className="text-xs text-ink-muted hidden sm:block">
-                      {new Date(shop.created_at).toLocaleDateString('en-IN', {
-                        day: '2-digit', month: 'short', year: 'numeric'
-                      })}
-                    </span>
-                  </div>
-                </div>
-              ))}
+          {/* Recent platform activity */}
+          <div className="card">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-ink">Recent Platform Activity</h2>
+              <a href="/dashboard/logs" className="text-xs hover:underline" style={{ color: 'var(--brand)' }}>
+                View all →
+              </a>
             </div>
-          )}
+
+            {!recentActivity?.length ? (
+              <EmptyState icon={ScrollText} title="No activity yet" compact />
+            ) : (
+              <div className="space-y-0">
+                {recentActivity.map((row, i) => {
+                  const shop = Array.isArray(row.shops) ? row.shops[0] : row.shops
+                  const shopName = shop?.name
+                  const targetName = (row.metadata as Record<string, unknown> | null)?.target_name as string | undefined
+                  return (
+                    <div
+                      key={row.id}
+                      className="flex items-center justify-between py-3 gap-3"
+                      style={{ borderBottom: i < recentActivity.length - 1 ? '1px solid var(--surface-border)' : 'none' }}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-ink truncate">{ACTION_LABEL[row.action] ?? row.action}</p>
+                        <p className="text-xs text-ink-muted truncate">
+                          {actorLabel(row.actor_type)} {targetName ? `· ${targetName}` : shopName ? `· ${shopName}` : ''}
+                        </p>
+                      </div>
+                      <span className="text-xs text-ink-muted flex-shrink-0">
+                        {new Date(row.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     )
