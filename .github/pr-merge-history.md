@@ -108,3 +108,4 @@
 | #143 | Bot shared number routing and variant ux | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-17 01:39 UTC | 0d 0h 0m |
 | #144 | Fix oversized quantity steppers, tighten product card padding, show c… | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 16:43 UTC | 0d 0h 0m |
 | #145 | Variant grid, sold-out overlay on image, hard-block order screen when… | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 17:10 UTC | 0d 0h 0m |
+| #146 | Audit Logs: fix the silent 200-row ceiling and a date-filter/display … | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 17:10 UTC | 0d 0h 0m |
