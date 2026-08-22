@@ -420,6 +420,33 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
     )
   }
 
+  // Reported gap: "not accepting orders" only ever showed as a small
+  // badge the customer could scroll past and still browse/add to
+  // cart/reach checkout (which then rejected it anyway, further down
+  // the flow). Now blocks the order screen outright, with a message
+  // the shop owner controls from Settings (away_message -- previously
+  // saved there but never actually shown to anyone) rather than a
+  // fixed, generic line.
+  if (settings && !settings.order_acceptance_enabled) {
+    return (
+      <main className="min-h-screen bg-surface flex items-center justify-center px-6">
+        <div className="card max-w-sm w-full text-center">
+          {shop.logo_url ? (
+            <img src={shop.logo_url} alt={`${shop.name} logo`} className="mx-auto mb-4 h-14 w-14 rounded-xl object-cover" />
+          ) : (
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand text-xl font-bold text-white">
+              {shop.name.charAt(0).toUpperCase()}
+            </div>
+          )}
+          <h2 className="text-lg font-semibold text-ink">{shop.name}</h2>
+          <p className="mt-2 text-sm text-ink-muted">
+            {settings.away_message || "We're not accepting orders right now — please check back later."}
+          </p>
+        </div>
+      </main>
+    )
+  }
+
   return (
     <main className="min-h-screen bg-surface pb-24">
       <header className="bg-surface-card border-b border-surface-border px-4 pt-6 pb-4">
@@ -447,10 +474,10 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                 Delivery{settings.delivery_radius_km ? ` within ${settings.delivery_radius_km}km` : ''}
               </span>
             )}
-            {!settings.order_acceptance_enabled && (
-              <span className="status-badge bg-red-50 text-red-600">Not accepting orders right now</span>
-            )}
-            {settings.order_acceptance_enabled && !isOpen && (
+            {/* No "not accepting orders" badge here anymore -- that case
+                now returns a full blocking screen above, before this
+                ever renders. Only the business-hours case reaches here. */}
+            {!isOpen && (
               <span className="status-badge bg-red-50 text-red-600">Closed right now — opens back up during business hours</span>
             )}
           </div>
@@ -522,16 +549,15 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             if (group.variants.length === 1) {
               const product = group.variants[0]
               const inCart = cart[product.id]
+              const soldOut = product.stock_quantity <= 0
               return (
-                <div key={group.key} className="card p-3 flex flex-col">
-                  <ProductImage src={product.image_url} alt={product.name} />
+                <div key={group.key} className={`card p-3 flex flex-col ${soldOut ? 'opacity-60' : ''}`}>
+                  <ProductImage src={product.image_url} alt={product.name} soldOut={soldOut} />
                   <h3 className="text-sm font-medium leading-tight text-ink">{product.name}</h3>
                   <p className="text-xs mt-0.5 text-ink-muted">{product.unit}</p>
                   <div className="mt-auto pt-2 flex items-center justify-between">
                     <span className="text-sm font-semibold text-ink">{formatMoney(product.price)}</span>
-                    {product.stock_quantity <= 0 ? (
-                      <span className="text-xs font-medium text-ink-faint">Out of stock</span>
-                    ) : inCart ? (
+                    {soldOut ? null : inCart ? (
                       // w-9/h-9 (36px) tap targets -- 44px (the full
                       // guideline figure) made a two-button stepper
                       // pill roughly 2.5x wider than the plain "+"
@@ -581,16 +607,15 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
             const cheapest = group.variants[0]
             const cartQty = group.variants.reduce((sum, v) => sum + (cart[v.id]?.quantity ?? 0), 0)
             const anyInStock = group.variants.some((v) => v.stock_quantity > 0)
+            const soldOut = !anyInStock
             return (
-              <div key={group.key} className="card p-3 flex flex-col">
-                <ProductImage src={group.image_url} alt={group.name} />
+              <div key={group.key} className={`card p-3 flex flex-col ${soldOut ? 'opacity-60' : ''}`}>
+                <ProductImage src={group.image_url} alt={group.name} soldOut={soldOut} />
                 <h3 className="text-sm font-medium leading-tight text-ink">{group.name}</h3>
                 <p className="text-xs mt-0.5 text-ink-muted">{group.variants.length} sizes available</p>
                 <div className="mt-auto pt-2 flex items-center justify-between">
-                  <span className="text-sm font-semibold text-ink">
-                    {anyInStock ? `From ${formatMoney(cheapest.price)}` : 'Out of stock'}
-                  </span>
-                  {anyInStock ? (
+                  <span className="text-sm font-semibold text-ink">From {formatMoney(cheapest.price)}</span>
+                  {!soldOut && (
                     <div className="flex items-center gap-1.5">
                       {cartQty > 0 && <span className="text-xs font-medium text-ink-muted">{cartQty} in cart</span>}
                       <button
@@ -602,8 +627,6 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                         <Plus size={16} />
                       </button>
                     </div>
-                  ) : (
-                    <span className="text-xs font-medium text-ink-faint">Out of stock</span>
                   )}
                 </div>
               </div>
@@ -629,9 +652,13 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
           <div className="relative w-full max-w-2xl bg-surface-card rounded-t-2xl px-4 pt-3 pb-5 max-h-[80vh] overflow-y-auto">
             <div className="w-9 h-1 rounded-full bg-surface-border mx-auto mb-3" />
             <h3 className="text-sm font-semibold text-ink">{variantPicker.name}</h3>
-            <p className="text-xs text-ink-muted mb-2">Choose a size to add to cart</p>
-            <div className="flex flex-col">
-              {variantPicker.variants.map((v, i) => {
+            <p className="text-xs text-ink-muted mb-3">Choose a size to add to cart</p>
+            {/* A small grid of tappable tiles, not a vertical list of
+                radio rows -- matches how Blinkit/Instamart present a
+                handful of size options: scannable at a glance instead
+                of a list that reads like a form. */}
+            <div className="grid grid-cols-3 gap-2">
+              {variantPicker.variants.map((v) => {
                 const outOfStock = v.stock_quantity <= 0
                 const selected = pickedVariantId === v.id
                 return (
@@ -640,21 +667,13 @@ export function StorefrontApp({ shop, settings, token, whatsappNumber }: Props) 
                     type="button"
                     disabled={outOfStock}
                     onClick={() => setPickedVariantId(v.id)}
-                    className={`flex items-center justify-between py-3 text-left disabled:opacity-40 ${i > 0 ? 'border-t border-surface-hover' : ''}`}
+                    className={`relative rounded-lg border-2 px-2 py-2.5 text-center disabled:opacity-40 ${
+                      selected ? 'border-brand bg-brand-light' : 'border-surface-border'
+                    }`}
                   >
-                    <span className="flex items-center gap-2.5">
-                      <span
-                        className={`w-4 h-4 rounded-full border-2 flex-shrink-0 ${selected ? 'border-brand bg-brand' : 'border-surface-border'}`}
-                        style={selected ? { boxShadow: 'inset 0 0 0 2px #fff' } : undefined}
-                      />
-                      <span>
-                        <span className="block text-sm text-ink">{v.unit}</span>
-                        <span className="block text-[11px] text-ink-faint">
-                          {outOfStock ? 'Out of stock' : `${v.stock_quantity} in stock`}
-                        </span>
-                      </span>
-                    </span>
-                    <span className="text-sm font-semibold text-ink">{formatMoney(v.price)}</span>
+                    <span className="block text-sm font-semibold text-ink">{v.unit}</span>
+                    <span className="block text-xs text-ink-muted mt-0.5">{formatMoney(v.price)}</span>
+                    {outOfStock && <span className="block text-[10px] font-medium text-red-500 mt-0.5">Sold out</span>}
                   </button>
                 )
               })}
