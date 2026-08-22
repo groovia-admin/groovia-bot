@@ -24,6 +24,9 @@ export const ACTION_LABEL: Record<string, string> = {
   "shop.logo_updated": "Shop logo updated",
   "shop.whatsapp_connection_updated": "WhatsApp connection updated",
   "catalog.master_category_synced": "Master category synced to shop",
+  "restricted_term.added": "Restricted term added",
+  "restricted_term.updated": "Restricted term updated",
+  "restricted_term.removed": "Restricted term removed",
 };
 
 export const ACTOR_BADGE: Record<ActorType, [string, string]> = {
