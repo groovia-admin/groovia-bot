@@ -94,7 +94,14 @@ export default function Sidebar({ isSuperAdmin, shopUser, userPhone }: SidebarPr
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const navItems = getNav(isSuperAdmin, shopUser?.role ?? '')
-  const displayName = shopUser?.full_name ?? userPhone
+  // For a super admin, shopUser is null (they're not a shop_users row) —
+  // showing the email as both the bold name line AND the muted line below
+  // it read as a doubled, identity-less footer. "Super Admin" as the bold
+  // line (matching the same label already used in the nav header's role
+  // pill) plus the email underneath mirrors the shop_user footer's shape
+  // (name, then a secondary identifier) without needing a real name field
+  // to exist anywhere for platform admins.
+  const displayName = isSuperAdmin ? 'Super Admin' : shopUser?.full_name ?? userPhone
   const shopName = shopUser?.shops?.name ?? 'GrooVia Platform'
   const shopLogoUrl = shopUser?.shops?.logo_url ?? null
   const roleLabel = isSuperAdmin ? 'Super Admin' : shopUser?.role ?? ''
