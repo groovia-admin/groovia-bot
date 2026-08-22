@@ -121,14 +121,22 @@ export default async function DashboardPage() {
     { data: shopSettings },
   ] = await Promise.all([
     adminClient.from('orders').select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId).gte('created_at', todayStart),
+      .eq('shop_id', shopId).gte('created_at', todayStart)
+      .or('status.neq.pending,shop_alert_sent_at.not.is.null'),
     adminClient.from('orders').select('*', { count: 'exact', head: true })
-      .eq('shop_id', shopId).eq('status', 'pending'),
+      .eq('shop_id', shopId).eq('status', 'pending')
+      .not('shop_alert_sent_at', 'is', null),
     adminClient.from('customers').select('*', { count: 'exact', head: true })
       .eq('shop_id', shopId),
     adminClient.from('orders')
       .select('id, order_number, status, total_amount, created_at, pickup_slot_label')
       .eq('shop_id', shopId)
+      // Not yet visible to staff — the customer still has their 5-minute
+      // self-cancel window and wa-bot hasn't sent the staff alert yet
+      // (orderCreator.js's processDueNewOrderAlerts / shop_alert_sent_at).
+      // A cancelled-within-the-window order still shows (status isn't
+      // 'pending' anymore), since staff should see that outcome.
+      .or('status.neq.pending,shop_alert_sent_at.not.is.null')
       .order('created_at', { ascending: false })
       .limit(5),
     // Fetched as rows rather than a count() because "low stock" is a

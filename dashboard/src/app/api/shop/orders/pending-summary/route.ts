@@ -19,6 +19,11 @@ export async function GET() {
     .select('id, order_number, created_at', { count: 'exact' })
     .eq('shop_id', shopId)
     .eq('status', 'pending')
+    // Excludes an order still inside the customer's 5-minute self-cancel
+    // window — wa-bot hasn't sent the staff alert yet (shop_alert_sent_at
+    // IS NULL is its own source of truth for "staff doesn't know about
+    // this yet"), so this polled badge/sound shouldn't reveal it early.
+    .not('shop_alert_sent_at', 'is', null)
     .order('created_at', { ascending: false })
     .limit(1)
 

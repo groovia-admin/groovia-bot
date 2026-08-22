@@ -26,6 +26,10 @@ export async function GET(request: Request) {
       .select('id, order_number, status, total_amount, order_customer_details ( customer_name_snapshot, customer_phone_snapshot )')
       .eq('shop_id', shopId)
       .or(`order_number.ilike.${like}`)
+      // Not yet visible to staff — same guard as the orders list, so
+      // search can't surface an order still inside the customer's
+      // 5-minute self-cancel window either.
+      .or('status.neq.pending,shop_alert_sent_at.not.is.null')
       .order('created_at', { ascending: false })
       .limit(RESULTS_PER_GROUP),
     adminClient
