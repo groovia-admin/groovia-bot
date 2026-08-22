@@ -1,11 +1,23 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight, ScrollText, Search, Boxes } from "lucide-react";
+import { ChevronDown, ChevronRight, ScrollText, Search, Boxes, Info } from "lucide-react";
 import { S } from "@/lib/ui/dashboardStyles";
 import EmptyState from "@/components/ui/EmptyState";
 import { ACTION_LABEL, ACTOR_BADGE, actorLabel, type ActorType } from "@/lib/auditLabels";
+
+// Same local-timezone formatting the "When" column itself renders with —
+// using this everywhere a row's calendar date is compared against a
+// dateFrom/dateTo filter keeps what's shown and what's filtered from
+// ever disagreeing (previously: a raw UTC slice of the ISO timestamp
+// compared against a local-timezone <input type="date"> value, which
+// could exclude a row near midnight that the table visibly showed as
+// falling on the filtered-for date).
+function localDateKey(iso: string): string {
+  return format(new Date(iso), "yyyy-MM-dd");
+}
 
 type LogRow = {
   id: string;
@@ -137,19 +149,49 @@ export default function LogsClient({
   showShopColumn,
   shops,
   movements,
+  truncated,
 }: {
   initialLogs: LogRow[];
   showShopColumn: boolean;
   shops?: ShopOption[] | null;
   movements?: MovementRow[] | null;
+  // True when the server capped the fetch at 200 rows with no date range
+  // active — the old silent-200-row-ceiling bug: a search or scroll past
+  // this point simply couldn't find anything older, with nothing on
+  // screen to say why. Now that a date range is a real server-side
+  // query (see logs/page.tsx), this only fires for the truly-unfiltered
+  // default view, and is surfaced instead of hidden.
+  truncated?: boolean;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [shopFilter, setShopFilter] = useState<string>("all");
   const [category, setCategory] = useState<"all" | "admin" | "shop">("all");
   const [search, setSearch] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  // Sourced from the URL, not local-only state — changing these pushes a
+  // new URL, which re-runs the server component with a real date-range
+  // query instead of filtering whatever 200 rows happened to load.
+  const dateFrom = searchParams.get("from") ?? "";
+  const dateTo = searchParams.get("to") ?? "";
   const [view, setView] = useState<"activity" | "inventory">("activity");
+
+  function updateDateParam(key: "from" | "to", value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set(key, value);
+    else params.delete(key);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  }
+
+  function clearFilters() {
+    setSearch("");
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("from");
+    params.delete("to");
+    router.replace(`${pathname}${params.toString() ? `?${params.toString()}` : ""}`, { scroll: false });
+  }
 
   const hasInventoryTab = movements !== undefined && movements !== null;
 
@@ -160,7 +202,11 @@ export default function LogsClient({
         if (category === "admin" && row.actor_type !== "super_admin") return false;
         if (category === "shop" && row.actor_type === "super_admin") return false;
 
-        const rowDate = row.created_at.slice(0, 10);
+        // The server already scoped the fetch to roughly this range (see
+        // logs/page.tsx) when from/to are set — this is the precise
+        // trim down to the exact calendar day, using the same
+        // local-timezone key the "When" column displays.
+        const rowDate = localDateKey(row.created_at);
         if (dateFrom && rowDate < dateFrom) return false;
         if (dateTo && rowDate > dateTo) return false;
 
@@ -324,7 +370,7 @@ export default function LogsClient({
           <input
             type="date"
             value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
+            onChange={(e) => updateDateParam("from", e.target.value)}
             style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
           />
         </div>
@@ -333,24 +379,23 @@ export default function LogsClient({
           <input
             type="date"
             value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
+            onChange={(e) => updateDateParam("to", e.target.value)}
             style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--surface-border)", background: "#FFFFFF", color: "var(--ink)", fontSize: "var(--text-base)", fontFamily: "inherit" }}
           />
         </div>
         {(search || dateFrom || dateTo) && (
-          <button
-            type="button"
-            onClick={() => {
-              setSearch("");
-              setDateFrom("");
-              setDateTo("");
-            }}
-            style={S.btn("var(--surface-hover)", "var(--ink)")}
-          >
+          <button type="button" onClick={clearFilters} style={S.btn("var(--surface-hover)", "var(--ink)")}>
             Clear filters
           </button>
         )}
       </div>
+
+      {truncated && !dateFrom && !dateTo && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 8, background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", fontSize: "var(--text-sm)", color: "#1D4ED8" }}>
+          <Info size={14} style={{ flexShrink: 0 }} />
+          <span>Showing the most recent 200 events platform-wide. Set a date range above to search further back.</span>
+        </div>
+      )}
 
       <div style={S.card}>
         <div style={{ overflowX: "auto" }}>

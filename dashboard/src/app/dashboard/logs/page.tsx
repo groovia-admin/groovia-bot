@@ -4,20 +4,46 @@ import LogsClient from '@/components/logs/LogsClient'
 
 export const dynamic = 'force-dynamic'
 
-export default async function LogsPage() {
+export default async function LogsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
   // Super admins see platform-wide audit logs; owners/managers see their
   // own shop's activity log. Staff has no access (matches Sidebar nav).
   const context = await requireRole(['owner', 'manager'])
+  const { from, to } = await searchParams
 
   const adminClient = createAdminClient()
 
-  const baseQuery = adminClient
+  // Previously a flat .limit(200) with no date awareness at all — a
+  // search for something older than the 200th-most-recent event
+  // platform-wide silently found nothing, since that row was never
+  // fetched from the server in the first place. Once a date range is
+  // active, query it for real instead of relying on the row cap: widened
+  // by a day on each side (comfortably covers any timezone offset
+  // between the UTC-stored boundary and a browser's local calendar day),
+  // then LogsClient trims to the exact local day using the same
+  // formatting the "When" column displays with.
+  const hasDateFilter = Boolean(from || to)
+  let baseQuery = adminClient
     .from('audit_logs')
     .select(
       'id, shop_id, actor_type, action, entity_type, entity_id, old_values, new_values, metadata, created_at, shops ( name )'
     )
     .order('created_at', { ascending: false })
-    .limit(200)
+
+  if (from) {
+    baseQuery = baseQuery.gte('created_at', new Date(Date.parse(from) - 24 * 60 * 60 * 1000).toISOString())
+  }
+  if (to) {
+    baseQuery = baseQuery.lt('created_at', new Date(Date.parse(to) + 2 * 24 * 60 * 60 * 1000).toISOString())
+  }
+
+  // No date filter: keep the fast default view capped at 200. A date
+  // filter is a real, bounded query already — no need for a row cap on
+  // top of it, just a generous safety ceiling.
+  baseQuery = baseQuery.limit(hasDateFilter ? 2000 : 200)
 
   const isSuperAdmin = context.kind === 'super_admin'
 
@@ -91,6 +117,7 @@ export default async function LogsPage() {
       showShopColumn={isSuperAdmin}
       shops={isSuperAdmin ? (shopsResult.data ?? []) : null}
       movements={isSuperAdmin ? null : movementRows}
+      truncated={!hasDateFilter && rows.length === 200}
     />
   )
 }
