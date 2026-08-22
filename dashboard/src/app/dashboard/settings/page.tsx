@@ -1,5 +1,5 @@
 import {
-  Store, MapPin, QrCode, Bot, Ban, Truck, CreditCard, Send, Landmark, LifeBuoy,
+  Store, MapPin, QrCode, Bot, Ban, Truck, CreditCard, Send, Landmark, LifeBuoy, SlidersHorizontal,
 } from 'lucide-react'
 import { requireRole } from '@/lib/auth/require-role'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -13,6 +13,7 @@ import PaymentSettingsForm from '@/components/settings/PaymentSettingsForm'
 import ShopQrCode from '@/components/settings/ShopQrCode'
 import DeclineReasonsSettingsForm from '@/components/settings/DeclineReasonsSettingsForm'
 import PlatformSettingsForm from '@/components/settings/PlatformSettingsForm'
+import PlatformDefaultsForm from '@/components/settings/PlatformDefaultsForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -119,7 +120,7 @@ export default async function SettingsPage() {
     const adminClient = createAdminClient()
     const { data: platformSettings, error: platformError } = await adminClient
       .from('platform_settings')
-      .select('support_email, support_phone, announcement_message, announcement_enabled')
+      .select('support_email, support_phone, announcement_message, announcement_enabled, default_trial_days')
       .eq('id', true)
       .maybeSingle()
 
@@ -140,6 +141,13 @@ export default async function SettingsPage() {
               support_phone: platformSettings?.support_phone ?? null,
               announcement_message: platformSettings?.announcement_message ?? null,
               announcement_enabled: platformSettings?.announcement_enabled ?? false,
+            }}
+          />
+        </SettingsCard>
+        <SettingsCard icon={SlidersHorizontal} color="#8b5cf6" title="Platform Defaults" subtitle="Operational defaults applied to new shops.">
+          <PlatformDefaultsForm
+            initial={{
+              default_trial_days: platformSettings?.default_trial_days ?? 30,
             }}
           />
         </SettingsCard>

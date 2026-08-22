@@ -532,7 +532,25 @@ export async function POST(
     console.error('Failed to create default shop_settings row:', settingsError)
   }
 
-  const shopUpdates: Record<string, string> = {}
+  // create_shop_with_owner (the RPC above) never receives or sets a
+  // trial length -- confirmed nothing in app code touched trial_ends_at
+  // before this, so a new shop's trial end date was whatever that opaque
+  // DB function did internally, if anything. Set explicitly here instead,
+  // from a single admin-configurable default (Settings -> Platform
+  // Defaults) rather than a value hidden inside a function this app
+  // doesn't control. Best-effort like the shop_settings seed above -- a
+  // failure here must not fail shop creation, which has already
+  // succeeded.
+  const { data: platformSettings } = await adminClient
+    .from('platform_settings')
+    .select('default_trial_days')
+    .eq('id', true)
+    .maybeSingle()
+
+  const defaultTrialDays = platformSettings?.default_trial_days ?? 30
+  const trialEndsAt = new Date(Date.now() + defaultTrialDays * 24 * 60 * 60 * 1000).toISOString()
+
+  const shopUpdates: Record<string, string> = { trial_ends_at: trialEndsAt }
 
   if (description) {
     shopUpdates.description = description
