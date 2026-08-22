@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import {
   Plus, Search, Package, Store, Check, X, Clock, Tag, Pencil,
-  ChevronRight, ImageOff,
+  ChevronRight, ImageOff, PanelLeftClose, PanelLeftOpen, Users,
 } from 'lucide-react'
 import clsx from 'clsx'
 import CartLoader from '@/components/ui/CartLoader'
@@ -101,6 +101,23 @@ export default function MasterCatalogClient() {
   const [expandedCategoryIds, setExpandedCategoryIds] = useState<Set<string>>(new Set())
   const [bulkBusyProductId, setBulkBusyProductId] = useState<string | null>(null)
   const [requests, setRequests] = useState<ProductRequest[]>([])
+  const [restrictedTerms, setRestrictedTerms] = useState<string[]>([])
+  // Same collapse-to-icon-rail idea as the main Sidebar / Reports nav —
+  // this category list eats 280px that's dead weight once a category is
+  // already selected and you're just working the product panel.
+  const [catalogSidebarCollapsed, setCatalogSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem('groovia_catalog_sidebar_collapsed') === '1'
+  })
+  const [expandedEnabledShopsFor, setExpandedEnabledShopsFor] = useState<string | null>(null)
+
+  function toggleCatalogSidebarCollapsed() {
+    setCatalogSidebarCollapsed((prev) => {
+      const next = !prev
+      window.localStorage.setItem('groovia_catalog_sidebar_collapsed', next ? '1' : '0')
+      return next
+    })
+  }
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState('')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -144,6 +161,7 @@ export default function MasterCatalogClient() {
   // ── Load data ──────────────────────────────────────────────────────────────
   useEffect(() => {
     loadAll()
+    loadRestrictedTerms()
   }, [])
 
   async function loadAll() {
@@ -170,9 +188,46 @@ export default function MasterCatalogClient() {
     setLoading(false)
   }
 
+  // restricted_product_terms has no RLS policies at all (service-role
+  // only, same as platform_admins — see that table's migration) so it
+  // can't be read via the direct `supabase` client this file uses
+  // everywhere else; fetched once through the same authenticated API
+  // route the Restricted Items page already uses instead.
+  async function loadRestrictedTerms() {
+    try {
+      const res = await fetch('/api/admin/restricted-terms')
+      const data = await res.json()
+      if (res.ok) setRestrictedTerms((data.terms ?? []).map((t: { term: string }) => t.term))
+    } catch {
+      // fail open — same tradeoff findMatchingRestrictedTerm makes
+      // server-side: a lookup error shouldn't block catalog management.
+    }
+  }
+
+  // Mirrors lib/restrictedProducts.ts's findMatchingRestrictedTerm
+  // exactly (case-insensitive substring match) — that helper takes a
+  // server-side SupabaseClient and can't be called from this client
+  // component, so the same check is reimplemented here against the
+  // list loaded above instead of querying the table directly.
+  function findRestrictedMatch(name: string): string | null {
+    const lowerName = name.toLowerCase()
+    return restrictedTerms.find((t) => lowerName.includes(t.toLowerCase())) ?? null
+  }
+
   // ── Category enablement (bulk, across selected shops) ─────────────────────
   function enabledShopCount(categoryId: string) {
     return enablements.filter((e) => e.master_category_id === categoryId).length
+  }
+
+  // Both places this category's coverage is shown (the catalog sidebar,
+  // the Enable-for-Shops card) only ever displayed an aggregate count —
+  // reported as confusing, since after enabling a category there was no
+  // way to see *which* shops without going shop-by-shop. Derived from
+  // the same in-memory enablement matrix already loaded in full, no new
+  // query.
+  function enabledShopNamesFor(categoryId: string): string[] {
+    const shopIds = new Set(enablements.filter((e) => e.master_category_id === categoryId).map((e) => e.shop_id))
+    return shops.filter((s) => shopIds.has(s.id)).map((s) => s.name).sort()
   }
 
   function toggleShopSelection(shopId: string) {
@@ -382,6 +437,13 @@ export default function MasterCatalogClient() {
 
   async function handleAddCategory(e: React.FormEvent) {
     e.preventDefault()
+
+    const restrictedMatch = findRestrictedMatch(categoryForm.name)
+    if (restrictedMatch) {
+      showToast(`"${categoryForm.name}" matches a restricted term ("${restrictedMatch}") and can't be added`)
+      return
+    }
+
     setSaving(true)
 
     const { data, error } = await supabase
@@ -410,6 +472,13 @@ export default function MasterCatalogClient() {
   async function handleEditCategory(e: React.FormEvent) {
     e.preventDefault()
     if (!editingCategory) return
+
+    const restrictedMatch = findRestrictedMatch(categoryForm.name)
+    if (restrictedMatch) {
+      showToast(`"${categoryForm.name}" matches a restricted term ("${restrictedMatch}") and can't be saved`)
+      return
+    }
+
     setSaving(true)
 
     const { error } = await supabase
@@ -464,6 +533,12 @@ export default function MasterCatalogClient() {
     e.preventDefault()
     if (!selectedCategoryId) return
 
+    const restrictedMatch = findRestrictedMatch(productForm.name)
+    if (restrictedMatch) {
+      showToast(`"${productForm.name}" matches a restricted term ("${restrictedMatch}") and can't be added`)
+      return
+    }
+
     const existing = categories.find((c) => c.id === selectedCategoryId)?.master_products ?? []
     for (const v of productForm.variants) {
       if (!v.unit.trim()) { showToast('Every variant needs a unit'); return }
@@ -511,6 +586,13 @@ export default function MasterCatalogClient() {
   async function handleEditProduct(e: React.FormEvent) {
     e.preventDefault()
     if (!editingProduct) return
+
+    const restrictedMatch = findRestrictedMatch(productForm.name)
+    if (restrictedMatch) {
+      showToast(`"${productForm.name}" matches a restricted term ("${restrictedMatch}") and can't be saved`)
+      return
+    }
+
     setSaving(true)
 
     const variant = productForm.variants[0]
@@ -632,15 +714,30 @@ export default function MasterCatalogClient() {
 
       {/* ── Tab: Master Catalog — sidebar + panel ──────────────────────────── */}
       {activeTab === 'catalog' && (
-        <div className="grid gap-4" style={{ gridTemplateColumns: '280px 1fr', alignItems: 'start' }}>
+        <div className="grid gap-4" style={{ gridTemplateColumns: catalogSidebarCollapsed ? '48px 1fr' : '280px 1fr', alignItems: 'start', transition: 'grid-template-columns .15s ease' }}>
           {/* Sidebar */}
           <div className="card p-0 overflow-hidden" style={{ display: 'flex', flexDirection: 'column', maxHeight: 640 }}>
-            <div style={{ padding: 12, borderBottom: '1px solid var(--surface-border)' }}>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
-                <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search categories…" className="input pl-9" />
-              </div>
+            <div style={{ padding: catalogSidebarCollapsed ? 8 : 12, borderBottom: '1px solid var(--surface-border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button
+                onClick={toggleCatalogSidebarCollapsed}
+                title={catalogSidebarCollapsed ? 'Expand categories' : 'Collapse categories'}
+                aria-label={catalogSidebarCollapsed ? 'Expand categories' : 'Collapse categories'}
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  width: 30, height: 30, borderRadius: 8, border: '1px solid var(--surface-border)',
+                  background: 'var(--surface)', color: 'var(--ink-muted)', cursor: 'pointer', flexShrink: 0,
+                }}
+              >
+                {catalogSidebarCollapsed ? <PanelLeftOpen size={14} /> : <PanelLeftClose size={14} />}
+              </button>
+              {!catalogSidebarCollapsed && (
+                <div className="relative" style={{ flex: 1 }}>
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-faint" />
+                  <input value={catalogSearch} onChange={(e) => setCatalogSearch(e.target.value)} placeholder="Search categories…" className="input pl-9" />
+                </div>
+              )}
             </div>
+            {catalogSidebarCollapsed ? null : (
             <div style={{ overflowY: 'auto', flex: 1 }}>
               {filteredCategories.length === 0 ? (
                 <p className="text-ink-muted text-sm p-4">No categories match.</p>
@@ -675,6 +772,7 @@ export default function MasterCatalogClient() {
                 })
               )}
             </div>
+            )}
           </div>
 
           {/* Main panel */}
@@ -840,7 +938,31 @@ export default function MasterCatalogClient() {
                       <Thumb src={cat.image_url} alt={cat.name} size={34} />
                       <div>
                         <p className="font-medium text-ink text-sm">{cat.name}</p>
-                        <p className="text-xs text-ink-muted">{products.length} products · enabled in {coverage} of {shops.length} shops</p>
+                        <p className="text-xs text-ink-muted">
+                          {products.length} products · enabled in {coverage} of {shops.length} shops
+                          {coverage > 0 && (
+                            <>
+                              {' · '}
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setExpandedEnabledShopsFor((prev) => (prev === cat.id ? null : cat.id))
+                                }}
+                                style={{ color: 'var(--brand-dark)', textDecoration: 'underline', cursor: 'pointer' }}
+                              >
+                                {expandedEnabledShopsFor === cat.id ? 'hide' : 'which shops?'}
+                              </span>
+                            </>
+                          )}
+                        </p>
+                        {expandedEnabledShopsFor === cat.id && (
+                          <p className="text-xs text-ink-muted" style={{ marginTop: 4, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                            <Users className="w-3.5 h-3.5" style={{ flexShrink: 0, marginTop: 1 }} />
+                            <span>{enabledShopNamesFor(cat.id).join(', ')}</span>
+                          </p>
+                        )}
                       </div>
                     </button>
                     <div className="flex items-center gap-2">
