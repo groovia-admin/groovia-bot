@@ -106,3 +106,4 @@
 | #141 | Order notes field, decrease-only edits, aligned pickup slots, cancel … | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-16 14:09 UTC | 0d 0h 0m |
 | #142 | Bot shared number routing and variant ux | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-16 18:27 UTC | 0d 0h 11m |
 | #143 | Bot shared number routing and variant ux | dashboard + wa-bot | @groovia-admin | @groovia-admin | 2026-08-17 01:39 UTC | 0d 0h 0m |
+| #144 | Fix oversized quantity steppers, tighten product card padding, show c… | dashboard | @groovia-admin | @groovia-admin | 2026-08-22 16:43 UTC | 0d 0h 0m |
