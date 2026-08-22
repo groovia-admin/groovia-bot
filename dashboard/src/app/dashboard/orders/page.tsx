@@ -21,6 +21,12 @@ export default async function OrdersPage() {
         'id, order_number, status, order_type, payment_method, payment_status, total_amount, pickup_slot_label, created_at, order_customer_details ( customer_name_snapshot, customer_phone_snapshot ), order_items ( quantity )'
       )
       .eq('shop_id', context.shopId)
+      // Not yet visible to staff — the customer still has their 5-minute
+      // self-cancel window and wa-bot hasn't sent the staff alert yet
+      // (shop_alert_sent_at IS NULL is its own source of truth for this).
+      // An order resolved some other way inside the window (e.g.
+      // self-cancelled) still shows, since staff should see that outcome.
+      .or('status.neq.pending,shop_alert_sent_at.not.is.null')
       .order('created_at', { ascending: false })
       .limit(200),
     adminClient.from('shop_settings').select('order_decline_reasons').eq('shop_id', context.shopId).maybeSingle(),

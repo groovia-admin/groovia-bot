@@ -59,6 +59,10 @@ export async function GET(_request: Request, { params }: OrderRouteContext) {
       )
       .eq('id', id)
       .eq('shop_id', shopId)
+      // Not yet visible to staff — same guard as the orders list, so a
+      // guessed/stale link can't open an order early either. Treated as
+      // "not found," indistinguishable from a real 404.
+      .or('status.neq.pending,shop_alert_sent_at.not.is.null')
       .maybeSingle(),
     adminClient.from('shop_settings').select('order_decline_reasons').eq('shop_id', shopId).maybeSingle(),
   ])
@@ -122,6 +126,10 @@ export async function PATCH(request: Request, { params }: OrderRouteContext) {
     .select('id, status, order_number')
     .eq('id', id)
     .eq('shop_id', shopId)
+    // Not yet visible to staff — an order still inside the customer's
+    // 5-minute self-cancel window can't be actioned early just because
+    // its id was guessed or a stale link was revisited.
+    .or('status.neq.pending,shop_alert_sent_at.not.is.null')
     .maybeSingle()
 
   if (orderError) {
