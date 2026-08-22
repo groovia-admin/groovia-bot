@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { requirePlatformAdmin } from '@/lib/auth/require-platform-admin'
 import { logAuditEvent } from '@/lib/audit/log'
 
-const SETTINGS_COLUMNS = 'support_email, support_phone, announcement_message, announcement_enabled, updated_at'
+const SETTINGS_COLUMNS = 'support_email, support_phone, announcement_message, announcement_enabled, default_trial_days, updated_at'
 
 type UpdateSettingsBody = Record<string, unknown>
 
@@ -81,6 +81,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'announcement_enabled must be true or false' }, { status: 400 })
     }
     changes.announcement_enabled = body.announcement_enabled
+  }
+
+  if (has('default_trial_days')) {
+    const days = Number(body.default_trial_days)
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return NextResponse.json({ error: 'default_trial_days must be a whole number between 1 and 365' }, { status: 400 })
+    }
+    changes.default_trial_days = days
   }
 
   if (Object.keys(changes).length === 0) {
